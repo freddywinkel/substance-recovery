@@ -10,6 +10,7 @@ import {
 import { useAuth } from "@clerk/react";
 import { runSync } from "@/lib/sync-engine";
 import { SYNC_DIRTY_EVENT } from "@/db";
+import { useClerkAvailable } from "@/lib/clerk-safe";
 
 export type SyncStatus = "idle" | "syncing" | "synced" | "error" | "offline";
 
@@ -34,13 +35,24 @@ const SyncContext = createContext<SyncContextValue>({
 const DEBOUNCE_MS = 2000;
 const PERIODIC_MS = 5 * 60 * 1000;
 
+// Dummy provider used when Clerk is not configured (offline-only mode).
+function DummySyncProvider({ children }: { children: ReactNode }) {
+  return (
+    <SyncContext.Provider
+      value={{ status: "idle", lastSyncedAt: null, isSignedIn: false, syncNow: () => {} }}
+    >
+      {children}
+    </SyncContext.Provider>
+  );
+}
+
 /**
  * Drives optional cloud sync. Completely inert when signed out: no network, no
  * timers, status stays "idle" — the app behaves exactly as the local-only build.
  * When signed in, syncs on mount/sign-in, on reconnect, on tab focus, debounced
  * after local writes, and periodically.
  */
-export function SyncProvider({ children }: { children: ReactNode }) {
+function RealSyncProvider({ children }: { children: ReactNode }) {
   const { isLoaded, isSignedIn, userId } = useAuth();
   const signedIn = isLoaded && !!isSignedIn && !!userId;
 
@@ -139,6 +151,14 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       {children}
     </SyncContext.Provider>
   );
+}
+
+export function SyncProvider({ children }: { children: ReactNode }) {
+  const clerkAvailable = useClerkAvailable();
+  if (!clerkAvailable) {
+    return <DummySyncProvider>{children}</DummySyncProvider>;
+  }
+  return <RealSyncProvider>{children}</RealSyncProvider>;
 }
 
 export function useSync(): SyncContextValue {

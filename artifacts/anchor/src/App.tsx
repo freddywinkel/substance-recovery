@@ -13,6 +13,7 @@ import { OfflineBanner } from "@/components/OfflineBanner";
 import { RegistrationReturnBanner } from "@/components/RegistrationReturnBanner";
 import { usePWA } from "@/hooks/usePWA";
 import { queryClient } from "@/lib/queryClient";
+import { ClerkAvailableContext } from "@/lib/clerk-safe";
 import {
   clerkPubKey,
   clerkProxyUrl,
@@ -79,9 +80,6 @@ function AppRoutes() {
       <Route path="/progress" component={Progress} />
       <Route path="/logs" component={Logs} />
       <Route path="/settings" component={Settings} />
-      {/* REQUIRED — copy "/sign-in/*?" and "/sign-up/*?" verbatim. The /*?
-          optional wildcard matches both the bare URL and Clerk's OAuth
-          sub-paths. */}
       <Route path="/sign-in/*?" component={SignInPage} />
       <Route path="/sign-up/*?" component={SignUpPage} />
       <Route component={NotFound} />
@@ -159,11 +157,31 @@ function ClerkProviderWithRoutes() {
   );
 }
 
+function NonClerkAppShell() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <SyncProvider>
+        <ActiveRegistrationProvider>
+          <AppShell />
+        </ActiveRegistrationProvider>
+      </SyncProvider>
+    </QueryClientProvider>
+  );
+}
+
 export default function App() {
   return (
     <LanguageProvider>
       <WouterRouter base={basePath}>
-        <ClerkProviderWithRoutes />
+        {clerkPubKey ? (
+          <ClerkAvailableContext.Provider value={true}>
+            <ClerkProviderWithRoutes />
+          </ClerkAvailableContext.Provider>
+        ) : (
+          <ClerkAvailableContext.Provider value={false}>
+            <NonClerkAppShell />
+          </ClerkAvailableContext.Provider>
+        )}
       </WouterRouter>
     </LanguageProvider>
   );

@@ -2,15 +2,24 @@ import { useState, useEffect } from "react";
 import { useStore } from "@/hooks/useStore";
 import { usePWA } from "@/hooks/usePWA";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { useSync } from "@/contexts/SyncContext";
 import { useT } from "@/hooks/useT";
+import { useSync } from "@/contexts/SyncContext";
 import { PageHeader } from "@/components/PageHeader";
 import { useReminders } from "@/hooks/useReminders";
-import { Moon, Sun, Download, Trash2, Phone, Shield, Calendar, Languages, UserPlus, X, Cloud, LogOut, RefreshCw, Check, CloudOff, AlertCircle, Upload, Bell } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { useClerkAvailable } from "@/lib/clerk-safe";
+import { AccountSection } from "@/components/AccountSection";
+import { FallbackAccountSection } from "@/components/FallbackAccountSection";
+import {
+  Moon, Sun, Download, Trash2, Phone, Shield, Calendar,
+  Languages, UserPlus, X, Cloud, Upload, Bell, FileDown,
+  FileUp, CheckCircle2, AlertCircle, Clock,
+} from "lucide-react";
 import { EmergencyContact } from "@/db";
 import { DEFAULT_CRISIS_SERVICES } from "@/lib/crisisServices";
-import { Show, useUser, useClerk } from "@clerk/react";
 import { useLocation } from "wouter";
+
+const LAST_EXPORTED_KEY = "substance-recovery:last-exported";
 
 export function Settings() {
   const {
@@ -21,14 +30,16 @@ export function Settings() {
   const { installPrompt, isInstalled, install } = usePWA();
   const { language, setLanguage } = useLanguage();
   const { t } = useT();
-  const { user } = useUser();
-  const { signOut } = useClerk();
-  const { status: syncStatus, lastSyncedAt, isSignedIn: syncSignedIn, syncNow } = useSync();
+  const { isSignedIn: syncSignedIn } = useSync();
   const [, navigate] = useLocation();
+  const { toast } = useToast();
+  const clerkAvailable = useClerkAvailable();
+
   const [confirmReset, setConfirmReset] = useState(false);
   const [resetDone, setResetDone] = useState(false);
   const [dateInput, setDateInput] = useState(sobrietyStartDate ?? "");
 
+  const [lastExported, setLastExported] = useState<string | null>(null);
   const [exportStatus, setExportStatus] = useState<"idle" | "success" | "error">("idle");
   const [importStatus, setImportStatus] = useState<"idle" | "success" | "error">("idle");
   const [importMessage, setImportMessage] = useState("");
@@ -50,6 +61,11 @@ export function Settings() {
   const [contactErrors, setContactErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
+    const stored = localStorage.getItem(LAST_EXPORTED_KEY);
+    if (stored) setLastExported(stored);
+  }, []);
+
+  useEffect(() => {
     if (crisisService) {
       if (crisisService.isCustom) {
         setSelectedServiceId("custom");
@@ -62,7 +78,7 @@ export function Settings() {
   }, [crisisService]);
 
   const handleReset = async () => {
-    await resetAllData({ signedIn: syncSignedIn, userId: user?.id ?? null });
+    await resetAllData({ signedIn: syncSignedIn, userId: null });
     setConfirmReset(false);
     setResetDone(true);
     setDateInput("");
@@ -84,10 +100,22 @@ export function Settings() {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
+
+      const now = new Date().toISOString();
+      localStorage.setItem(LAST_EXPORTED_KEY, now);
+      setLastExported(now);
       setExportStatus("success");
+      toast({
+        title: t("export.success"),
+        description: t("export.subtitle"),
+      });
       setTimeout(() => setExportStatus("idle"), 3000);
     } catch {
       setExportStatus("error");
+      toast({
+        title: t("export.error"),
+        variant: "destructive",
+      });
       setTimeout(() => setExportStatus("idle"), 5000);
     }
   };
@@ -102,6 +130,10 @@ export function Settings() {
         if (!payload || typeof payload !== "object" || !payload.version) {
           setImportStatus("error");
           setImportMessage(t("import.error"));
+          toast({
+            title: t("import.error"),
+            variant: "destructive",
+          });
           return;
         }
         setPendingImport(payload);
@@ -109,6 +141,10 @@ export function Settings() {
       } catch {
         setImportStatus("error");
         setImportMessage(t("import.error"));
+        toast({
+          title: t("import.error"),
+          variant: "destructive",
+        });
       }
     };
     reader.readAsText(file);
@@ -122,11 +158,19 @@ export function Settings() {
       const result = await importData(pendingImport);
       setImportStatus("success");
       setImportMessage(t("import.success").replace("{n}", String(result.imported)));
+      toast({
+        title: t("import.success"),
+        description: `${result.imported} items restored`,
+      });
       setPendingImport(null);
       setTimeout(() => setImportStatus("idle"), 3000);
     } catch {
       setImportStatus("error");
       setImportMessage(t("import.error"));
+      toast({
+        title: t("import.error"),
+        variant: "destructive",
+      });
       setPendingImport(null);
       setTimeout(() => setImportStatus("idle"), 5000);
     }
@@ -197,6 +241,18 @@ export function Settings() {
   };
 
   const todayStr = new Date().toISOString().slice(0, 10);
+
+  const formatLastExported = (iso: string | null) => {
+    if (!iso) return t("export.lastExported") + ": never";
+    const date = new Date(iso);
+    const dateStr = date.toLocaleDateString(language === "nl" ? "nl-NL" : "en-GB", {
+      day: "numeric", month: "short", year: "numeric",
+    });
+    const timeStr = date.toLocaleTimeString(language === "nl" ? "nl-NL" : "en-GB", {
+      hour: "2-digit", minute: "2-digit",
+    });
+    return `${t("export.lastExported")}: ${dateStr} · ${timeStr}`;
+  };
 
   return (
     <div className="flex flex-col min-h-dvh bg-background">
@@ -495,82 +551,7 @@ export function Settings() {
         </section>
 
         {/* Account / Cloud sync */}
-        <section>
-          <p className="text-xs text-muted-foreground uppercase tracking-widest px-1 mb-3">{t("settings.section.account")}</p>
-          <div className="bg-card border border-border rounded-2xl p-4 flex flex-col gap-3">
-            <Show when="signed-out">
-              <div className="flex items-start gap-3">
-                <Cloud size={18} className="text-primary mt-0.5 shrink-0" />
-                <div>
-                  <p className="text-sm font-medium text-foreground">{t("settings.account.signedOutTitle")}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
-                    {t("settings.account.signedOutBody")}
-                  </p>
-                </div>
-              </div>
-              <div className="flex gap-2 pt-1">
-                <button
-                  onClick={() => navigate("/sign-in")}
-                  className="flex-1 bg-primary text-primary-foreground rounded-xl py-3 font-semibold text-sm hover:opacity-90 active:scale-95 transition-all touch-target"
-                >
-                  {t("settings.account.signIn")}
-                </button>
-                <button
-                  onClick={() => navigate("/sign-up")}
-                  className="flex-1 border border-border rounded-xl py-3 font-medium text-sm text-foreground hover:bg-muted/40 transition-colors touch-target"
-                >
-                  {t("settings.account.signUp")}
-                </button>
-              </div>
-            </Show>
-            <Show when="signed-in">
-              <div className="flex items-start gap-3">
-                <Cloud size={18} className="text-primary mt-0.5 shrink-0" />
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-foreground">{t("settings.account.signedInTitle")}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed break-words">
-                    {t("settings.account.signedInAs")} {user?.primaryEmailAddress?.emailAddress ?? user?.username ?? ""}
-                  </p>
-                </div>
-              </div>
-
-              {/* Sync status */}
-              <div className="flex items-center justify-between gap-3 bg-background border border-border rounded-xl px-4 py-3">
-                <div className="flex items-center gap-2.5 min-w-0">
-                  {syncStatus === "syncing" && <RefreshCw size={15} className="text-primary shrink-0 animate-spin" />}
-                  {syncStatus === "error" && <AlertCircle size={15} className="text-destructive shrink-0" />}
-                  {syncStatus === "offline" && <CloudOff size={15} className="text-muted-foreground shrink-0" />}
-                  {(syncStatus === "synced" || syncStatus === "idle") && <Check size={15} className="text-primary shrink-0" />}
-                  <p className={`text-xs leading-snug truncate ${syncStatus === "error" ? "text-destructive" : "text-muted-foreground"}`}>
-                    {syncStatus === "syncing" && t("settings.account.syncing")}
-                    {syncStatus === "error" && t("settings.account.syncError")}
-                    {syncStatus === "offline" && t("settings.account.syncOffline")}
-                    {(syncStatus === "synced" || syncStatus === "idle") && (
-                      lastSyncedAt
-                        ? `${t("settings.account.lastSynced")} ${new Date(lastSyncedAt).toLocaleTimeString(language === "nl" ? "nl-NL" : "en-GB", { hour: "2-digit", minute: "2-digit" })}`
-                        : t("settings.account.synced")
-                    )}
-                  </p>
-                </div>
-                <button
-                  onClick={syncNow}
-                  disabled={syncStatus === "syncing"}
-                  className="shrink-0 text-xs font-medium text-primary hover:opacity-80 disabled:opacity-40 transition-opacity touch-target px-1"
-                >
-                  {t("settings.account.syncNow")}
-                </button>
-              </div>
-
-              <button
-                onClick={() => signOut()}
-                className="w-full flex items-center justify-center gap-2 border border-border rounded-xl py-3 font-medium text-sm text-foreground hover:bg-muted/40 transition-colors touch-target"
-              >
-                <LogOut size={16} />
-                {t("settings.account.signOut")}
-              </button>
-            </Show>
-          </div>
-        </section>
+        {clerkAvailable ? <AccountSection /> : <FallbackAccountSection />}
 
         {/* Privacy */}
         <section>
@@ -596,33 +577,66 @@ export function Settings() {
         {/* Export / Import */}
         <section>
           <p className="text-xs text-muted-foreground uppercase tracking-widest px-1 mb-3">{t("export.title")}</p>
-          <div className="bg-card border border-border rounded-2xl p-4 flex flex-col gap-3">
-            <p className="text-xs text-muted-foreground leading-relaxed">{t("export.subtitle")}</p>
-            <div className="flex gap-2">
-              <button
-                onClick={handleExport}
-                className="flex-1 flex items-center justify-center gap-2 bg-primary text-primary-foreground rounded-xl py-3 font-semibold text-sm hover:opacity-90 active:scale-95 transition-all touch-target"
-              >
-                <Download size={16} />
-                {t("export.btn")}
-              </button>
-              <label className="flex-1 flex items-center justify-center gap-2 border border-border rounded-xl py-3 font-medium text-sm text-foreground hover:bg-muted/40 transition-colors touch-target cursor-pointer">
-                <Upload size={16} />
-                {t("import.btn")}
-                <input type="file" accept="application/json" onChange={handleImportFile} className="hidden" />
-              </label>
+          <div className="bg-card border border-border rounded-2xl p-4 flex flex-col gap-4">
+            {/* Header with icon */}
+            <div className="flex items-start gap-3">
+              <Cloud size={18} className="text-primary mt-0.5 shrink-0" />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-foreground">{t("export.title")}</p>
+                <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
+                  {t("export.subtitle")}
+                </p>
+              </div>
             </div>
+
+            {/* Buttons */}
+            <div className="flex flex-col gap-2">
+              <div className="flex gap-2">
+                <button
+                  onClick={handleExport}
+                  className="flex-1 flex items-center justify-center gap-2 bg-primary text-primary-foreground rounded-xl py-3 font-semibold text-sm hover:opacity-90 active:scale-95 transition-all touch-target"
+                >
+                  <FileDown size={16} />
+                  {t("export.btn")}
+                </button>
+                <label className="flex-1 flex items-center justify-center gap-2 border border-border rounded-xl py-3 font-medium text-sm text-foreground hover:bg-muted/40 transition-colors touch-target cursor-pointer">
+                  <FileUp size={16} />
+                  {t("import.btn")}
+                  <input type="file" accept="application/json" onChange={handleImportFile} className="hidden" />
+                </label>
+              </div>
+
+              {/* Last exported timestamp */}
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Clock size={12} />
+                <span>{formatLastExported(lastExported)}</span>
+              </div>
+            </div>
+
+            {/* Status indicators */}
             {exportStatus === "success" && (
-              <p className="text-xs text-primary animate-fade-up">{t("export.success")}</p>
+              <div className="flex items-center gap-2 text-xs text-primary animate-fade-up">
+                <CheckCircle2 size={14} />
+                <span>{t("export.success")}</span>
+              </div>
             )}
             {exportStatus === "error" && (
-              <p className="text-xs text-destructive animate-fade-up">{t("export.error")}</p>
+              <div className="flex items-center gap-2 text-xs text-destructive animate-fade-up">
+                <AlertCircle size={14} />
+                <span>{t("export.error")}</span>
+              </div>
             )}
             {importStatus === "success" && (
-              <p className="text-xs text-primary animate-fade-up">{importMessage}</p>
+              <div className="flex items-center gap-2 text-xs text-primary animate-fade-up">
+                <CheckCircle2 size={14} />
+                <span>{importMessage || t("import.success")}</span>
+              </div>
             )}
             {importStatus === "error" && (
-              <p className="text-xs text-destructive animate-fade-up">{importMessage}</p>
+              <div className="flex items-center gap-2 text-xs text-destructive animate-fade-up">
+                <AlertCircle size={14} />
+                <span>{importMessage || t("import.error")}</span>
+              </div>
             )}
           </div>
         </section>
@@ -630,7 +644,7 @@ export function Settings() {
         {/* Reminders */}
         <section>
           <p className="text-xs text-muted-foreground uppercase tracking-widest px-1 mb-3">{t("reminder.section")}</p>
-          <div className="bg-card border border-border rounded-2xl p-4 flex flex-col gap-3">
+          <div className="bg-card border border-border rounded-2xl p-4 flex flex-col gap-4">
             <div className="flex items-start gap-3">
               <Bell size={18} className="text-primary mt-0.5 shrink-0" />
               <div className="flex-1">
@@ -643,29 +657,31 @@ export function Settings() {
               <p className="text-xs text-muted-foreground">{t("reminder.no_support")}</p>
             ) : (
               <>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-foreground">{t("reminder.enable")}</span>
-                  <button
-                    onClick={() => {
-                      const next = !reminderSettings.enabled;
-                      saveReminderSettings({ ...reminderSettings, enabled: next });
-                    }}
-                    className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors touch-target ${
-                      reminderSettings.enabled ? "bg-primary" : "bg-muted"
-                    }`}
-                    role="switch"
-                    aria-checked={reminderSettings.enabled}
-                  >
-                    <span
-                      className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform duration-200 ${
-                        reminderSettings.enabled ? "translate-x-6" : "translate-x-1"
+                <div className="bg-background border border-border rounded-xl p-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-foreground">{t("reminder.enable")}</span>
+                    <button
+                      onClick={() => {
+                        const next = !reminderSettings.enabled;
+                        saveReminderSettings({ ...reminderSettings, enabled: next });
+                      }}
+                      className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors touch-target ${
+                        reminderSettings.enabled ? "bg-primary" : "bg-muted"
                       }`}
-                    />
-                  </button>
+                      role="switch"
+                      aria-checked={reminderSettings.enabled}
+                    >
+                      <span
+                        className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform duration-200 ${
+                          reminderSettings.enabled ? "translate-x-6" : "translate-x-1"
+                        }`}
+                      />
+                    </button>
+                  </div>
                 </div>
 
                 {reminderSettings.enabled && (
-                  <div className="flex items-center gap-3">
+                  <div className="bg-background border border-border rounded-xl p-3 flex items-center justify-between">
                     <span className="text-sm text-foreground">{t("reminder.time")}</span>
                     <input
                       type="time"
@@ -680,10 +696,10 @@ export function Settings() {
                 )}
 
                 {reminderPermission === "granted" ? (
-                  <p className="text-xs text-primary flex items-center gap-1">
-                    <Check size={12} />
-                    {t("reminder.permission.granted")}
-                  </p>
+                  <div className="flex items-center gap-1.5 text-xs text-primary">
+                    <CheckCircle2 size={12} />
+                    <span>{t("reminder.permission.granted")}</span>
+                  </div>
                 ) : reminderPermission === "denied" ? (
                   <p className="text-xs text-destructive">{t("reminder.permission.denied")}</p>
                 ) : (
@@ -795,4 +811,3 @@ export function Settings() {
     </div>
   );
 }
-

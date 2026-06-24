@@ -3,9 +3,11 @@ import { Link, useLocation } from "wouter";
 import { useStore } from "@/hooks/useStore";
 import { useT } from "@/hooks/useT";
 import { useActiveRegistration } from "@/contexts/ActiveRegistrationContext";
+import { useClerkAvailable } from "@/lib/clerk-safe";
 import {
   Zap, AlertTriangle, Brain, Coffee,
   Flame, TrendingUp, CalendarCheck, RotateCcw,
+  User, LogIn,
 } from "lucide-react";
 
 const RESUME_LABEL_KEYS: Record<string, string> = {
@@ -62,6 +64,7 @@ export function Home() {
   const { t, language } = useT();
   const { session, clearSession } = useActiveRegistration();
   const [, navigate] = useLocation();
+  const clerkAvailable = useClerkAvailable();
   const lastCraving = cravingLogs[0];
 
   const sobriety = useMemo(
@@ -91,12 +94,21 @@ export function Home() {
 
       {/* ── Header ─────────────────────────────────────────── */}
       <header
-        className="px-5 pt-5 pb-4"
+        className="px-5 pt-5 pb-4 flex items-start justify-between"
         style={{ paddingTop: "calc(1.25rem + env(safe-area-inset-top, 0px))" }}
       >
-        <p className="text-[11px] text-muted-foreground uppercase tracking-widest mb-0.5">Substance Recovery</p>
-        <h1 className="text-2xl font-semibold text-foreground leading-snug">{timeGreeting()}</h1>
-        <p className="text-muted-foreground text-sm mt-0.5">{t("home.private")}</p>
+        <div className="flex-1 min-w-0">
+          <p className="text-[11px] text-muted-foreground uppercase tracking-widest mb-0.5">Substance Recovery</p>
+          <h1 className="text-2xl font-semibold text-foreground leading-snug">{timeGreeting()}</h1>
+          <p className="text-muted-foreground text-sm mt-0.5">{t("home.private")}</p>
+        </div>
+        <button
+          onClick={() => navigate("/settings")}
+          className="shrink-0 mt-0.5 p-2 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors touch-target"
+          aria-label={t("nav.settings")}
+        >
+          {clerkAvailable ? <User size={20} strokeWidth={1.8} /> : <LogIn size={20} strokeWidth={1.8} />}
+        </button>
       </header>
 
       <div className="flex-1 overflow-y-auto scroll-smooth-ios px-4 flex flex-col gap-4 pb-safe">
