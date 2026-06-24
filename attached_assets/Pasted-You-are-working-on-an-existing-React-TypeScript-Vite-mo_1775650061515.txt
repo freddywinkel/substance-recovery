@@ -1,0 +1,544 @@
+You are working on an existing React + TypeScript + Vite mobile-first recovery PWA.
+
+This is an update to the existing app, not a rebuild.
+Inspect the current repository first and preserve the existing architecture wherever possible.
+
+Read first:
+- docs/master-spec.md
+- docs/clinical-content.md
+- docs/safety-boundaries.md
+- docs/ui-principles.md
+- docs/progress.md
+- PLAN.md
+
+PRIMARY TASK
+Expand the existing app with higher-value recovery support functions inside these areas:
+1. Trigger Tracker
+2. Relapse Log
+3. Anxiety tab
+4. Restlessness / Boredom tab
+
+The goal is to make the app more practically useful in real recovery moments:
+- catch problems earlier
+- help the user faster
+- separate craving from anxiety/restlessness
+- reduce shame after setbacks
+- improve personal pattern recognition
+
+IMPORTANT RULES
+- do not rebuild the whole app from scratch
+- do not remove working features unless replacing them with a cleaner equivalent
+- do not add cloud sync
+- do not add analytics SDKs
+- do not add social/community features
+- do not add predictive AI
+- do not invent unsupported clinical claims
+- do not present the app as treatment, diagnosis, or emergency care
+- use calm, supportive, non-judgmental language
+- keep it mobile-first and iPhone 14 Pro friendly
+- preserve local-first persistence
+
+UX GOALS
+The app should feel:
+- calm
+- premium
+- emotionally safe
+- simple under stress
+- one-handed friendly
+- dark mode first
+- not corporate
+- not childish
+- not overstimulating
+
+==================================================
+PART 1 — IMPROVE THE TRIGGER TRACKER
+==================================================
+
+Expand the Trigger Tracker so it includes not just basic craving logging, but richer practical functions.
+
+Add these functions if missing:
+
+1. Trigger build-up timeline
+- when did this start
+- when did it become noticeable
+- when did it become risky
+
+2. Trigger chain capture
+- event
+- thought
+- feeling
+- body sensation
+- urge
+- action urge
+
+3. Access/risk friction check
+- do you have access right now
+- do you have money right now
+- are you alone
+- can you leave
+- has anyone contacted you
+- is the substance/behavior directly available
+
+4. “Urge voice” field
+- what is the urge saying right now
+
+5. Confidence split
+- confidence to get through next 10 minutes
+- confidence to get through next few hours
+
+6. Protective factors present
+- someone safe available
+- can leave situation
+- food/water available
+- have a plan
+- can distract
+- can contact someone
+- already used a tool
+- already got through part of this
+
+7. Trigger severity type
+- emotionally painful
+- obsessive
+- body-level urge
+- panic-like
+- impulsive
+- empty/numb
+- restless
+- boredom-driven
+
+8. “Help me now” shortcut mode
+A fast branch that skips full logging and opens:
+- grounding
+- breathing
+- cold water reset
+- leave the room
+- contact someone
+- toolbox
+- quick distraction
+- anxiety tab
+- restlessness tab
+
+9. Repeat trigger recognition
+If local patterns exist, surface cautious wording like:
+- this looks similar to past entries
+- similar moments often involved evenings, being alone, and restlessness
+
+10. Post-urge recovery follow-up
+After some time or on return:
+- did the urge pass
+- did you use
+- what helped
+- what made it worse
+- how long until it came down
+
+==================================================
+PART 2 — IMPROVE THE RELAPSE LOG
+==================================================
+
+Expand the Relapse Log into a more useful, shame-free learning tool.
+
+Add these functions if missing:
+
+1. Lapse vs relapse distinction
+- lapse
+- setback
+- return to use
+- relapse
+- no label
+
+2. Pre-relapse stage markers
+- isolating
+- bargaining
+- fantasizing
+- hiding
+- feeling hopeless
+- not eating/sleeping
+- skipping routine
+- too much confidence
+- seeking triggers
+- contacting people/places
+
+3. “Point of no return” question
+- where did it become hardest to turn back
+  - first thought
+  - first contact
+  - first movement toward it
+  - once I was there
+  - once I started
+
+4. “What did you actually need?” field
+- relief
+- sleep
+- numbness
+- comfort
+- stimulation
+- escape
+- connection
+- reward
+- silence in my head
+- self-punishment
+- rebellion
+- other
+
+5. Consequence timeline
+- immediate effect
+- 1 hour later
+- later that day
+- next morning
+- emotional effect
+- practical effect
+
+6. Shame interruption / supportive screen
+After logging:
+- this moment does not erase your effort
+- the next step matters more than punishment
+- choose one stabilizing action now
+
+7. Repair actions
+- hydrate/eat
+- rest
+- remove access
+- tell someone safe
+- block/delete contact
+- leave place
+- re-enter routine
+- open toolbox
+- make next 24-hour plan
+
+8. Hidden warning sign awareness
+- I knew but ignored it
+- I minimized it
+- I noticed too late
+- I was already slipping yesterday
+
+9. Relapse type tagging
+- impulsive
+- planned
+- emotional collapse
+- boredom-driven
+- social pressure
+- reward-seeking
+- exhaustion-based
+- self-sabotage
+- after conflict
+- after success/celebration
+
+10. Recovery restart plan
+- what happens in the next 10 minutes
+- next 2 hours
+- tonight
+- tomorrow morning
+- who needs to know
+- what needs to be removed/blocked
+
+==================================================
+PART 3 — ADD / IMPROVE ANXIETY TAB
+==================================================
+
+Create or improve an Anxiety tab that helps distinguish anxiety from craving and route the user to the right coping action.
+
+Include:
+
+1. Anxiety type selector
+- panic spike
+- health anxiety
+- dread
+- racing thoughts
+- social anxiety
+- generalized worry
+- shame/fear after use
+- future fear
+- body anxiety
+
+2. “What is your brain predicting?” field
+- what are you afraid is about to happen
+
+3. Urgency vs action check
+- does this feel urgent
+- is action needed now
+- do you need grounding, time, or support
+
+4. Body map or body location selector
+- chest
+- stomach
+- throat
+- head
+- arms
+- legs
+- whole body
+
+5. Panic mode shortcut
+Immediate help with minimal logging:
+- slow breathing
+- orient to room
+- cold water
+- grounding
+- calming script
+- timer
+
+6. Reassurance-seeking tracker
+- googling
+- checking body
+- asking others repeatedly
+- avoiding
+- rumination
+- compulsive distraction
+
+7. Worry postponement tool
+- postpone for 15 min
+- postpone for 1 hour
+- write it down for later
+
+8. Links to other states
+- did this trigger craving
+- did this come from restlessness
+- did poor sleep contribute
+- did conflict contribute
+
+9. Outcome check
+- did it pass
+- how long did it last
+- what helped
+- what worsened it
+- did it become a craving
+
+10. Safe contact / safe script
+- save message template
+- quick support wording
+- option to open contacts
+
+==================================================
+PART 4 — ADD / IMPROVE RESTLESSNESS / BOREDOM TAB
+==================================================
+
+Create or improve a Restlessness tab for early recovery, boredom, agitation, and understimulation.
+
+Include:
+
+1. Restlessness type selector
+- bored
+- understimulated
+- physically agitated
+- mentally noisy
+- can’t sit still
+- empty
+- irritated
+- craving stimulation
+- lonely and restless
+- tired but wired
+
+2. Stimulation need check
+- do you need calming
+- movement
+- sensory reset
+- hand occupation
+- light mental occupation
+- social contact
+
+3. Low-dopamine rescue menu
+- shower
+- tea/water
+- short walk
+- stretch
+- simple food
+- tidy one small area
+- music
+- stand outside briefly
+- low-intensity game
+- easy task
+
+4. Occupy hands mode
+- fold laundry
+- clean sink
+- doodle
+- stress object
+- snack prep
+- organize one drawer
+
+5. Movement branch
+- 2-minute movement
+- 5-minute walk
+- paced steps
+- stretch routine
+- shake tension out
+
+6. Mental occupation branch
+- simple reading
+- puzzle
+- podcast
+- low-intensity game
+- recipe prep
+- light admin task
+
+7. Restlessness timer
+- survive 5 minutes
+- survive 10 minutes
+- survive 20 minutes
+- check back later
+
+8. Convert-state check
+- is this restlessness
+- or craving
+- or anxiety
+- or loneliness
+- or exhaustion
+
+Then route cleanly to the right module.
+
+9. Environment reset
+- open window
+- softer lights
+- leave room
+- remove phone
+- change clothes
+- shoes on and walk
+- sit somewhere else
+
+10. Outcome check
+- did it settle
+- what helped
+- what made it worse
+- did it become a craving
+
+==================================================
+PART 5 — CROSS-FUNCTIONAL FEATURES
+==================================================
+
+Add these app-wide helpful functions if they fit cleanly:
+
+1. “What helped last time”
+Surface the last few tools that seemed to help in similar situations.
+
+2. One-tap repeat
+Repeat a previously helpful tool/action.
+
+3. Pattern awareness
+Use cautious wording only:
+- based on your entries
+- this seems to show up more often
+- similar moments often involve...
+
+Do not use predictive or deterministic language.
+
+4. 24-hour stabilization plan
+After high-risk or relapse moments, let the user make a short next-step plan.
+
+5. Honesty/contact shortcut
+A fast action to:
+- choose a contact
+- copy a message
+- use a support script
+
+6. Privacy support
+Keep privacy-first behavior.
+If settings/export already exist, extend them cleanly.
+
+==================================================
+PART 6 — HOME SCREEN UPDATE
+==================================================
+
+Update the Home screen so the most important actions are easy to reach on iPhone 14 Pro.
+
+Home screen must include large, clear, thumb-friendly actions for:
+- Trigger Tracker
+- Relapse Log
+- Anxiety
+- Restlessness
+- Toolbox
+- Progress
+
+The layout must:
+- respect safe areas
+- work well in mobile Safari
+- work well as a PWA from the iPhone home screen
+- avoid a desktop-style framed layout on mobile
+- keep spacing calm and clear
+
+==================================================
+PART 7 — DATA / STORAGE
+==================================================
+
+Use the existing local-first architecture where possible.
+
+Ensure:
+- local persistence for all new fields and modules
+- drafts + completed entries
+- strongly typed models
+- repository/service layer updates if needed
+- clean migrations if schema changes are required
+
+Do not add cloud sync.
+
+==================================================
+PART 8 — ANALYTICS / PROGRESS INTEGRATION
+==================================================
+
+Where appropriate, connect the new data to the Progress tab.
+
+Add or improve stats such as:
+- top triggers
+- top anxiety types
+- top restlessness states
+- tools used most
+- which tools seemed to help more often
+- craving decrease after tools
+- confidence increase after tools
+- top warning signs before relapse
+- common relapse types
+- common “what I actually needed” patterns
+
+Use cautious language only.
+No medical or treatment claims.
+
+==================================================
+PART 9 — TESTING
+==================================================
+
+Add or update tests for:
+- flow progression
+- branching logic
+- draft persistence
+- local save behavior
+- routing between modules
+- “what helped last time” logic if implemented
+- analytics helper functions if changed
+
+Run:
+- npm run build
+- npm run test
+- npm run lint
+
+Fix critical issues introduced by this work.
+
+==================================================
+PART 10 — DOCUMENTATION
+==================================================
+
+Update docs/progress.md after implementation.
+
+Include:
+- objective
+- files changed
+- decisions made
+- validation performed
+- known issues
+- next step
+
+If new data structures or metrics are added, update relevant docs as well.
+
+==================================================
+OUTPUT FORMAT
+==================================================
+
+Return:
+1. inspection summary
+2. implementation plan
+3. changes made
+4. files changed
+5. validation results
+6. known issues
+7. next recommended step
+
+Start now.
+Do not stop at planning.
+Actually implement these improvements in the existing app.

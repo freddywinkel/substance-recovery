@@ -1,0 +1,199 @@
+Update the Progress tab of the existing recovery PWA to include meaningful local statistics derived from the Craving / Trigger Tracker, Relapse Log, Toolbox usage, and intervention outcomes.
+
+Use these files as source of truth:
+- docs/master-spec.md
+- docs/clinical-content.md
+- docs/safety-boundaries.md
+- docs/ui-principles.md
+- docs/progress.md
+- docs/dashboard-metrics.md if present
+- PLAN.md
+
+PRIMARY GOAL
+Make the Progress tab genuinely useful by showing calm, readable, privacy-first insights about:
+- trigger patterns
+- used coping/distraction tactics
+- helpfulness trends
+- confidence changes
+- relapse warning signs
+- relapse context patterns
+- sobriety / return-to-use overview
+
+IMPORTANT RULES
+- do not use predictive AI
+- do not make clinical efficacy claims
+- do not say the app proves or prevents relapse
+- use cautious language such as:
+  - patterns in your logs
+  - what seems to help more often
+  - possible associations
+  - based on your entries
+- keep the UI calm, supportive, and non-judgmental
+- mobile-first and iPhone 14 Pro friendly
+- dark mode default
+- no chart clutter
+- no corporate dashboard feel
+- no manipulative streak pressure
+
+ADD THESE STATISTICS TO THE PROGRESS TAB
+
+1. CORE OVERVIEW
+- sobriety counter / days since last return to use
+- total craving entries in selected range
+- total lapse/relapse logs in selected range
+- average craving intensity
+- average confidence to resist
+- total coping/intervention actions used
+
+2. TRIGGER PATTERNS
+- top internal triggers
+- top external triggers
+- top emotions before craving
+- top physical sensations before craving
+- top thoughts before craving
+- top substances or behaviors associated with cravings
+
+3. TIME AND CONTEXT PATTERNS
+- craving heatmap by day/date
+- high-risk time of day view
+- day-of-week pattern
+- most common locations
+- most common social context
+- buildup duration distribution
+
+4. COPING / DISTRACTION TACTICS
+For each tool or tactic:
+- times selected
+- times actually used
+- tool used rate
+- average craving before
+- average craving after
+- average craving drop
+- average confidence before
+- average confidence after
+- average confidence lift
+- percentage where craving decreased
+- percentage where user chose document only
+- favorites usage
+- custom tool usage
+
+5. HELPFULNESS / DE-ESCALATION
+- entries where craving decreased after intervention
+- entries where confidence increased after intervention
+- percentage of craving entries with some coping action
+- percentage of high-risk entries followed by no linked relapse log in the local data window
+- support action rate
+- times user left the risky situation if that data exists
+
+IMPORTANT:
+Label this section carefully.
+Use labels like:
+- helpfulness trends
+- de-escalation patterns
+- support follow-through
+Do not use labels like:
+- proven success
+- treatment effectiveness
+- relapse prevented
+
+6. RELAPSE / LAPSE INSIGHTS
+- total lapse/return-to-use events
+- days since last event
+- top first triggers before relapse
+- most missed warning signs
+- most common thought right before use
+- most common “what could have helped”
+- top time-of-day for relapse events
+- top contexts before relapse
+- number of relapse logs linked to prior craving entries
+- number of relapse logs with no support contact selected
+
+7. WARNING SIGN ANALYSIS
+Group warning signs if data supports it:
+- emotional warning signs
+- mental warning signs
+- behavioral/physical warning signs
+Show top items and frequencies.
+
+8. HALT / BASE STATE PATTERNS
+If data exists in craving logs:
+- hungry
+- angry
+- lonely
+- tired
+Show:
+- frequency
+- average craving intensity by HALT state
+- overlap with relapse events if possible
+
+9. PERSONAL TRENDS
+Add filters:
+- 7d
+- 30d
+- 90d
+- all time
+
+Show trends for:
+- average craving intensity
+- average confidence
+- coping action use
+- high-risk entry count
+- lapse/relapse count
+
+IMPLEMENTATION REQUIREMENTS
+- use repository/service helpers for analytics
+- add strongly typed analytics helpers
+- keep metrics computed locally only
+- use accessible card-based UI
+- mobile-first layout
+- iPhone 14 Pro safe-area friendly
+- tap on a metric should open related entries if that pattern already exists or can be added cleanly
+- provide good empty states
+- avoid visual overload
+- charts should remain simple and readable
+
+UI STRUCTURE RECOMMENDATION
+Create sections in this order:
+1. Overview
+2. Trigger Patterns
+3. Coping & Tools
+4. Relapse Insights
+5. Trends
+
+TESTING REQUIREMENTS
+Add or update tests for analytics helpers including:
+- trigger frequency calculation
+- tool helpfulness calculation
+- average craving drop
+- average confidence lift
+- relapse linkage counts
+- warning sign frequency
+- filter range behavior
+
+VALIDATION
+Run:
+- npm run build
+- npm run test
+- npm run lint
+
+Fix critical issues introduced by this work.
+
+DOCUMENTATION
+Update docs/progress.md after implementation.
+Also create or update docs/dashboard-metrics.md describing:
+- each metric
+- formula or calculation logic
+- cautionary interpretation notes
+- limitations of the metrics
+
+OUTPUT FORMAT
+Return:
+1. inspection summary
+2. analytics plan
+3. changes made
+4. files changed
+5. validation results
+6. known issues
+7. next recommended step
+
+Start now and implement the Progress tab update.

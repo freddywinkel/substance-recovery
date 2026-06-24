@@ -1,0 +1,164 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: API specification
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: sync
+    description: Cross-device sync operations
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      description: Returns server health status
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+  /sync:
+    post:
+      operationId: syncRecords
+      tags: [sync]
+      summary: Bidirectional record sync
+      description: >
+        Pushes locally-changed records and pulls all records newer than the
+        supplied revision cursor. Requires an authenticated session. The whole
+        request is applied atomically. Pull is paginated by `revision`; repeat
+        with the returned `cursor` until `hasMore` is false.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SyncInput"
+      responses:
+        "200":
+          description: Sync applied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SyncResult"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden origin
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
+    SyncPayload:
+      description: Opaque record payload (the full client-side record), or null for tombstones.
+      type: ["object", "null"]
+      additionalProperties: true
+    SyncChange:
+      type: object
+      required:
+        - kind
+        - recordId
+        - clientUpdatedAt
+        - deleted
+      properties:
+        kind:
+          type: string
+        recordId:
+          type: string
+        payload:
+          $ref: "#/components/schemas/SyncPayload"
+        clientUpdatedAt:
+          type: integer
+          description: Epoch milliseconds, monotonic per device.
+        deleted:
+          type: boolean
+    SyncRecord:
+      type: object
+      required:
+        - kind
+        - recordId
+        - clientUpdatedAt
+        - deleted
+        - revision
+      properties:
+        kind:
+          type: string
+        recordId:
+          type: string
+        payload:
+          $ref: "#/components/schemas/SyncPayload"
+        clientUpdatedAt:
+          type: integer
+        deleted:
+          type: boolean
+        revision:
+          type: integer
+    SyncInput:
+      type: object
+      required:
+        - changes
+        - cursor
+      properties:
+        changes:
+          type: array
+          items:
+            $ref: "#/components/schemas/SyncChange"
+        cursor:
+          type: string
+          description: Server revision cursor. Use "0" for a full pull.
+        limit:
+          type: integer
+          description: Optional pull page size.
+    SyncResult:
+      type: object
+      required:
+        - records
+        - cursor
+        - hasMore
+        - serverTime
+      properties:
+        records:
+          type: array
+          items:
+            $ref: "#/components/schemas/SyncRecord"
+        cursor:
+          type: string
+        hasMore:
+          type: boolean
+        serverTime:
+          type: integer
+          description: Server clock (epoch ms) at response time.

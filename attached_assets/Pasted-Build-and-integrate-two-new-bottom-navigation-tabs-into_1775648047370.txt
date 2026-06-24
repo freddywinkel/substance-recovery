@@ -1,0 +1,367 @@
+Build and integrate two new bottom navigation tabs into my existing recovery app: Anxiety Tracker and Boredom Tracker. These features must be tailored to a user who struggles with social anxiety, spotlight effect, boredom intolerance, restlessness, distress intolerance, experiential avoidance, and a tendency to seek quick dopamine through distraction, gaming, food, social interaction, or substances. The goal is not over-analysis or obsessive self-monitoring, but fast pattern recognition and building tolerance for uncomfortable states without immediately reacting.
+
+Important design principle: both trackers must be very fast to use, low-friction, clean, minimal, mobile-first, and should take no more than 10–20 seconds per log. Avoid long journaling, avoid too many text inputs, avoid making the user overthink. The trackers should help the user notice patterns and train “pause before reacting.”
+
+Add two new bottom nav items:
+
+Anxiety Tracker
+Boredom Tracker
+
+These should fit seamlessly into the existing style, design system, and navigation structure of the recovery app.
+
+For the Anxiety Tracker, build a quick logging flow with the following fields:
+
+Intensity: slider 1–10
+Context: quick-select buttons
+Social setting with unknown people
+Work / performance
+Alone
+After using / crash
+Other
+Trigger: quick-select buttons
+Feeling observed / spotlight
+Thought about appearance
+Silence / nothing to do
+Social expectation
+Fear of judgment
+Other
+Body sensation: multi-select
+Chest tension
+Restlessness
+Racing thoughts
+Awkward body awareness
+Tight jaw / shoulders
+Automatic reaction: single select
+Tried to fix myself (posture, hair, behavior)
+Started talking more / overcompensating
+Avoided / left situation
+Searched for distraction
+Sat with it without reacting
+
+After logging, show one short grounded supportive message, for example:
+
+“You don’t need to fix this. You can stay.”
+“Feeling observed is not the same as being judged.”
+“This can pass without reacting.”
+
+For the Boredom Tracker, build a quick logging flow with these fields:
+
+Intensity of boredom/restlessness: slider 1–10
+Type of feeling: choose 1–2
+Restless energy
+Emptiness
+Irritation
+Mental noise
+Flat / numb
+Situation:
+Doing nothing
+Between activities
+Alone
+After stimulation drops
+Before sleep
+Other
+Urge:
+Scroll / phone
+Game
+Eat
+Use substances
+Seek people
+Other stimulation
+What did I do:
+Escaped immediately
+Delayed action
+Sat with it without reacting
+Replaced with healthy routine
+Optional extra field:
+Duration before reacting: 0 min / 5 min / 10 min / 20+ min
+
+After logging, show one short message, for example:
+
+“This feeling will pass without action.”
+“Onrust is not danger.”
+“You can delay without fixing.”
+
+Add a very important feature to both trackers: a “Delay Action” button. When pressed, it should start a 10-minute timer and open a very simple grounding screen. This screen should be extremely minimal and contain only:
+
+a timer
+one short instruction at a time
+no clutter
+
+For example, rotate instructions such as:
+
+“Sit still.”
+“Feel your feet on the ground.”
+“Notice the urge without acting.”
+“Name what you feel.”
+“You do not need to fix this.”
+“Let the wave peak and pass.”
+
+The delay screen should feel calm, clean, and structured, not spiritual or overly therapeutic.
+
+Add a weekly summary view for both trackers combined. Keep it simple and visual. Show:
+
+most common anxiety triggers
+most common boredom situations
+percentage of times the user reacted immediately versus delayed versus sat with it
+average intensity per category
+trend over the last 7 days
+
+Generate simple insights automatically, such as:
+
+“Anxiety happens most in social spotlight situations.”
+“Boredom peaks when stimulation drops.”
+“You are improving your delay tolerance.”
+“You often react quickly when alone and restless.”
+
+Do not make the weekly summary feel judgmental. It should be supportive and practical.
+
+Very important behavioral rule: this feature must not encourage obsessive tracking or perfectionism. Add subtle guardrails such as:
+
+no long-form journaling by default
+no requirement to log everything
+no streak pressure
+no “perfect day” scoring
+no shame-based language
+
+If useful, allow an optional notes field behind a collapsed “Add note” button, but keep it hidden by default.
+
+Tailor the wording to this recovery context:
+
+the user historically used substances, distraction, overfunctioning, and stimulation to avoid uncomfortable internal states
+the user wants to build tolerance for boredom, emptiness, anxiety, and restlessness
+the user needs support for learning not to react immediately
+the user struggles especially with social evaluation, self-consciousness, appearance-based anxiety, and boredom when unoccupied
+
+UX priorities:
+
+mobile-first
+very fast logging
+thumb-friendly buttons
+visually clean
+emotionally regulating, not overstimulating
+consistent with the rest of the recovery app
+no overwhelming dashboards
+
+Technical expectations:
+
+integrate with the existing app architecture cleanly
+reuse existing components/styles where possible
+create clear types/interfaces for tracker entries
+persist logs in the current app data layer
+build reusable components for sliders, quick-select chips, delay timer, and insight cards
+make it easy to expand later with charts or therapist export if needed
+
+At the end, implement:
+
+bottom nav integration
+tracker entry screens
+delay action screen with timer
+weekly summary screen
+clean reusable state/data models
+polished UI consistent with the current app
+
+Also add a short developer note in comments explaining that these trackers are intended for awareness and distress tolerance training, not symptom control or obsessive self-monitoring.
+
+Voeg eraan toe dat het in de home tab moet komen, niet navigation bar. En voeg ook statistieken toe voor de progress tab. MAak een cope paste prompt
+
+Use this prompt in Replit:
+
+Build and integrate two new features into my existing recovery app: Anxiety Tracker and Boredom Tracker. These should not be added as separate bottom navigation tabs. Instead, they must be added as clearly visible feature cards or entry points inside the existing Home tab. They should feel like important daily tools within the Home screen, not like separate app sections in the bottom navigation bar.
+
+Also extend the existing Progress tab with new statistics and insights for both Anxiety Tracker and Boredom Tracker.
+
+These features must be tailored to a user who struggles with social anxiety, spotlight effect, boredom intolerance, restlessness, distress intolerance, experiential avoidance, and a tendency to seek quick dopamine through distraction, gaming, food, social interaction, overfunctioning, or substances. The goal is not over-analysis or obsessive self-monitoring, but fast pattern recognition and building tolerance for uncomfortable internal states without immediately reacting.
+
+Important design principle: both trackers must be very fast to use, low-friction, clean, minimal, mobile-first, and should take no more than 10–20 seconds per log. Avoid long journaling, avoid too many text inputs, avoid making the user overthink. The trackers should help the user notice patterns and train “pause before reacting.”
+
+Placement
+Add Anxiety Tracker and Boredom Tracker as feature cards, buttons, or modules inside the existing Home tab
+Do not add them as new items in the bottom navigation bar
+Make them easy to access from Home, visually consistent with the rest of the recovery app
+They should look like core recovery tools, not secondary extras
+Anxiety Tracker
+
+Build a quick logging flow with the following fields:
+
+Intensity: slider 1–10
+Context: quick-select buttons
+Social setting with unknown people
+Work / performance
+Alone
+After using / crash
+Other
+Trigger: quick-select buttons
+Feeling observed / spotlight
+Thought about appearance
+Silence / nothing to do
+Social expectation
+Fear of judgment
+Other
+Body sensation: multi-select
+Chest tension
+Restlessness
+Racing thoughts
+Awkward body awareness
+Tight jaw / shoulders
+Automatic reaction: single select
+Tried to fix myself (posture, hair, behavior)
+Started talking more / overcompensating
+Avoided / left situation
+Searched for distraction
+Sat with it without reacting
+
+After logging, show one short grounded supportive message, for example:
+
+“You don’t need to fix this. You can stay.”
+“Feeling observed is not the same as being judged.”
+“This can pass without reacting.”
+Boredom Tracker
+
+Build a quick logging flow with these fields:
+
+Intensity of boredom/restlessness: slider 1–10
+Type of feeling: choose 1–2
+Restless energy
+Emptiness
+Irritation
+Mental noise
+Flat / numb
+Situation:
+Doing nothing
+Between activities
+Alone
+After stimulation drops
+Before sleep
+Other
+Urge:
+Scroll / phone
+Game
+Eat
+Use substances
+Seek people
+Other stimulation
+What did I do:
+Escaped immediately
+Delayed action
+Sat with it without reacting
+Replaced with healthy routine
+Optional extra field:
+Duration before reacting: 0 min / 5 min / 10 min / 20+ min
+
+After logging, show one short message, for example:
+
+“This feeling will pass without action.”
+“Onrust is not danger.”
+“You can delay without fixing.”
+Delay Action feature
+
+Add a very important shared feature to both trackers: a “Delay Action” button.
+
+When pressed:
+
+start a 10-minute timer
+open a very simple grounding screen
+keep the screen extremely minimal
+
+This screen should contain only:
+
+a timer
+one short instruction at a time
+no clutter
+
+Rotate or cycle through instructions such as:
+
+“Sit still.”
+“Feel your feet on the ground.”
+“Notice the urge without acting.”
+“Name what you feel.”
+“You do not need to fix this.”
+“Let the wave peak and pass.”
+
+The delay screen should feel calm, clean, and structured, not spiritual or overly therapeutic.
+
+Progress tab expansion
+
+Extend the existing Progress tab with new statistics and insight sections for Anxiety Tracker and Boredom Tracker.
+
+Add clear, simple, supportive stats such as:
+
+Anxiety stats
+total anxiety logs
+average anxiety intensity
+most common context
+most common trigger
+most common automatic reaction
+percentage of times the user sat with it vs avoided vs overcompensated vs searched distraction
+Boredom stats
+total boredom logs
+average boredom/restlessness intensity
+most common situation
+most common urge
+percentage of times the user escaped immediately vs delayed vs sat with it vs replaced with healthy routine
+average delay duration before reacting
+Combined recovery stats
+percentage of times user delayed action across both trackers
+trend of immediate reaction vs tolerated discomfort over last 7 days
+trend over last 30 days if data exists
+intensity trend charts for anxiety and boredom
+most common high-risk moments
+supportive insight cards
+
+Generate simple insights automatically, such as:
+
+“Anxiety happens most in social spotlight situations.”
+“Boredom peaks when stimulation drops.”
+“You are improving your delay tolerance.”
+“You often react quickly when alone and restless.”
+
+Do not make the progress screen feel judgmental. It should be supportive, practical, and visually clean.
+
+Behavioral guardrails
+
+Very important: this feature must not encourage obsessive tracking or perfectionism. Add subtle guardrails such as:
+
+no long-form journaling by default
+no requirement to log everything
+no streak pressure
+no perfect-day scoring
+no shame-based language
+
+If useful, allow an optional notes field behind a collapsed “Add note” button, but keep it hidden by default.
+
+Tailoring to this recovery context
+
+Tailor the wording and UX to this recovery context:
+
+the user historically used substances, distraction, overfunctioning, and stimulation to avoid uncomfortable internal states
+the user wants to build tolerance for boredom, emptiness, anxiety, and restlessness
+the user needs support for learning not to react immediately
+the user struggles especially with social evaluation, self-consciousness, appearance-based anxiety, and boredom when unoccupied
+UX priorities
+mobile-first
+very fast logging
+thumb-friendly buttons
+visually clean
+emotionally regulating, not overstimulating
+consistent with the rest of the recovery app
+no overwhelming dashboards
+Technical expectations
+integrate cleanly with the existing app architecture
+reuse existing components/styles where possible
+create clear types/interfaces for tracker entries
+persist logs in the current app data layer
+build reusable components for sliders, quick-select chips, delay timer, and insight cards
+connect tracker data into the existing Progress tab cleanly
+make it easy to expand later with charts or export if needed
+Final implementation checklist
+
+Implement all of the following:
+
+Add Anxiety Tracker and Boredom Tracker entry points inside the Home tab
+Build tracker entry/logging screens
+Build shared Delay Action screen with timer
+Store tracker data in the app data layer
+Add Anxiety and Boredom statistics to the Progress tab
+Add simple charts or visual summaries in Progress
+Add supportive insight cards based on logged patterns
+Keep UI polished and consistent with the existing recovery app

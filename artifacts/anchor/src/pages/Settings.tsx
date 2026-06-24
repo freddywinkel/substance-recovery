@@ -1,0 +1,589 @@
+import { useState, useEffect } from "react";
+import { useStore } from "@/hooks/useStore";
+import { usePWA } from "@/hooks/usePWA";
+import { useLanguage } from "@/contexts/LanguageContext";
+import { useSync } from "@/contexts/SyncContext";
+import { useT } from "@/hooks/useT";
+import { PageHeader } from "@/components/PageHeader";
+import { Moon, Sun, Download, Trash2, Phone, Shield, Calendar, Languages, UserPlus, X, Cloud, LogOut, RefreshCw, Check, CloudOff, AlertCircle } from "lucide-react";
+import { EmergencyContact } from "@/db";
+import { DEFAULT_CRISIS_SERVICES } from "@/lib/crisisServices";
+import { Show, useUser, useClerk } from "@clerk/react";
+import { useLocation } from "wouter";
+
+export function Settings() {
+  const {
+    theme, setTheme, resetAllData, sobrietyStartDate, setSobrietyStartDate,
+    crisisService, setCrisisService, emergencyContacts, setEmergencyContacts,
+  } = useStore();
+  const { installPrompt, isInstalled, install } = usePWA();
+  const { language, setLanguage } = useLanguage();
+  const { t } = useT();
+  const { user } = useUser();
+  const { signOut } = useClerk();
+  const { status: syncStatus, lastSyncedAt, isSignedIn: syncSignedIn, syncNow } = useSync();
+  const [, navigate] = useLocation();
+  const [confirmReset, setConfirmReset] = useState(false);
+  const [resetDone, setResetDone] = useState(false);
+  const [dateInput, setDateInput] = useState(sobrietyStartDate ?? "");
+
+  const [selectedServiceId, setSelectedServiceId] = useState<string>("");
+  const [customName, setCustomName] = useState("");
+  const [customNumber, setCustomNumber] = useState("");
+  const [customNameError, setCustomNameError] = useState("");
+  const [customNumberError, setCustomNumberError] = useState("");
+
+  const [showContactForm, setShowContactForm] = useState(false);
+  const [contactName, setContactName] = useState("");
+  const [contactRelation, setContactRelation] = useState("");
+  const [contactPhone, setContactPhone] = useState("");
+  const [contactErrors, setContactErrors] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    if (crisisService) {
+      if (crisisService.isCustom) {
+        setSelectedServiceId("custom");
+        setCustomName(crisisService.name);
+        setCustomNumber(crisisService.number);
+      } else {
+        setSelectedServiceId(crisisService.id);
+      }
+    }
+  }, [crisisService]);
+
+  const handleReset = async () => {
+    await resetAllData({ signedIn: syncSignedIn, userId: user?.id ?? null });
+    setConfirmReset(false);
+    setResetDone(true);
+    setDateInput("");
+    setSelectedServiceId("");
+    setCustomName("");
+    setCustomNumber("");
+  };
+
+  const handleDateSave = async () => {
+    const val = dateInput.trim();
+    await setSobrietyStartDate(val || null);
+  };
+
+  const handleServiceChange = async (id: string) => {
+    setSelectedServiceId(id);
+    setCustomNameError("");
+    setCustomNumberError("");
+    if (id === "custom") {
+      setCustomName("");
+      setCustomNumber("");
+      return;
+    }
+    const svc = DEFAULT_CRISIS_SERVICES.find((s) => s.id === id);
+    if (svc) {
+      await setCrisisService({ id: svc.id, name: t(svc.nameKey), number: svc.number, isCustom: false });
+    }
+  };
+
+  const handleCustomSave = async () => {
+    let valid = true;
+    setCustomNameError("");
+    setCustomNumberError("");
+    if (!customName.trim()) {
+      setCustomNameError(t("settings.emergencyContacts.name"));
+      valid = false;
+    }
+    const digits = customNumber.replace(/\D/g, "");
+    if (digits.length < 3) {
+      setCustomNumberError(t("settings.crisisService.customNumber"));
+      valid = false;
+    }
+    if (!valid) return;
+    await setCrisisService({ id: "custom", name: customName.trim(), number: customNumber.trim(), isCustom: true });
+  };
+
+  const handleAddContact = async () => {
+    const errors: Record<string, string> = {};
+    if (!contactName.trim()) errors.name = "required";
+    if (!contactRelation.trim()) errors.relationship = "required";
+    const digits = contactPhone.replace(/\D/g, "");
+    if (!contactPhone.trim() || digits.length < 3) errors.phone = "invalid";
+    setContactErrors(errors);
+    if (Object.keys(errors).length > 0) return;
+
+    const newContact: EmergencyContact = {
+      id: crypto.randomUUID(),
+      name: contactName.trim(),
+      relationship: contactRelation.trim(),
+      phone: contactPhone.trim(),
+    };
+    await setEmergencyContacts([...emergencyContacts, newContact]);
+    setContactName("");
+    setContactRelation("");
+    setContactPhone("");
+    setContactErrors({});
+    setShowContactForm(false);
+  };
+
+  const handleRemoveContact = async (id: string) => {
+    await setEmergencyContacts(emergencyContacts.filter((c) => c.id !== id));
+  };
+
+  const todayStr = new Date().toISOString().slice(0, 10);
+
+  return (
+    <div className="flex flex-col min-h-dvh bg-background">
+      <PageHeader title={t("settings.title")} />
+
+      <div className="flex-1 overflow-y-auto scroll-smooth-ios px-4 py-4 pb-safe flex flex-col gap-4">
+
+        {/* Sobriety */}
+        <section>
+          <p className="text-xs text-muted-foreground uppercase tracking-widest px-1 mb-3">{t("settings.section.sobriety")}</p>
+          <div className="bg-card border border-border rounded-2xl p-4 flex flex-col gap-3">
+            <div className="flex items-start gap-3">
+              <Calendar size={18} className="text-primary mt-0.5 shrink-0" />
+              <div>
+                <p className="text-sm font-medium text-foreground">{t("settings.sobriety.label")}</p>
+                <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
+                  {t("settings.sobriety.sub")}
+                </p>
+              </div>
+            </div>
+            <input
+              type="date"
+              value={dateInput}
+              max={todayStr}
+              onChange={(e) => setDateInput(e.target.value)}
+              onBlur={handleDateSave}
+              className="w-full bg-background border border-input rounded-xl px-4 py-3 text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-ring appearance-none [color-scheme:inherit]"
+            />
+            {sobrietyStartDate && (
+              <p className="text-xs text-primary leading-snug break-words">
+                {t("settings.sobriety.saved")} {new Date(sobrietyStartDate + "T00:00:00").toLocaleDateString(language === "nl" ? "nl-NL" : "en-GB", {
+                  weekday: "long", year: "numeric", month: "long", day: "numeric",
+                })}
+              </p>
+            )}
+          </div>
+        </section>
+
+        {/* Appearance */}
+        <section>
+          <p className="text-xs text-muted-foreground uppercase tracking-widest px-1 mb-3">{t("settings.section.appearance")}</p>
+          <div className="bg-card border border-border rounded-2xl p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                {theme === "dark" ? <Moon size={18} /> : <Sun size={18} />}
+                <div>
+                  <p className="text-sm font-medium text-foreground">
+                    {theme === "dark" ? t("settings.theme.dark") : t("settings.theme.light")}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {theme === "dark" ? t("settings.theme.dark_sub") : t("settings.theme.light_sub")}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+                className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors touch-target ${
+                  theme === "light" ? "bg-primary" : "bg-muted"
+                }`}
+                role="switch"
+                aria-checked={theme === "light"}
+                aria-label={t("settings.theme.aria")}
+              >
+                <span
+                  className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform duration-200 ${
+                    theme === "light" ? "translate-x-6" : "translate-x-1"
+                  }`}
+                />
+              </button>
+            </div>
+          </div>
+        </section>
+
+        {/* Language */}
+        <section>
+          <p className="text-xs text-muted-foreground uppercase tracking-widest px-1 mb-3">{t("settings.section.language")}</p>
+          <div className="bg-card border border-border rounded-2xl p-4">
+            <div className="flex items-center gap-3 mb-3">
+              <Languages size={18} className="text-primary shrink-0" />
+              <p className="text-sm font-medium text-foreground">
+                {language === "nl" ? "Taal / Language" : "Language / Taal"}
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setLanguage("nl")}
+                className={`flex-1 py-2.5 rounded-xl border text-sm font-medium transition-all touch-target ${
+                  language === "nl"
+                    ? "bg-primary/10 border-primary text-foreground"
+                    : "bg-background border-border text-muted-foreground hover:border-primary/30"
+                }`}
+              >
+                🇳🇱 Nederlands
+              </button>
+              <button
+                onClick={() => setLanguage("en")}
+                className={`flex-1 py-2.5 rounded-xl border text-sm font-medium transition-all touch-target ${
+                  language === "en"
+                    ? "bg-primary/10 border-primary text-foreground"
+                    : "bg-background border-border text-muted-foreground hover:border-primary/30"
+                }`}
+              >
+                🇬🇧 English
+              </button>
+            </div>
+          </div>
+        </section>
+
+        {/* Install */}
+        {!isInstalled && installPrompt && (
+          <section>
+            <p className="text-xs text-muted-foreground uppercase tracking-widest px-1 mb-3">{t("settings.section.install")}</p>
+            <div className="bg-card border border-border rounded-2xl p-4">
+              <div className="flex items-start gap-3">
+                <Download size={18} className="text-primary mt-0.5 shrink-0" />
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-foreground">{t("settings.install.title")}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
+                    {t("settings.install.sub")}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={install}
+                className="mt-4 w-full bg-primary text-primary-foreground rounded-xl py-3 font-semibold text-sm hover:opacity-90 active:scale-95 transition-all touch-target"
+              >
+                {t("settings.install.btn")}
+              </button>
+            </div>
+          </section>
+        )}
+
+        {/* ── Crisis Service picker ──────────────────────────── */}
+        <section>
+          <p className="text-xs text-muted-foreground uppercase tracking-widest px-1 mb-3">{t("settings.crisisService")}</p>
+          <div className="bg-card border border-border rounded-2xl p-4 flex flex-col gap-3">
+            <p className="text-xs text-muted-foreground leading-relaxed">{t("settings.crisisService.description")}</p>
+            <select
+              value={selectedServiceId}
+              onChange={(e) => handleServiceChange(e.target.value)}
+              className="w-full bg-background border border-input rounded-xl px-4 py-3 text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-ring appearance-none"
+            >
+              <option value="">{t("settings.crisisService.choose")}</option>
+              {DEFAULT_CRISIS_SERVICES.map((svc) => (
+                <option key={svc.id} value={svc.id}>
+                  {t(svc.nameKey)} — {svc.number}
+                </option>
+              ))}
+              <option value="custom">{t("settings.crisisService.custom")}</option>
+            </select>
+
+            {selectedServiceId === "custom" && (
+              <div className="flex flex-col gap-2 pt-1">
+                <div>
+                  <input
+                    type="text"
+                    placeholder={t("settings.crisisService.customName")}
+                    value={customName}
+                    onChange={(e) => setCustomName(e.target.value)}
+                    className={`w-full bg-background border rounded-xl px-4 py-3 text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-ring ${
+                      customNameError ? "border-destructive" : "border-input"
+                    }`}
+                  />
+                  {customNameError && <p className="text-xs text-destructive mt-1">{t("settings.emergencyContacts.name")} {language === "nl" ? "is verplicht" : "is required"}</p>}
+                </div>
+                <div>
+                  <input
+                    type="tel"
+                    placeholder={t("settings.crisisService.customNumber")}
+                    value={customNumber}
+                    onChange={(e) => setCustomNumber(e.target.value)}
+                    className={`w-full bg-background border rounded-xl px-4 py-3 text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-ring ${
+                      customNumberError ? "border-destructive" : "border-input"
+                    }`}
+                  />
+                  {customNumberError && <p className="text-xs text-destructive mt-1">{language === "nl" ? "Minimaal 3 cijfers vereist" : "Minimum 3 digits required"}</p>}
+                </div>
+                <button
+                  onClick={handleCustomSave}
+                  className="w-full bg-primary text-primary-foreground rounded-xl py-3 font-semibold text-sm hover:opacity-90 active:scale-95 transition-all touch-target"
+                >
+                  {language === "nl" ? "Opslaan" : "Save"}
+                </button>
+              </div>
+            )}
+
+            {crisisService && !crisisService.isCustom && selectedServiceId && selectedServiceId !== "custom" && (
+              <p className="text-xs text-primary leading-snug">
+                ✓ {crisisService.name} — {crisisService.number}
+              </p>
+            )}
+            {crisisService?.isCustom && selectedServiceId === "custom" && crisisService.name && (
+              <p className="text-xs text-primary leading-snug">
+                ✓ {crisisService.name} — {crisisService.number}
+              </p>
+            )}
+          </div>
+        </section>
+
+        {/* ── Emergency Contacts ────────────────────────────── */}
+        <section>
+          <p className="text-xs text-muted-foreground uppercase tracking-widest px-1 mb-3">{t("settings.emergencyContacts")}</p>
+          <div className="bg-card border border-border rounded-2xl p-4 flex flex-col gap-3">
+            <p className="text-xs text-muted-foreground leading-relaxed">{t("settings.emergencyContacts.description")}</p>
+
+            {/* Existing contacts */}
+            {emergencyContacts.length > 0 && (
+              <div className="flex flex-col gap-2">
+                {emergencyContacts.map((contact) => (
+                  <div
+                    key={contact.id}
+                    className="flex items-center justify-between gap-3 bg-background border border-border rounded-xl px-4 py-3"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-foreground truncate">{contact.name}</p>
+                      <p className="text-xs text-muted-foreground">{contact.relationship} · {contact.phone}</p>
+                    </div>
+                    <button
+                      onClick={() => handleRemoveContact(contact.id)}
+                      className="text-muted-foreground hover:text-destructive transition-colors shrink-0 p-1 touch-target"
+                      aria-label={t("settings.emergencyContacts.remove")}
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Add contact form */}
+            {showContactForm ? (
+              <div className="flex flex-col gap-2 border border-border rounded-xl p-3">
+                <div>
+                  <input
+                    type="text"
+                    placeholder={t("settings.emergencyContacts.name")}
+                    value={contactName}
+                    onChange={(e) => setContactName(e.target.value)}
+                    className={`w-full bg-background border rounded-xl px-4 py-3 text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-ring ${
+                      contactErrors.name ? "border-destructive" : "border-input"
+                    }`}
+                  />
+                  {contactErrors.name && <p className="text-xs text-destructive mt-1">{language === "nl" ? "Naam is verplicht" : "Name is required"}</p>}
+                </div>
+                <div>
+                  <input
+                    type="text"
+                    placeholder={t("settings.emergencyContacts.relationship")}
+                    value={contactRelation}
+                    onChange={(e) => setContactRelation(e.target.value)}
+                    className={`w-full bg-background border rounded-xl px-4 py-3 text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-ring ${
+                      contactErrors.relationship ? "border-destructive" : "border-input"
+                    }`}
+                  />
+                  {contactErrors.relationship && <p className="text-xs text-destructive mt-1">{language === "nl" ? "Relatie is verplicht" : "Relationship is required"}</p>}
+                </div>
+                <div>
+                  <input
+                    type="tel"
+                    placeholder={t("settings.emergencyContacts.phone")}
+                    value={contactPhone}
+                    onChange={(e) => setContactPhone(e.target.value)}
+                    className={`w-full bg-background border rounded-xl px-4 py-3 text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-ring ${
+                      contactErrors.phone ? "border-destructive" : "border-input"
+                    }`}
+                  />
+                  {contactErrors.phone && <p className="text-xs text-destructive mt-1">{language === "nl" ? "Minimaal 3 cijfers vereist" : "Minimum 3 digits required"}</p>}
+                </div>
+                <div className="flex gap-2 pt-1">
+                  <button
+                    onClick={() => { setShowContactForm(false); setContactErrors({}); }}
+                    className="flex-1 border border-border rounded-xl py-2.5 text-sm font-medium text-foreground hover:bg-muted/40 transition-colors touch-target"
+                  >
+                    {t("common.cancel")}
+                  </button>
+                  <button
+                    onClick={handleAddContact}
+                    className="flex-1 bg-primary text-primary-foreground rounded-xl py-2.5 text-sm font-semibold hover:opacity-90 active:scale-95 transition-all touch-target"
+                  >
+                    {language === "nl" ? "Opslaan" : "Save"}
+                  </button>
+                </div>
+              </div>
+            ) : emergencyContacts.length < 3 ? (
+              <button
+                onClick={() => setShowContactForm(true)}
+                className="flex items-center justify-center gap-2 w-full border border-dashed border-border rounded-xl py-3 text-sm text-muted-foreground hover:border-primary/40 hover:text-primary transition-colors touch-target"
+              >
+                <UserPlus size={16} />
+                {t("settings.emergencyContacts.add")}
+              </button>
+            ) : (
+              <p className="text-xs text-muted-foreground text-center py-1">{t("settings.emergencyContacts.max")}</p>
+            )}
+          </div>
+        </section>
+
+        {/* Account / Cloud sync */}
+        <section>
+          <p className="text-xs text-muted-foreground uppercase tracking-widest px-1 mb-3">{t("settings.section.account")}</p>
+          <div className="bg-card border border-border rounded-2xl p-4 flex flex-col gap-3">
+            <Show when="signed-out">
+              <div className="flex items-start gap-3">
+                <Cloud size={18} className="text-primary mt-0.5 shrink-0" />
+                <div>
+                  <p className="text-sm font-medium text-foreground">{t("settings.account.signedOutTitle")}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
+                    {t("settings.account.signedOutBody")}
+                  </p>
+                </div>
+              </div>
+              <div className="flex gap-2 pt-1">
+                <button
+                  onClick={() => navigate("/sign-in")}
+                  className="flex-1 bg-primary text-primary-foreground rounded-xl py-3 font-semibold text-sm hover:opacity-90 active:scale-95 transition-all touch-target"
+                >
+                  {t("settings.account.signIn")}
+                </button>
+                <button
+                  onClick={() => navigate("/sign-up")}
+                  className="flex-1 border border-border rounded-xl py-3 font-medium text-sm text-foreground hover:bg-muted/40 transition-colors touch-target"
+                >
+                  {t("settings.account.signUp")}
+                </button>
+              </div>
+            </Show>
+            <Show when="signed-in">
+              <div className="flex items-start gap-3">
+                <Cloud size={18} className="text-primary mt-0.5 shrink-0" />
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-foreground">{t("settings.account.signedInTitle")}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed break-words">
+                    {t("settings.account.signedInAs")} {user?.primaryEmailAddress?.emailAddress ?? user?.username ?? ""}
+                  </p>
+                </div>
+              </div>
+
+              {/* Sync status */}
+              <div className="flex items-center justify-between gap-3 bg-background border border-border rounded-xl px-4 py-3">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  {syncStatus === "syncing" && <RefreshCw size={15} className="text-primary shrink-0 animate-spin" />}
+                  {syncStatus === "error" && <AlertCircle size={15} className="text-destructive shrink-0" />}
+                  {syncStatus === "offline" && <CloudOff size={15} className="text-muted-foreground shrink-0" />}
+                  {(syncStatus === "synced" || syncStatus === "idle") && <Check size={15} className="text-primary shrink-0" />}
+                  <p className={`text-xs leading-snug truncate ${syncStatus === "error" ? "text-destructive" : "text-muted-foreground"}`}>
+                    {syncStatus === "syncing" && t("settings.account.syncing")}
+                    {syncStatus === "error" && t("settings.account.syncError")}
+                    {syncStatus === "offline" && t("settings.account.syncOffline")}
+                    {(syncStatus === "synced" || syncStatus === "idle") && (
+                      lastSyncedAt
+                        ? `${t("settings.account.lastSynced")} ${new Date(lastSyncedAt).toLocaleTimeString(language === "nl" ? "nl-NL" : "en-GB", { hour: "2-digit", minute: "2-digit" })}`
+                        : t("settings.account.synced")
+                    )}
+                  </p>
+                </div>
+                <button
+                  onClick={syncNow}
+                  disabled={syncStatus === "syncing"}
+                  className="shrink-0 text-xs font-medium text-primary hover:opacity-80 disabled:opacity-40 transition-opacity touch-target px-1"
+                >
+                  {t("settings.account.syncNow")}
+                </button>
+              </div>
+
+              <button
+                onClick={() => signOut()}
+                className="w-full flex items-center justify-center gap-2 border border-border rounded-xl py-3 font-medium text-sm text-foreground hover:bg-muted/40 transition-colors touch-target"
+              >
+                <LogOut size={16} />
+                {t("settings.account.signOut")}
+              </button>
+            </Show>
+          </div>
+        </section>
+
+        {/* Privacy */}
+        <section>
+          <p className="text-xs text-muted-foreground uppercase tracking-widest px-1 mb-3">{t("settings.section.privacy")}</p>
+          <div className="bg-card border border-border rounded-2xl p-4 flex flex-col gap-3">
+            <div className="flex items-start gap-3">
+              <Shield size={18} className="text-primary mt-0.5 shrink-0" />
+              <div>
+                <p className="text-sm font-medium text-foreground">{syncSignedIn ? t("settings.privacy.titleSignedIn") : t("settings.privacy.title")}</p>
+                <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                  {syncSignedIn ? t("settings.privacy.bodySignedIn") : t("settings.privacy.body")}
+                </p>
+              </div>
+            </div>
+            <div className="border-t border-border/50 pt-3">
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                {t("settings.privacy.footer")}
+              </p>
+            </div>
+          </div>
+        </section>
+
+        {/* Data management */}
+        <section>
+          <p className="text-xs text-muted-foreground uppercase tracking-widest px-1 mb-3">{t("settings.section.data")}</p>
+          <div className="bg-card border border-border rounded-2xl overflow-hidden">
+            <button
+              onClick={() => setConfirmReset(true)}
+              className="w-full flex items-center justify-between px-4 py-3.5 hover:bg-destructive/5 transition-colors touch-target"
+            >
+              <div className="text-left">
+                <p className="text-sm font-medium text-destructive">{t("settings.data.erase")}</p>
+                <p className="text-xs text-muted-foreground">
+                  {t("settings.data.erase_sub")}
+                </p>
+              </div>
+              <Trash2 size={16} strokeWidth={1.8} className="text-destructive shrink-0" />
+            </button>
+          </div>
+        </section>
+
+        {resetDone && (
+          <p className="text-center text-sm text-muted-foreground animate-fade-up">
+            {t("settings.data.erased")}
+          </p>
+        )}
+
+        <div className="text-center py-2">
+          <p className="text-xs text-muted-foreground">
+            {t("settings.footer")}
+          </p>
+          <p className="text-xs text-muted-foreground/50 mt-1">
+            {t("settings.footer_sub")}
+          </p>
+        </div>
+
+        <div className="h-4" />
+      </div>
+
+      {/* Confirm reset dialog */}
+      {confirmReset && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-background/80 backdrop-blur-sm px-4 pb-8">
+          <div className="bg-card border border-border rounded-3xl p-6 w-full max-w-sm">
+            <h3 className="font-semibold text-foreground mb-1">{t("settings.reset.title")}</h3>
+            <p className="text-sm text-muted-foreground mb-5 leading-relaxed">
+              {t("settings.reset.body")}
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setConfirmReset(false)}
+                className="flex-1 border border-border rounded-xl py-3 font-medium text-foreground touch-target"
+              >
+                {t("common.cancel")}
+              </button>
+              <button
+                onClick={handleReset}
+                className="flex-1 bg-destructive text-destructive-foreground rounded-xl py-3 font-semibold touch-target"
+              >
+                {t("settings.reset.confirm")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

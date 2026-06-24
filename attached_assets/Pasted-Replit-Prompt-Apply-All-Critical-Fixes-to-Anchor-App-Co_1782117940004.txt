@@ -1,0 +1,365 @@
+Replit Prompt: Apply All Critical Fixes to Anchor App
+Copy and paste this entire prompt into a Replit AI assistant chat (or use as a multi-file instruction set).
+Context
+You are applying critical fixes to the Anchor PWA recovery app in artifacts/anchor/src. The previous fix session never actually applied these changes to the source files. Below are all the exact changes needed, organized by file, with before/after code blocks.
+1. src/db/index.ts — Remove dead check-in code, fix Journal type
+1a. Remove the CheckIn interface and all check-in functions
+Delete these exports entirely:
+TypeScript
+Copy
+export interface CheckIn {
+  id: string;
+  timestamp: number;
+  mood: 1 | 2 | 3 | 4 | 5;
+  streak: number;
+  note?: string;
+}
+
+export async function addCheckIn(checkIn: Omit<CheckIn, "id" | "timestamp" | "streak">): Promise<CheckIn> { ... }
+
+export async function getCheckIns(): Promise<CheckIn[]> { ... }
+
+export function computeStreak(checkIns: CheckIn[]): number { ... }
+1b. Change JournalEntry.cravingIntensity from 1|2|3|4|5|null to number|null
+Find:
+TypeScript
+Copy
+export interface JournalEntry {
+  id: string;
+  timestamp: number;
+  mood: 1 | 2 | 3 | 4 | 5;
+  cravingIntensity: 1 | 2 | 3 | 4 | 5 | null;
+  note: string;
+  toolUsed: string | null;
+}
+Replace with:
+TypeScript
+Copy
+export interface JournalEntry {
+  id: string;
+  timestamp: number;
+  mood: 1 | 2 | 3 | 4 | 5;
+  cravingIntensity: number | null;
+  note: string;
+  toolUsed: string | null;
+}
+1c. Keep the checkIns object store (backward compatibility)
+Important: In dbVersion() or the DB schema setup, keep the checkIns object store but change its type to unknown (or any) so existing user data is preserved. No migration needed — the app just stops reading from it.
+2. src/hooks/useStore.ts — Remove dead check-in state
+2a. Remove imports and state fields
+Find and remove from imports:
+TypeScript
+Copy
+import type { CheckIn } from "../db";
+Find and remove from StoreState interface:
+TypeScript
+Copy
+  checkIns: CheckIn[];
+  streak: number;
+2b. Remove from load()
+Find and remove these two lines inside load():
+TypeScript
+Copy
+const checkIns = await getCheckIns();
+const streak = computeStreak(checkIns);
+2c. Remove from load() state merge
+Find and remove from the set({...}) call inside load():
+TypeScript
+Copy
+  checkIns,
+  streak,
+2d. Remove from resetAllData()
+Find and remove from the set({...}) call inside resetAllData():
+TypeScript
+Copy
+  checkIns: [],
+  streak: 0,
+2e. Remove from return object
+Find and remove from the return object at the end of useStore():
+TypeScript
+Copy
+  checkIns,
+  streak,
+  checkInToday: () => { ... },
+2f. Remove checkInToday function definition
+Find and delete the entire checkInToday function:
+TypeScript
+Copy
+const checkInToday = async () => { ... };
+3. src/pages/Progress.tsx — Fix streak to use sobriety data, remove check-in grid, restore encouragement
+3a. Remove CheckInGrid component entirely
+Delete the entire CheckInGrid component definition (including all helper functions and its JSX).
+3b. Add computeSobrietyStats inline (or import from Home if shared)
+Add this function near the top of the file (after imports, before component):
+TypeScript
+Copy
+function computeSobrietyStats(
+  sobrietyStartDate: string | null,
+  relapseLogs: { timestamp: number }[]
+) {
+  if (!sobrietyStartDate) return null;
+  const startMs = new Date(sobrietyStartDate + "T00:00:00").getTime();
+  const nowMs = Date.now();
+  const msPerDay = 1000 * 60 * 60 * 24;
+  const totalDays = Math.floor((nowMs - startMs) / msPerDay);
+  const relapseAfterStart = relapseLogs
+    .filter((r) => r.timestamp >= startMs)
+    .sort((a, b) => b.timestamp - a.timestamp)[0];
+  const currentStreakDays = relapseAfterStart
+    ? Math.floor((nowMs - relapseAfterStart.timestamp) / msPerDay)
+    : totalDays;
+  return {
+    totalDays,
+    currentStreakDays,
+    hasRelapse: !!relapseAfterStart,
+    startDate: sobrietyStartDate,
+  };
+}
+3c. Replace the broken streak StatCard with sobriety streak
+Find the streak card (it uses streak from useStore):
+tsx
+Copy
+<StatCard
+  label={t("progress.stat.streak")}
+  value={stats.streak}
+  sub={t("progress.stat.streak_sub")}
+  icon={Flame}
+/>
+Replace with:
+tsx
+Copy
+{(() => {
+  const sobriety = computeSobrietyStats(sobrietyStartDate, relapseLogs);
+  return (
+    <StatCard
+      label={t("progress.stat.streak")}
+      value={sobriety?.currentStreakDays ?? 0}
+      sub={sobriety ? t("progress.stat.streak_sub") : t("progress.stat.set_date")}
+      icon={CalendarCheck}
+    />
+  );
+})()}
+Note: Make sure CalendarCheck is imported from lucide-react. If Flame is no longer used elsewhere, remove it from imports.
+3d. Fix encourageText to use real sobriety data
+Find the encourageText logic that uses streak:
+TypeScript
+Copy
+const encourageText =
+  stats.streak >= 90
+    ? t("progress.encourage.amazing")
+    : stats.streak >= 30
+    ? t("progress.encourage.great")
+    : stats.streak > 0
+    ? t("progress.encourage.good")
+    : t("progress.encourage.start");
+Replace with:
+TypeScript
+Copy
+const sobriety = computeSobrietyStats(sobrietyStartDate, relapseLogs);
+const encourageText =
+  (sobriety?.currentStreakDays ?? 0) >= 90
+    ? t("progress.encourage.amazing")
+    : (sobriety?.currentStreakDays ?? 0) >= 30
+    ? t("progress.encourage.great")
+    : (sobriety?.currentStreakDays ?? 0) > 0
+    ? t("progress.encourage.good")
+    : t("progress.encourage.start");
+3e. Restore the Encouragement card (if missing after CheckInGrid removal)
+Ensure this section exists in the JSX, after the stats grid and before the insight blocks:
+tsx
+Copy
+{/* Encouragement */}
+<div className="card">
+  <h3 className="font-semibold text-primary">{t("progress.encourage.title")}</h3>
+  <p className="text-sm text-secondary mt-1">{encourageText}</p>
+</div>
+3f. Remove the CheckInGrid usage in JSX
+Find and remove:
+tsx
+Copy
+<CheckInGrid checkIns={checkIns} streak={streak} t={t} />
+3g. Remove checkIns and streak from useStore destructuring
+Find and remove from the useStore() destructuring:
+TypeScript
+Copy
+  checkIns,
+  streak,
+3h. Fix orange accent → primary (if still present)
+Find any remaining text-orange-500 or bg-orange-500 and replace with text-primary / bg-primary or primary equivalent.
+4. src/pages/TrekTracker.tsx — Fix high-risk flag and slider labels
+4a. Fix the inverted highRiskFlag logic (CRITICAL)
+Find:
+TypeScript
+Copy
+const highRiskFlag = draft.intensity > 8 && draft.confidenceBefore > 8;
+Replace with:
+TypeScript
+Copy
+const highRiskFlag = draft.intensity >= 8 && draft.confidenceBefore <= 3;
+Why: The old logic flagged high risk when the user was HIGHLY confident they wouldn't use. That's backwards. High risk = high craving intensity + low confidence.
+4b. Fix all three slider lowLabel from "1" to "0"
+Find all three IntensitySlider components and change lowLabel:
+tsx
+Copy
+// Intensity slider
+<IntensitySlider
+  ...
+  lowLabel="0"  // was "1"
+  ...
+/>
+
+// Confidence-before slider
+<IntensitySlider
+  ...
+  lowLabel="0"  // was "1"
+  ...
+/>
+
+// Confidence-after slider
+<IntensitySlider
+  ...
+  lowLabel="0"  // was "1"
+  ...
+/>
+5. src/pages/Home.tsx — Remove orange accent
+5a. Fix Trek card orange background
+Find:
+tsx
+Copy
+className="... bg-orange-500/10 ..."
+Replace with:
+tsx
+Copy
+className="... bg-primary/10 ..."
+5b. Fix Trek card orange text
+Find:
+tsx
+Copy
+className="... text-orange-500 ..."
+Replace with:
+tsx
+Copy
+className="... text-primary ..."
+5c. Remove "orange" comment (if present)
+Find and remove:
+tsx
+Copy
+{/* orange accent card */}
+6. src/pages/JournalNewEntry.tsx — Standardize craving to 0–10 slider
+6a. Remove the 1–5 button grid
+Delete the entire craving section that uses CRAVING_LABELS and a row of 5 buttons.
+6b. Add 0–10 range slider
+Replace the deleted craving section with:
+tsx
+Copy
+<div className="space-y-2">
+  <label className="text-sm font-medium text-primary">
+    {t("journal.craving")}
+  </label>
+  <div className="flex items-center gap-3">
+    <span className="text-sm text-secondary w-6 text-center">0</span>
+    <input
+      type="range"
+      min={0}
+      max={10}
+      step={1}
+      value={craving ?? 0}
+      onChange={(e) => setCraving(Number(e.target.value))}
+      className="intensity-slider flex-1"
+      style={{ "--thumb-pct": `${((craving ?? 0) / 10) * 100}%` } as React.CSSProperties}
+    />
+    <span className="text-sm text-secondary w-6 text-center">10</span>
+  </div>
+  <div className="text-center text-sm text-primary font-medium">
+    {craving !== null ? craving : "—"}
+  </div>
+</div>
+6c. Remove CRAVING_LABELS array (if defined in file)
+Delete:
+TypeScript
+Copy
+const CRAVING_LABELS = ["Very Low", "Low", "Moderate", "High", "Very High"];
+6d. Update state type
+Ensure craving state is typed as number | null:
+TypeScript
+Copy
+const [craving, setCraving] = useState<number | null>(5);
+Note: The default should be 5 (middle of 0–10), not 3.
+7. src/pages/Journal.tsx — Update craving display to /10
+7a. Fix the craving display string
+Find:
+tsx
+Copy
+{entry.cravingIntensity !== null && ` · ${t("journal.craving")}: ${entry.cravingIntensity}/5`}
+Replace with:
+tsx
+Copy
+{entry.cravingIntensity !== null && ` · ${t("journal.craving")}: ${entry.cravingIntensity}/10`}
+8. src/pages/AnxietyTracker.tsx — Fix slider label
+8a. Change intensity slider lowLabel from "1" to "0"
+Find:
+tsx
+Copy
+lowLabel="1"
+Replace with:
+tsx
+Copy
+lowLabel="0"
+9. src/pages/BoredomTracker.tsx — Fix slider label
+9a. Change intensity slider lowLabel from "1" to "0"
+Find:
+tsx
+Copy
+lowLabel="1"
+Replace with:
+tsx
+Copy
+lowLabel="0"
+10. src/pages/Logs.tsx — Remove orange accent (if present)
+10a. Fix active log type icon color
+Find any text-orange-500 in the log type toggle buttons and replace with text-primary.
+11. src/lib/translations.ts — Rename nav label
+11a. Change English "Help" to "Crisis"
+Find:
+TypeScript
+Copy
+help: "Help",
+Replace with:
+TypeScript
+Copy
+help: "Crisis",
+11b. Change Dutch "Help" to "Nood"
+Find:
+TypeScript
+Copy
+help: "Help",
+Replace with:
+TypeScript
+Copy
+help: "Nood",
+Summary Table of All Files Changed
+Table
+File	Change Type	Description
+src/db/index.ts	Remove + Fix	Remove CheckIn interface, addCheckIn, getCheckIns, computeStreak; change cravingIntensity to number | null
+src/hooks/useStore.ts	Remove	Remove checkIns, streak, checkInToday from state and return
+src/pages/Progress.tsx	Remove + Fix + Add	Remove CheckInGrid; add computeSobrietyStats; fix streak to sobriety; fix encourageText; fix orange accents; restore encouragement card
+src/pages/TrekTracker.tsx	Fix	highRiskFlag logic (CRITICAL); fix 3 slider lowLabel values
+src/pages/Home.tsx	Fix	Remove bg-orange-500/10 and text-orange-500 → primary
+src/pages/JournalNewEntry.tsx	Replace	Replace 1–5 craving buttons with 0–10 slider
+src/pages/Journal.tsx	Fix	Display /10 instead of /5
+src/pages/AnxietyTracker.tsx	Fix	Slider lowLabel "1" → "0"
+src/pages/BoredomTracker.tsx	Fix	Slider lowLabel "1" → "0"
+src/pages/Logs.tsx	Fix	Remove text-orange-500 → text-primary
+src/lib/translations.ts	Fix	nav.help "Help" → "Crisis" (EN), "Nood" (NL)
+Post-Apply Checklist
+After applying these changes, please run:
+bash
+Copy
+pnpm run typecheck
+# or
+npm run typecheck
+Expected: Zero type errors. Common things that might break:
+Missing CalendarCheck import in Progress.tsx (add import { CalendarCheck } from "lucide-react" if needed)
+React.CSSProperties usage in JournalNewEntry.tsx (should be fine if React is imported)
+Then build and deploy as usual.
+End of prompt. Apply all changes above, then typecheck and build.

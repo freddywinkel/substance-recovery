@@ -1,0 +1,117 @@
+## Replit Prompt — Recovery Path Critical Fixes
+
+Apply the following critical fixes to the Recovery Path app. Make all changes carefully, preserve existing functionality, and verify no TypeScript errors after.
+
+**1. Remove dead check-in code and fix Progress streak**
+
+In `src/hooks/useStore.ts`:
+- Remove `checkIns` state variable, `setCheckIns`, `streak` state, `setStreak`, and the `checkInToday` callback
+- Remove `addCheckIn` and `getCheckIns` from the `import` from `@/db`
+- Remove `checkIns` and `streak` from the return object
+- In the `load()` function, remove `getCheckIns()` from the Promise.all and remove `setCheckIns(cis)` and `setStreak(computeStreak(cis))`
+
+In `src/db/index.ts`:
+- Remove the `CheckIn` interface
+- Remove `addCheckIn()`, `getCheckIns()`, and `computeStreak()` functions
+- Keep the `checkIns` object store in the DB schema for backward compatibility (do not delete existing user data), but the app should no longer use it
+
+In `src/pages/Progress.tsx`:
+- Remove the entire `CheckInGrid` component (lines 211-250)
+- Remove `checkIns` from the `useStore` destructuring
+- Remove the `CheckInGrid` usage in the Activity section
+- Replace the "Streak" stat card (which shows `streak` from useStore) with a sobriety streak card. Copy the `computeSobrietyStats` function from `src/pages/Home.tsx` and use it here with `sobrietyStartDate` and `relapseLogs`. Show `currentStreakDays` with the label "Days sober" and the milestone text.
+
+**2. Add 3 missing Dutch translations to `optNl`**
+
+In `src/lib/translations.ts`, inside the `optNl` object (around line 2002), add these 3 entries:
+```ts
+"Social pressure": "Sociale druk",
+"Call or text someone": "Iemand bellen of bericht sturen",
+"Bored": "Verveeld",
+```
+
+**3. Fix TrekTracker intensity slider labels**
+
+In `src/pages/TrekTracker.tsx`, find the two `IntensitySlider` components and fix their labels:
+
+For the intensity slider (around line 459):
+```tsx
+<IntensitySlider
+  value={draft.intensity}
+  onChange={(v) => update("intensity", v)}
+  lowLabel="0"   // <-- change from "1" to "0"
+  highLabel="10"
+/>
+```
+
+For the confidence slider (around line 467):
+```tsx
+<IntensitySlider
+  value={draft.confidenceBefore}
+  onChange={(v) => update("confidenceBefore", v)}
+  lowLabel="0"   // <-- change from "1" to "0"
+  highLabel="10"
+/>
+```
+
+Also add `min={0}` explicitly to both to match the label.
+
+**4. Remove orange accents**
+
+In `src/pages/Home.tsx`, the Trek ("Ik heb trek") card uses orange. Change it to primary:
+
+```tsx
+// From:
+<div className="bg-orange-500/10 border border-orange-500/30 rounded-2xl p-4 h-full flex flex-col gap-2 hover:bg-orange-500/15 ...">
+  <div className="rounded-xl bg-orange-500/20 w-10 h-10 flex items-center justify-center text-orange-500">
+
+// To:
+<div className="bg-primary/10 border border-primary/30 rounded-2xl p-4 h-full flex flex-col gap-2 hover:bg-primary/15 ...">
+  <div className="rounded-xl bg-primary/20 w-10 h-10 flex items-center justify-center text-primary">
+```
+
+In `src/pages/Progress.tsx`, change two instances of `text-orange-500` to `text-primary`:
+- The active desire stat card icon (around line 457)
+- The active desire avg intensity icon (around line 506)
+
+**5. Change Journal craving scale from 1-5 to 0-10**
+
+In `src/db/index.ts`:
+```ts
+// Change:
+cravingIntensity: 1 | 2 | 3 | 4 | 5 | null;
+// To:
+cravingIntensity: number | null; // 0-10
+```
+
+In `src/pages/JournalNewEntry.tsx`:
+- Replace the 1-5 button grid with a simple range slider (0-10)
+- Add this component inside the file (or inline):
+```tsx
+function Slider({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="text-center">
+        <span className="text-7xl font-light text-primary tabular-nums">{value}</span>
+      </div>
+      <input
+        type="range" min={0} max={10} step={1} value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="intensity-slider w-full"
+      />
+      <div className="flex justify-between px-1">
+        <span className="text-xs text-muted-foreground">0 = none</span>
+        <span className="text-xs text-muted-foreground">10 = overwhelming</span>
+      </div>
+    </div>
+  );
+}
+```
+- Set default `craving` state to `5` instead of `null`
+- Remove the `CRAVING_LABELS` array and the 1-5 button grid
+- Use the `<Slider>` component for craving selection
+
+In `src/pages/Journal.tsx`:
+- Change the display from `${entry.cravingIntensity}/5` to `${entry.cravingIntensity}/10`
+
+**After all changes, run `npm run build` to verify no errors. Do not change any other functionality.**

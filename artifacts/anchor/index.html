@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+
+    <!-- ── Viewport ────────────────────────────────────────── -->
+    <!--
+      viewport-fit=cover  → content fills the screen edge-to-edge
+                            (lets us control safe-area ourselves)
+      maximum-scale=1     → prevent accidental pinch-zoom on iOS
+      user-scalable=no    → same — text fields already bump scale
+    -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1, user-scalable=no"
+    />
+
+    <!-- ── Theme color ─────────────────────────────────────── -->
+    <meta name="theme-color" content="#131820" />
+
+    <!-- ── iOS / Safari specific ───────────────────────────── -->
+    <!-- Enables Add to Home Screen / standalone launch -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <!-- Status bar overlays app (we control safe-area ourselves) -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <!-- App name shown under Home Screen icon -->
+    <meta name="apple-mobile-web-app-title" content="Anchor" />
+    <!-- Prevent iOS from auto-detecting / linking phone numbers -->
+    <meta name="format-detection" content="telephone=no" />
+
+    <!-- ── App description ─────────────────────────────────── -->
+    <meta name="description" content="A private, offline-capable companion for addiction recovery support." />
+    <meta name="application-name" content="Anchor" />
+    <meta name="mobile-web-app-capable" content="yes" />
+
+    <!-- ── Page title ──────────────────────────────────────── -->
+    <title>Anchor — Recovery Support</title>
+
+    <!-- ── Icons ───────────────────────────────────────────── -->
+    <!--
+      apple-touch-icon: used by iOS for the Home Screen icon.
+      Safari ignores manifest icons — this file is the ONLY source
+      for the iOS Home Screen icon. Must be 180×180 for iPhone.
+    -->
+    <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png" />
+    <!-- Fallback favicon for browser tabs -->
+    <link rel="icon" type="image/svg+xml" href="icon.svg" />
+    <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png" />
+
+    <!-- ── Web App Manifest ─────────────────────────────────── -->
+    <link rel="manifest" href="manifest.json" />
+
+    <!-- ── Fonts ───────────────────────────────────────────── -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,400;0,14..32,500;0,14..32,600;0,14..32,700&display=swap"
+      rel="stylesheet"
+    />
+
+    <!-- ── Prevent flash of white on load ──────────────────── -->
+    <style>
+      html,
+      body {
+        background: #131820;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

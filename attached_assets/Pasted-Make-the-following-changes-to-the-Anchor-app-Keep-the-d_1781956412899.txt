@@ -1,0 +1,193 @@
+Make the following changes to the Anchor app. Keep the data model (DB types) unchanged unless specified. Do NOT add new features, change routing, or redesign UI. Focus on fixing bugs, consistency, and usability.
+
+Run `npm run typecheck` and `npm run build` after all changes to verify.
+
+═══════════════════════════════════════════════════════════════
+1. TRANSLATIONS (src/lib/translations.ts)
+═══════════════════════════════════════════════════════════════
+
+A. Replace "Verlangen Surfen" with "Gevoelsurfen" everywhere:
+   - tools.urge.title (Dutch nl block)
+   - urge.title (Dutch nl block)
+   - crisis.tool.urge.title (Dutch nl block)
+   - home.delay_sub (Dutch nl block): change "Verlangen surf timer" to "Gevoelsurf timer"
+   - optNl map: change "Urge surfing": "Verlangen surfen" to "Urge surfing": "Gevoelsurfen"
+
+B. Add missing translation keys:
+   In the English `const en` block, add:
+   "progress.boredom.checkins": "Restlessness check-ins",
+   "progress.boredom.avg_sub": "out of 10",
+   
+   In the Dutch `const nl` block, add:
+   "progress.boredom.checkins": "Rusteloosheid check-ins",
+   "progress.boredom.avg_sub": "van 10",
+
+C. Remove dead translation keys (never used in code):
+   - All keys starting with `bb.` (bb.title, bb.subtitle, etc.)
+   - All keys starting with `sc.` (sc.title, sc.subtitle, etc.)
+   - All keys starting with `grounding.` (grounding.title, grounding.subtitle, etc.)
+   - Keep ALL keys starting with: breath., compassion., ground., urge., tools., crisis., progress., journal., craving., delay., dist., anxiety., boredom., relapse., logs., common., nav., home., help., settings., tape., cold., notfound.
+
+D. Change the Dutch "common.next" key from "Volgende →" to just "Volgende" (remove the arrow character — we will add a visual icon instead).
+
+═══════════════════════════════════════════════════════════════
+2. PROGRESS PAGE (src/pages/Progress.tsx)
+═══════════════════════════════════════════════════════════════
+
+In the boredom/restlessness section (around line 740), fix the wrong translation key references:
+- `label={t("progress.anxiety.checkins")}` → `label={t("progress.boredom.checkins")}`
+- `sub={t("progress.anxiety.avg_sub")}` → `sub={t("progress.boredom.avg_sub")}`
+
+═══════════════════════════════════════════════════════════════
+3. CRAVING TRACKER (src/pages/CravingTracker.tsx)
+═══════════════════════════════════════════════════════════════
+
+A. Fix the distress slider default: In `blankDraft()`, change `distressLevel: -1` to `distressLevel: 5`. The distress slider currently starts at 0 (far left) which is inconsistent with the intensity slider that starts at 5. This makes both start in the middle.
+
+B. Fix untranslated action sub-texts: Around line 621, change the sub-text rendering from `{sub}` to `{tOpt(sub)}` so the Dutch translations show up instead of English text.
+
+C. Fix the double arrow on the "Next" button: Remove the `<ArrowRight size={16} />` icon from the bottom button. The Dutch text will have a clean "Volgende" + we add an icon consistently in all trackers (see step 11).
+
+═══════════════════════════════════════════════════════════════
+4. RELAPSE LOG (src/pages/RelapseLog.tsx) — SHORTEN FROM 11 TO 6 STEPS
+═══════════════════════════════════════════════════════════════
+
+Keep the data model (Draft type, all fields) unchanged. Only merge the UI steps.
+
+A. Simplify LABEL_OPTIONS to 3 choices:
+   - { value: "lapse", label: "A lapse", sub: "One instance, caught quickly" }
+   - { value: "relapse", label: "A relapse", sub: "A more serious return" }
+   - { value: "no-label", label: "No label", sub: "I just want to document this" }
+   Remove "setback" and "return-to-use" options.
+
+B. Merge step 2: Combine "when" and "substance" into ONE step:
+   - Show WHEN_OPTIONS + DURATION_OPTIONS
+   - Then show SUBSTANCES + AMOUNT_OPTIONS
+   - All on one scrollable page with clear sub-headings
+
+C. Merge step 4: Combine "before", "warnings", "thought", and "help" into ONE step called "before":
+   - Sub-heading: "Wat eraan voorafging" / "What led up to this"
+   - Section 1: PRE_USE_FACTORS (multi-select ChipGrid)
+   - Section 2: MISSED_WARNINGS (multi-select ChipGrid)
+   - Section 3: THOUGHT_PRESETS (single-select, then free text textarea)
+   - Section 4: COULD_HELP_OPTIONS (single multi-select ChipGrid — merge the 3 separate early/middle/last lists into one list. Save the selected values to ALL THREE fields: couldHaveHelpedEarly, couldHaveHelpedMiddle, couldHaveHelpedLast, so analytics still works.)
+   - Make this step optional (show Skip button)
+
+D. Merge step 5: Combine "next" and "needs" concepts:
+   - Keep the "next" step as the safety/action step: support contact + next step + risk
+   - Move the "needs" (what you actually needed) question to the DONE screen as a reflective follow-up, OR keep it as a final step 6. Your choice — whichever feels smoother for the user.
+
+E. Remove the separate "note" step — merge the free text note into the final "needs" step or keep it as a small optional textarea at the bottom of the "next" step.
+
+F. Update STEP_ORDER to: ["label", "when", "trigger", "before", "next", "done"] (or include "needs" as step 6 if you keep it separate).
+
+G. Fix the Next button: Remove the `<ArrowRight size={16} />` icon (see step 11).
+
+═══════════════════════════════════════════════════════════════
+5. BOX BREATHING (src/tools/BoxBreathing.tsx)
+═══════════════════════════════════════════════════════════════
+
+A. Add an inline milestone banner that appears when cycles >= 4:
+   - Show below the cycle counter: "4 cycli voltooid — dat is vaak genoeg om een verschil te voelen. Je kunt stoppen of doorgaan." (Dutch) / "4 cycles completed — that's often enough to feel a shift. You can stop or keep going." (English)
+   - Add a "Stop" button (Klaar / Done) next to the existing pause/play button that navigates home.
+   - Keep the existing controls visible too.
+
+B. The banner should use `t("breath.milestone")` — add this key to translations.ts in both languages.
+
+═══════════════════════════════════════════════════════════════
+6. ANXIETY TRACKER (src/pages/AnxietyTracker.tsx)
+═══════════════════════════════════════════════════════════════
+
+A. Split the crowded step 3 (urgency) into two steps:
+   - Step 3: "Urgency" — just the urgency toggle + quick tools (if urgent)
+   - Step 4: "Details" — context, linked state, reassurance patterns, trigger (all optional, show Skip button prominently)
+   - Update STEP_ORDER to: ["type", "body", "urgency", "details", "reaction"]
+   - Update the progress bar and step counter accordingly.
+
+B. Fix the Next button: Add `<ArrowRight size={16} />` icon to match the consistent style (see step 11).
+
+═══════════════════════════════════════════════════════════════
+7. BOREDOM TRACKER (src/pages/BoredomTracker.tsx)
+═══════════════════════════════════════════════════════════════
+
+A. Fix the bug where ALL 25 rescue options show when no stimulation need is selected:
+   - Change the rescue section conditions from `(!stimulationNeed || stimulationNeed === "calming")` to just `(stimulationNeed === "calming")` for each category.
+   - If no stimulation need is selected in step 2, show a message in step 4: "Kies eerst een behoefte in de vorige stap" / "Pick a need in the previous step first" with a button to go back.
+
+B. Make the stimulation need selection required in step 2 (don't let the user proceed to step 3 without selecting one).
+
+C. Fix the Next button: Add `<ArrowRight size={16} />` icon (see step 11).
+
+═══════════════════════════════════════════════════════════════
+8. JOURNAL NEW ENTRY (src/pages/JournalNewEntry.tsx)
+═══════════════════════════════════════════════════════════════
+
+Change the default craving from `null` to `1` (which corresponds to "None" / "Geen"):
+- In the `logEntry` call, change `cravingIntensity: craving` to `cravingIntensity: craving ?? 1` so if no craving is selected, it defaults to "None" instead of showing nothing.
+
+═══════════════════════════════════════════════════════════════
+9. MIN-H SCREEN FIX (various files)
+═══════════════════════════════════════════════════════════════
+
+Change `min-h-screen` to `min-h-dvh` in these files to prevent mobile overlap issues:
+- src/tools/UrgeSurfing.tsx (2 places)
+- src/tools/SelfCompassion.tsx (2 places)
+- src/tools/PlayTheTape.tsx (3 places)
+- src/tools/Grounding54321.tsx (2 places)
+- src/tools/Distraction.tsx (3 places)
+- src/tools/ColdWaterReset.tsx (3 places)
+- src/tools/BoxBreathing.tsx (1 place)
+- src/pages/CrisisNow.tsx (1 place)
+- src/pages/Settings.tsx (1 place)
+- src/pages/Tools.tsx (1 place)
+- src/pages/not-found.tsx (1 place)
+
+DO NOT change pages that already use `min-h-dvh` (CravingTracker, AnxietyTracker, BoredomTracker, Journal, Logs, Progress, DelayScreen, Home, RelapseLog, JournalNewEntry).
+
+═══════════════════════════════════════════════════════════════
+10. 404 PAGE (src/pages/not-found.tsx)
+═══════════════════════════════════════════════════════════════
+
+Change `bg-gray-50` to `bg-background` so dark mode works correctly.
+
+═══════════════════════════════════════════════════════════════
+11. CONSISTENT NEXT BUTTONS (all tracker files)
+═══════════════════════════════════════════════════════════════
+
+Make ALL tracker bottom buttons consistent:
+- All use: `<ArrowRight size={16} />` icon next to the text
+- CravingTracker: REMOVE the extra ArrowRight (currently has it), then add it back in a consistent way (text + icon, not double arrows)
+- RelapseLog: same
+- AnxietyTracker: ADD the ArrowRight icon
+- BoredomTracker: ADD the ArrowRight icon
+
+The button text should be: `<span>{t("common.next")}</span><ArrowRight size={16} />` for all trackers.
+
+═══════════════════════════════════════════════════════════════
+12. SETTINGS PAGE (src/pages/Settings.tsx)
+═══════════════════════════════════════════════════════════════
+
+Fix the date input styling in the sobriety section:
+- The `type="date"` input uses browser-native styling which may look off in dark mode.
+- Add `appearance-none` and custom styling to make it match the app's input fields (rounded-xl, consistent padding, dark-mode compatible text color).
+- Ensure the "saved" date text below the input doesn't overflow its container on small screens.
+
+═══════════════════════════════════════════════════════════════
+13. TRANSLATION MAP FIXES (src/lib/translations.ts — optNl section)
+═══════════════════════════════════════════════════════════════
+
+Add missing translations for the risk buttons in RelapseLog:
+- "No concern": "Geen zorgen"
+- "Some safety concern": "Enige veiligheidszorg"
+- "Fear of continued use": "Bang om door te gaan"
+- "Withdrawal concern": "Ontwenningszorgen"
+
+═══════════════════════════════════════════════════════════════
+VERIFICATION
+═══════════════════════════════════════════════════════════════
+
+After all changes, run:
+1. `npm run typecheck` — must pass with no errors
+2. `npm run build` — must build successfully
+
+If there are errors, fix them before finishing.

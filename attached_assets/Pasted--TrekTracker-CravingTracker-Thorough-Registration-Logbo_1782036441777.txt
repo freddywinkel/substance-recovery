@@ -1,0 +1,492 @@
+# TrekTracker & CravingTracker — Thorough Registration, Logbook & Stats
+
+Maak de registratie van zowel **TrekTracker** (actief) als **CravingTracker** (passief) grondig en statistisch relevant. Voeg ontbrekende velden toe (emoties, intensiteit, lichamelijke signalen, uitkomst, locatie) zodat de logbook volledig is en de statistieken betekenisvolle inzichten geven.
+
+---
+
+## 1. DATA MODEL (src/db/index.ts)
+
+Voeg toe aan `CravingLog` interface (bestaande velden blijven ongewijzigd):
+
+```typescript
+export interface CravingLog {
+  id: string;
+  timestamp: number;
+  status: "draft" | "completed";
+  cravingType: "active" | "passive";
+  // bestaande velden:
+  type?: string;
+  planningStage?: string;
+  need?: string;
+  action?: string;
+  confidence?: number;
+  onset?: string;
+  trigger?: string;
+  // NIEUW — voor beide trackers:
+  intensity?: number;            // 1-10
+  emotions?: string[];           // multi-select
+  physicalSignals?: string[];    // multi-select
+  location?: string;             // tekst, optioneel
+  outcome?: "used" | "not_used" | "unsure"; // alleen bij completed
+  // NIEUW — alleen TrekTracker (actief):
+  triggerNote?: string;          // "Wat zette dit in gang?"
+  // NIEUW — alleen CravingTracker (passief):
+  thoughts?: string[];           // multi-select cognitieve verstoringen
+}
+```
+
+- `intensity`: 1-10, verplicht bij elke completed log
+- `emotions`: string array, max 3 selecties (voorkom overload)
+- `physicalSignals`: string array, max 3 selecties
+- `outcome`: verplicht bij completed — "used" (toegegeven), "not_used" (weerstaan), "unsure" (weet nog niet)
+- `thoughts`: alleen voor passive cravings, max 2 selecties
+- `location`: optioneel, tekstveld
+- `triggerNote`: optioneel, tekstveld, alleen actief
+
+---
+
+## 2. TRANSLATIES (src/lib/translations.ts)
+
+Voeg toe aan **zowel EN als NL** secties.
+
+### 2a. Intensiteit
+```typescript
+"intensity.label": "How intense is this?",
+"intensity.label.nl": "Hoe intens is dit?",
+"intensity.scale": "1 = mild, 10 = overwhelming",
+"intensity.scale.nl": "1 = mild, 10 = overweldigend",
+
+"intensity.mild": "Mild",
+"intensity.moderate": "Moderate",
+"intensity.strong": "Strong",
+"intensity.overwhelming": "Overwhelming",
+```
+
+Dutch:
+```typescript
+"intensity.mild": "Mild",
+"intensity.moderate": "Matig",
+"intensity.strong": "Sterk",
+"intensity.overwhelming": "Overweldigend",
+```
+
+### 2b. Emoties (multi-select, max 3)
+```typescript
+"emotions.label": "What emotions are present?",
+"emotions.label.nl": "Welke emoties zijn er?",
+"emotions.subtitle": "Select up to 3",
+"emotions.subtitle.nl": "Selecteer maximaal 3",
+"emotions.angry": "Angry",
+"emotions.sad": "Sad",
+"emotions.anxious": "Anxious",
+"emotions.bored": "Bored",
+"emotions.lonely": "Lonely",
+"emotions.frustrated": "Frustrated",
+"emotions.tired": "Tired",
+"emotions.restless": "Restless",
+"emotions.guilty": "Guilty",
+"emotions.ashamed": "Ashamed",
+"emotions.excited": "Excited",
+```
+
+Dutch:
+```typescript
+"emotions.angry": "Boos",
+"emotions.sad": "Verdrietig",
+"emotions.anxious": "Angstig",
+"emotions.bored": "Verveeld",
+"emotions.lonely": "Eenzaam",
+"emotions.frustrated": "Gefrustreerd",
+"emotions.tired": "Moe",
+"emotions.restless": "Rusteloos",
+"emotions.guilty": "Schuldig",
+"emotions.ashamed": "Beschaamd",
+"emotions.excited": "Opgewonden",
+```
+
+### 2c. Lichamelijke signalen (multi-select, max 3)
+```typescript
+"physical.label": "Physical signals",
+"physical.label.nl": "Lichamelijke signalen",
+"physical.subtitle": "What does your body feel?",
+"physical.subtitle.nl": "Wat voel je in je lichaam?",
+"physical.racingHeart": "Racing heart",
+"physical.sweating": "Sweating",
+"physical.tension": "Tension",
+"physical.stomachKnots": "Stomach knots",
+"physical.shaking": "Shaking",
+"physical.nausea": "Nausea",
+"physical.chestTightness": "Chest tightness",
+"physical.headache": "Headache",
+```
+
+Dutch:
+```typescript
+"physical.racingHeart": "Hartkloppingen",
+"physical.sweating": "Zweten",
+"physical.tension": "Spanning",
+"physical.stomachKnots": "Knoop in de maag",
+"physical.shaking": "Trillen",
+"physical.nausea": "Misselijkheid",
+"physical.chestTightness": "Benauwdheid",
+"physical.headache": "Hoofdpijn",
+```
+
+### 2d. Gedachten (alleen passive, max 2)
+```typescript
+"thoughts.label": "What thoughts are going through your mind?",
+"thoughts.label.nl": "Welke gedachten gaan er door je hoofd?",
+"thoughts.subtitle": "Select up to 2",
+"thoughts.subtitle.nl": "Selecteer maximaal 2",
+"thoughts.cantHandle": "I can't handle this",
+"thoughts.justOnce": "Just one time",
+"thoughts.unfair": "This is unfair",
+"thoughts.wontMatter": "It won't matter",
+"thoughts.needRelief": "I need relief",
+"thoughts.everyoneDoes": "Everyone does it",
+"thoughts.deserveIt": "I deserve this",
+"thoughts.weak": "I'm weak if I resist",
+```
+
+Dutch:
+```typescript
+"thoughts.cantHandle": "Ik kan dit niet aan",
+"thoughts.justOnce": "Maar één keer",
+"thoughts.unfair": "Dit is oneerlijk",
+"thoughts.wontMatter": "Het maakt toch niet uit",
+"thoughts.needRelief": "Ik moet dit kwijt",
+"thoughts.everyoneDoes": "Iedereen doet het",
+"thoughts.deserveIt": "Ik verdien dit",
+"thoughts.weak": "Ik ben zwak als ik weersta",
+```
+
+### 2e. Uitkomst
+```typescript
+"outcome.label": "What happened?",
+"outcome.label.nl": "Wat is er gebeurd?",
+"outcome.used": "I used",
+"outcome.notUsed": "I did not use",
+"outcome.unsure": "Not sure yet",
+"outcome.used.nl": "Ik heb gebruikt",
+"outcome.notUsed.nl": "Ik heb niet gebruikt",
+"outcome.unsure.nl": "Weet ik nog niet zeker",
+```
+
+### 2f. Locatie
+```typescript
+"location.label": "Where are you?",
+"location.label.nl": "Waar ben je?",
+"location.placeholder": "e.g., at home, work, bar...",
+"location.placeholder.nl": "bijv. thuis, werk, café...",
+```
+
+### 2g. Trigger note (alleen actief)
+```typescript
+"triggerNote.label": "What triggered this?",
+"triggerNote.label.nl": "Wat zette dit in gang?",
+"triggerNote.placeholder": "e.g., argument, stress, seeing someone use...",
+"triggerNote.placeholder.nl": "bijv. ruzie, stress, iemand zag gebruiken...",
+```
+
+### 2h. Stats / Voortgang
+```typescript
+"stats.outcomeRate": "Success rate",
+"stats.outcomeRate.nl": "Succespercentage",
+"stats.avgIntensity": "Average intensity",
+"stats.avgIntensity.nl": "Gemiddelde intensiteit",
+"stats.topEmotions": "Top emotions",
+"stats.topEmotions.nl": "Vaakste emoties",
+"stats.topPhysical": "Top physical signals",
+"stats.topPhysical.nl": "Vaakste lichamelijke signalen",
+"stats.intensityTrend": "Intensity trend",
+"stats.intensityTrend.nl": "Intensiteitstrend",
+"stats.outcomeByStrategy": "Success by action",
+"stats.outcomeByStrategy.nl": "Succes per actie",
+"stats.used": "Used",
+"stats.used.nl": "Gebruikt",
+"stats.notUsed": "Did not use",
+"stats.notUsed.nl": "Niet gebruikt",
+"stats.unsure": "Unsure",
+"stats.unsure.nl": "Onbekend",
+```
+
+---
+
+## 3. TREKTRACKER (ACTIEF) — 5 STAPPEN
+
+Behoud alle bestaande stappen en opties. Voeg nieuwe velden toe aan bestaande of nieuwe stappen. Gebruik **multi-select chips** voor emoties/lichaam/gedachten — snel te tappen, max 3 (of 2) selecties.
+
+### Stap 1: Type + Intensiteit + Locatie
+- **Type** (bestaand): "Planning", "Actief zoeken", "Ritueel", etc. — single select
+- **Intensiteit** (NIEUW): 1-10 slider, verplicht. Toon labels: 1=Mild, 5=Matig, 10=Overweldigend. Kleur progressie: groen → geel → oranje → rood
+- **Locatie** (NIEUW): optioneel tekstveld, onder intensiteit
+
+### Stap 2: Planning + Emoties + Lichamelijk
+- **Planning stage** (bestaand): "Alleen erover nadenken", "Onderweg", etc.
+- **Emoties** (NIEUW): multi-select chips, max 3. 11 opties. Toon geselecteerde chips als `bg-primary/20 text-primary` 
+- **Lichamelijke signalen** (NIEUW): multi-select chips, max 3. 8 opties. Zelfde chip styling
+
+### Stap 3: Need + Trigger Note + Gedachten
+- **Need** (bestaand): "Verlichting", "Opwinding", "Troost", etc.
+- **Trigger Note** (NIEUW): optioneel textarea. "Wat zette dit in gang?"
+- **Gedachten** (NIEUW): multi-select chips, max 2. 8 opties. Alleen voor actief — planning cravings gaan gepaard met specifieke rationales
+
+### Stap 4: Action
+- **Action** (bestaand): "Toegang verwijderen", "Locatie veranderen", etc. — single select
+
+### Stap 5: Uitkomst + Confidence
+- **Uitkomst** (NIEUW): 3 grote buttons naast elkaar (of gestapeld):
+  - 🔴 "Ik heb gebruikt" (bg-red-100 border-red-300 text-red-800 / dark: bg-red-950/30 border-red-800/40 text-red-300)
+  - 🟢 "Ik heb niet gebruikt" (bg-green-100 border-green-300 text-green-800 / dark: bg-green-950/30 border-green-800/40 text-green-300)
+  - ⚪ "Weet ik nog niet zeker" (bg-muted border-border text-muted-foreground)
+- **Confidence** (bestaand): "Hoe zeker ben je dat je niet gaat gebruiken?" slider 0-100
+  - **NB**: als uitkomst = "used", pas confidence label aan naar "Hoe zeker ben je dat je nu kunt stoppen?" (of equivalent)
+
+---
+
+## 4. CRAVINGTRACKER (PASSIEF) — 4 STAPPEN
+
+### Stap 1: Onset + Intensiteit + Locatie
+- **Onset** (bestaand): "Hoe begon het?" opties
+- **Intensiteit** (NIEUW): 1-10 slider, verplicht. Zelfde styling als TrekTracker
+- **Locatie** (NIEUW): optioneel tekstveld
+
+### Stap 2: Trigger + Emoties + Lichamelijk + Gedachten
+- **Trigger** (bestaand): single select
+- **Emoties** (NIEUW): multi-select chips, max 3. Zelfde 11 opties
+- **Lichamelijke signalen** (NIEUW): multi-select chips, max 3. Zelfde 8 opties
+- **Gedachten** (NIEUW): multi-select chips, max 2. 8 opties. Voor passief cravings — catastrofale gedachten
+
+### Stap 3: Action
+- **Action** (bestaand): single select wat je deed
+
+### Stap 4: Uitkomst + Done
+- **Uitkomst** (NIEUW): zelfde 3 buttons als TrekTracker stap 5
+- **Done** message: pas aan op basis van uitkomst:
+  - Not used: "Sterk — je hebt het craving weerstaan" (bestaande positive message)
+  - Used: "Het is gebeurd. Elke stap is een les. Je kunt hier van leren." (neutrale, non-judgmental message)
+  - Unsure: "Neem de tijd. Je kunt dit later aanvullen."
+
+---
+
+## 5. MULTI-SELECT CHIP COMPONENT
+
+Maak een herbruikbare chip component (inline in de tracker files of als apart component):
+
+```tsx
+// Chip button — toggle select/deselect
+<button
+  onClick={() => toggleSelection(item)}
+  className={cn(
+    "px-3 py-2 rounded-lg text-sm font-medium transition-colors border",
+    selected
+      ? "bg-primary/20 border-primary/40 text-primary"
+      : "bg-muted border-border text-muted-foreground hover:bg-muted/80"
+  )}
+>
+  {label}
+</button>
+```
+
+- Max selecties: disable niet-geselecteerde chips wanneer limiet bereikt (visueel dimmen, niet klikbaar)
+- Toon teller: "2/3 selected" boven de chips
+- Layout: flex wrap gap-2
+
+---
+
+## 6. INTENSITEIT SLIDER
+
+1-10 slider met visuele feedback:
+
+```tsx
+<div className="space-y-4">
+  <div className="flex justify-between text-xs text-muted-foreground">
+    <span>{t("intensity.mild")} (1)</span>
+    <span>{t("intensity.overwhelming")} (10)</span>
+  </div>
+  <input
+    type="range"
+    min={1}
+    max={10}
+    value={intensity || 5}
+    onChange={(e) => setIntensity(Number(e.target.value))}
+    className="w-full accent-primary"
+  />
+  <div className="text-center">
+    <span className="text-2xl font-bold text-primary">{intensity}</span>
+    <span className="text-sm text-muted-foreground ml-2">
+      {intensity <= 3 ? t("intensity.mild") : 
+       intensity <= 6 ? t("intensity.moderate") : 
+       intensity <= 8 ? t("intensity.strong") : t("intensity.overwhelming")}
+    </span>
+  </div>
+</div>
+```
+
+- Verplicht: Next knop disabled tot intensity > 0
+- Default waarde: 5 (midden)
+
+---
+
+## 7. LOGBOOK (src/pages/Logbook.tsx of bestaande log-weergave)
+
+Toon elke log als uitgebreide kaart. De bestaande weergave was al "grondiger" dan de registratie — nu moet de registratie de logbook aanvullen.
+
+### Kaart layout per log:
+
+```
+┌─────────────────────────────────────┐
+│ 📅 21 jun 12:04    [ACTIEF]         │  ← badge: primary voor actief, secondary voor passief
+│                                     │
+│ Intensiteit: ████████░░  8/10       │  ← progress bar, kleur afhankelijk van score
+│                                     │
+│ Uitkomst: 🟢 Niet gebruikt          │  ← badge kleur: groen/rood/gray
+│                                     │
+│ Type: Actief zoeken                 │  ← bestaande velden
+│ Planning: Onderweg                  │
+│ Need: Troost                        │
+│                                     │
+│ 😤 Boos  😢 Verdrietig  😰 Angstig  │  ← emoties als chips
+│                                     │
+│ 💓 Hartkloppingen  😰 Spanning      │  ← lichamelijk als chips
+│                                     │
+│ 🧠 "Ik kan dit niet aan"            │  ← gedachten als italic chips
+│                                     │
+│ 📍 Café                             │  ← locatie
+│ 📝 Ruzie met partner                │  ← trigger note (actief)
+│                                     │
+│ Actie: Locatie veranderd            │  ← bestaand
+│ Confidence: 75%                     │  ← bestaand
+└─────────────────────────────────────┘
+```
+
+- Uitkomst badge: `used` = rood, `not_used` = groen, `unsure` = grijs
+- Intensiteit progress bar: 1-4 = groen, 5-7 = oranje, 8-10 = rood
+- Velden die leeg zijn: verbergen in logbook (niet tonen als "-")
+- Gedachten chips: italic, kleiner font, `bg-secondary/50`
+- Craving type badge: "ACTIEF" / "PASSIEF" bovenaan rechts
+
+---
+
+## 8. STATISTIEKEN / VOORTGANG (src/pages/Progress.tsx of src/lib/analytics.ts)
+
+Voeg nieuwe statistieken en charts toe. Behoud alle bestaande stats.
+
+### 8a. CravingStats interface (src/lib/analytics.ts)
+
+```typescript
+export interface CravingStats {
+  // ... bestaande velden
+  // NIEUW:
+  totalCompleted: number;
+  outcomeUsed: number;
+  outcomeNotUsed: number;
+  outcomeUnsure: number;
+  successRate: number;           // percentage not_used / totalCompleted
+  avgIntensity: number;          // gemiddelde 1-10
+  avgIntensityActive: number;
+  avgIntensityPassive: number;
+  topEmotions: { name: string; count: number }[];
+  topPhysical: { name: string; count: number }[];
+  topThoughts: { name: string; count: number }[];
+  intensityByWeek: { week: string; avg: number; count: number }[];
+  outcomeByAction: { action: string; used: number; notUsed: number; rate: number }[];
+  outcomeByNeed: { need: string; used: number; notUsed: number; rate: number }[];
+  outcomeByEmotion: { emotion: string; used: number; notUsed: number; rate: number }[];
+}
+```
+
+### 8b. Analytics functies (src/lib/analytics.ts)
+
+Voeg helper toe die alle bovenstaande berekent uit `CravingLog[]`. Logica:
+
+- `totalCompleted`: logs met `status === "completed"`
+- `outcomeUsed/NotUsed/Unsure`: count per `outcome` veld
+- `successRate`: `(outcomeNotUsed / totalCompleted) * 100`, round to 1 decimal
+- `avgIntensity`: average van alle `intensity` velden (alleen completed)
+- `topEmotions`: flatten alle `emotions` arrays, count occurrences, sort desc, top 5
+- `topPhysical`: zelfde voor `physicalSignals`
+- `topThoughts`: zelfde voor `thoughts`
+- `intensityByWeek`: groepeer per week (ISO week), gemiddelde intensity, count
+- `outcomeByAction`: per `action` value, count used vs notUsed, bereken success rate
+- `outcomeByNeed`: zelfde per `need`
+- `outcomeByEmotion`: zelfde per `emotion` (flatten emotions arrays)
+
+### 8c. Progress page UI — Nieuwe kaarten
+
+Voeg onder de bestaande stats 2-3 nieuwe rijen toe:
+
+**Rij 1 — Uitkomst overzicht (3 kolommen):**
+- Kaart 1: "Succespercentage" — groot getal (bv. 67%) met trend indicator (↑↓)
+- Kaart 2: "Gem. intensiteit" — getal (bv. 6.4/10) met progress bar
+- Kaart 3: "Totaal voltooid" — getal (bv. 42) met breakdown: 🟢32 🔴6 ⚪4
+
+**Rij 2 — Top lijsten (2 kolommen):**
+- Kaart "Vaakste emoties": top 5 met count bar chart (horizontale bars, zoals bestaande top needs)
+- Kaart "Vaakste lichamelijke signalen": top 5 met count bar chart
+
+**Rij 3 — Trend (1 kolom, volle breedte):**
+- Kaart "Intensiteitstrend": lijn chart of bar chart per week
+  - X-as: weeknummers ("Wk 23", "Wk 24", etc.)
+  - Y-as: gemiddelde intensiteit 0-10
+  - Twee lijnen: actief (primary) vs passief (secondary)
+  - Gebruik `<div>` bars als echte chart library te zwaar is — simpel CSS bar chart is prima
+
+**Rij 4 — Succes per strategie (1 kolom, volle breedte):**
+- Kaart "Succes per actie": tabel of horizontale bars
+  - Per actie: naam, totaal gebruikt, aantal successen, succespercentage
+  - Sorteer op succespercentage (hoogste bovenaan)
+  - Top 5 acties tonen
+
+**Rij 5 — Succes per need (1 kolom, volle breedte):**
+- Zelfde als Rij 4 maar voor needs. Toont welke needs het moeilijkst zijn om te weerstaan.
+
+---
+
+## 9. DARK MODE
+
+Alle nieuwe UI elementen moeten dark mode compatible zijn:
+- Chips: `dark:bg-muted dark:border-border dark:text-muted-foreground` + selected `dark:bg-primary/20 dark:border-primary/40 dark:text-primary`
+- Intensiteit slider: `accent-primary` werkt in dark mode automatisch
+- Uitkomst buttons: gebruik `dark:` prefixen voor rood/groen/grijs varianten
+- Progress bars: gebruik `bg-primary` voor fill, `dark:bg-muted` voor track
+- Logbook kaarten: `dark:bg-card dark:border-border`
+
+---
+
+## 10. BACKWARDS COMPATIBILITY
+
+- Oude logs hebben geen `intensity`, `emotions`, `outcome`, etc. → tonen als "Niet geregistreerd" in logbook, niet meenemen in stats
+- In analytics: filter alleen logs die het veld hebben voor die specifieke stat
+  - Bijv. `avgIntensity`: bereken alleen over logs waar `intensity !== undefined`
+  - `successRate`: bereken alleen over logs waar `outcome !== undefined`
+- Geen migratie nodig — IndexedDB accepteert nieuwe velden automatisch
+
+---
+
+## 11. VERIFICATIE
+
+1. `npm run typecheck` — 0 errors
+2. `npm run build` — succes
+3. Check alle volgende flows:
+   - TrekTracker: alle 5 stappen werken, intensiteit slider werkt, chips selecteren/deselecteren, max limiet werkt, outcome buttons werken, data wordt opgeslagen
+   - CravingTracker: alle 4 stappen werken, zelfde checks
+   - Logbook: toont alle nieuwe velden correct, verbergt lege velden, uitkomst badge klopt
+   - Progress: nieuwe stats laden, charts tonen data, geen errors bij oude logs
+4. Dutch vertalingen: alle nieuwe keys hebben NL variant
+5. Dark mode: alle nieuwe elementen zichtbaar in dark mode
+6. Geen wijzigingen aan: Home layout, CheckIn, BoxBreathing, RelapseLog (behalve outcome als die daar al bestaat), Settings (crisisdienst prompt)
+
+---
+
+## BELANGRIJKE REGELS
+
+- **Intensiteit is verplicht** (1-10) — de Next knop is disabled tot intensity > 0
+- **Uitkomst is verplicht** bij stap 5/4 — de "Done" knop is disabled tot outcome gekozen
+- **Emoties/lichaam/gedachten zijn optioneel** — max selectie limiet, maar niet verplicht
+- **Locatie en trigger note zijn optioneel** — altijd optioneel
+- **Multi-select chips**: max 3 voor emoties, max 3 voor lichamelijk, max 2 voor gedachten
+- **Outkomst message**: pas de "Done" message aan op basis van uitkomst (positief/neutraal)
+- **Bestaande stappen en opties blijven** — alle huidige type/planning/need/action opties blijven bestaan
+- **Stats worden alleen berekend over completed logs** — draft logs niet meenemen
+- **Logbook toont craving type badge** (ACTIEF / PASSIEF) zodat je het verschil ziet

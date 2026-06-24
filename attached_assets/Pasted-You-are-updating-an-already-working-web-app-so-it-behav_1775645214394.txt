@@ -1,0 +1,94 @@
+You are updating an already working web app so it behaves properly on **iPhone Safari** and can be added to the **Home Screen** as a real app-like experience.
+
+## Goal
+
+Make this app fully usable as an **iPhone-friendly PWA / Home Screen web app**.
+
+## Main requirements
+
+1. The app must open correctly in **Safari on iPhone**.
+2. The user must be able to use **Share → Add to Home Screen**.
+3. After adding it, it should launch in an **app-like standalone view**, not feel like a normal browser tab.
+4. The app must be optimized for **iPhone 14 Pro** dimensions and safe areas.
+5. Do not rebuild the whole app unless absolutely necessary. Update the existing project cleanly.
+
+## Implement these technical requirements
+
+* Add or fix a valid **web app manifest**.
+* Ensure manifest includes:
+
+  * `name`
+  * `short_name`
+  * `start_url`
+  * `display: "standalone"`
+  * `background_color`
+  * `theme_color`
+  * proper icons
+* Add **Apple touch icon** support.
+* Add proper mobile meta tags in the main HTML head, including:
+
+  * viewport
+  * theme color
+  * Apple mobile web app capable settings where appropriate
+* Make sure the app has a usable **app icon** when added to iPhone Home Screen.
+* Ensure routing works correctly when launched from the home screen.
+* Ensure refresh / direct open / deep link does not break the app.
+* Ensure no layout elements are hidden behind:
+
+  * notch
+  * dynamic island area
+  * bottom home indicator
+* Respect **safe-area insets** on iPhone.
+* Make the layout mobile-first and specifically comfortable on **iPhone 14 Pro**.
+* Buttons, cards, modals, forms, and bottom navigation must be touch-friendly.
+* Prevent horizontal overflow.
+* Ensure text is readable without zooming.
+* Ensure fixed headers / footers do not overlap content.
+
+## UX requirements for iPhone home screen use
+
+* App should feel polished when opened from Home Screen.
+* Loading state should be clean and not broken.
+* Home screen icon and app name should look intentional.
+* Main navigation should be immediately usable on a small phone screen.
+* Tap targets must be large enough for thumb use.
+* Forms should work well with iPhone keyboard.
+* Scrolling should be smooth and not trap the user inside broken containers.
+
+## PWA / installability checks
+
+* Verify the app can be added via Safari’s **Add to Home Screen**.
+* Verify it launches in standalone mode after being added.
+* Verify the correct icon is shown.
+* Verify the manifest is actually detected.
+* If any current setup blocks this behavior, fix it.
+
+## Constraints
+
+* Preserve the current app architecture where possible.
+* Do not make random redesign decisions outside what is needed for mobile usability and installability.
+* Keep styling consistent with the existing app.
+* Do not remove existing features.
+* Make only the changes needed to support proper iPhone Home Screen behavior and mobile usability.
+
+## Deliverables
+
+1. Update the code.
+2. List exactly which files were changed.
+3. Explain what was added for:
+
+   * manifest
+   * icons
+   * Apple touch support
+   * standalone launch
+   * iPhone safe-area support
+4. Run validation/build checks.
+5. Tell me clearly whether the app is now ready for:
+
+   * Safari on iPhone
+   * Add to Home Screen
+   * standalone app-like launch
+
+## Important
+
+Do not just describe what should be done. Actually implement it in the project.

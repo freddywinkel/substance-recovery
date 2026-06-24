@@ -1,0 +1,199 @@
+Make the following focused fixes to the Anchor app. Do NOT change functionality, add features, or redesign. Only fix these specific bugs and inconsistencies in the Dutch translations and UI.
+
+Run `npm run typecheck` and `npm run build` after all changes.
+
+---
+
+## 1. DUTCH TRANSLATIONS — FIX "craving" usage
+
+In the Dutch section of `src/lib/translations.ts` (after `const nl:`), replace ALL instances of the word "verlangen" or "drang" with "craving" in the text values. The English loanword "craving" is the correct term in Dutch addiction care.
+
+Keep the translation keys (like `craving.step.xxx`) exactly as they are. Only change the Dutch text values.
+
+After replacement, fix the grammar:
+- "de craving" → "het craving" (in Dutch, craving is neuter)
+- "De craving" → "Het craving"
+- "met deze craving" → "met dit craving" (fix to "dit" since craving is neuter)
+- "Jij bent groter dan deze craving" → "Jij bent groter dan dit craving"
+- "Onder elke craving" → "Onder elk craving"
+
+---
+
+## 2. FIX TREKTRACKER CONFIDENCE SLIDER TEXT
+
+In `src/lib/translations.ts` Dutch section:
+- Change: `"Hoe zeker ben je dat je gaat gebruiken?"`
+- To: `"Hoe zeker ben je dat je niet gaat gebruiken?"` (lowercase "niet", not caps)
+
+The slider measures confidence in staying sober, not in using. "niet" should be lowercase.
+
+---
+
+## 3. FIX TREKTRACKER STEP 1 QUESTION
+
+In `src/lib/translations.ts` Dutch section:
+- Change: `"Wat voor trek heb je?"`
+- To: `"Waardoor heb je trek?"`
+
+The options are about causes/drivers (planning, boredom, social pressure), not "what kind of hunger." "Waardoor" (what drives this) matches the options better.
+
+---
+
+## 4. SOBRIETY STREAK ICON — REMOVE FLAME (src/pages/Home.tsx)
+
+The sobriety streak uses the same Flame icon as the TrekTracker card, causing confusion. Change the sobriety streak to use a different icon.
+
+- Line 102: Change `<Flame size={22} className="text-primary" />` to `<CalendarCheck size={22} className="text-primary" />`
+- Line 150: Change `<Flame size={18} className="text-muted-foreground" />` to `<CalendarCheck size={18} className="text-muted-foreground" />`
+
+Keep the Flame icon ONLY on the TrekTracker card (line 171) — that's correct.
+
+---
+
+## 5. TREKTRACKER SCROLL TO TOP (src/pages/TrekTracker.tsx)
+
+Add `useEffect` to scroll to the top of the page when the step changes. Currently the page stays scrolled down when clicking Next.
+
+A. Add `useEffect` to the import on line 1:
+```tsx
+import { useState, useCallback, useEffect } from "react";
+```
+
+B. Add this effect inside the `TrekTracker` component, after the `useState` declarations (around line 184):
+```tsx
+useEffect(() => {
+  window.scrollTo(0, 0);
+}, [step]);
+```
+
+---
+
+## 6. TREKTRACKER — REMOVE ORANGE, USE PRIMARY COLORS
+
+The TrekTracker currently mixes orange and primary colors. Change ALL orange styling to primary for consistency with the rest of the app.
+
+In `src/pages/TrekTracker.tsx`:
+- Line 317: Change `bg-orange-500` to `bg-primary` (progress bar)
+- Line 452: Change `bg-orange-500 text-white` to `bg-primary text-primary-foreground` (bottom Next button)
+- Line 274: Change `text-orange-500` to `text-primary` (Done screen icon)
+
+In `src/pages/Home.tsx`:
+- Line 169: Change `bg-orange-500/10 border-orange-500/30` to `bg-primary/10 border-primary/30` (Trek card background/border)
+- Line 169: Change `hover:bg-orange-500/15` to `hover:bg-primary/15` (Trek card hover)
+- Line 170: Change `bg-orange-500/20` to `bg-primary/20` (Trek card icon container)
+- Line 170: Change `text-orange-500` to `text-primary` (Trek card icon)
+
+---
+
+## 7. CRAVINGTRACKER STEP LABELS (src/pages/CravingTracker.tsx + src/lib/translations.ts)
+
+The 4-step CravingTracker shows wrong step labels because it reuses old 11-step translation keys.
+
+In `src/pages/CravingTracker.tsx` (around line 190-194):
+Change the STEP_LABELS mapping:
+```tsx
+const STEP_LABELS: Record<Step, string> = {
+  onset: t("craving.step.onset"),      // was: t("craving.step.situation")
+  trigger: t("craving.step.trigger"),  // was: t("craving.step.physical")
+  action: t("craving.step.action"),
+  done: t("common.done"),
+};
+```
+
+In `src/lib/translations.ts`, add these new keys:
+
+English section (around the other `craving.step` keys):
+```
+"craving.step.onset": "How did it start?",
+"craving.step.trigger": "Trigger & body",
+```
+
+Dutch section:
+```
+"craving.step.onset": "Hoe begon het?",
+"craving.step.trigger": "Trigger & lichaam",
+```
+
+---
+
+## 8. MISSING CRAVING OUTCOME LABEL (src/lib/translations.ts)
+
+In `src/pages/CravingTracker.tsx` line 472, there's a fallback: `t("craving.q.outcome") || "Outcome"`. Add this missing key.
+
+English:
+```
+"craving.q.outcome": "Outcome",
+```
+
+Dutch:
+```
+"craving.q.outcome": "Uitkomst",
+```
+
+---
+
+## 9. RELAPSE LOG RISK BUTTONS — MISSING DUTCH (src/lib/translations.ts)
+
+In `src/pages/RelapseLog.tsx`, the risk buttons use `tOpt()` but the Dutch translations are missing from the `optNl` map. Add these to the Dutch `optNl` section:
+
+```
+"No concern": "Geen zorgen",
+"Some safety concern": "Enige veiligheidszorg",
+"Fear of continued use": "Bang om door te gaan",
+"Withdrawal concern": "Ontwenningszorgen",
+```
+
+---
+
+## 10. TREKTRACKER OPTIONS — MISSING DUTCH TRANSLATIONS (src/lib/translations.ts)
+
+Add these missing Dutch translations to the `optNl` map. Many TrekTracker options show English text in Dutch mode.
+
+TrekTracker actions:
+```
+"Remove access or money": "Toegang of geld verwijderen",
+"Change location": "Locatie veranderen",
+"Use delay timer": "Gebruik vertragingstimer",
+"Just observe — don't act": "Observeren — niet handelen",
+```
+
+TrekTracker types:
+```
+"Planning or thinking about it": "Plannen of erover nadenken",
+"Actively seeking it": "Actief zoeken",
+"Ritual / habit": "Ritueel / gewoonte",
+"Boredom-driven": "Door verveling gedreven",
+"Emotional escape": "Emotioneel ontsnappen",
+```
+
+TrekTracker planning stages:
+```
+"Just thinking about it": "Alleen erover nadenken",
+"Getting money or resources": "Geld of middelen regelen",
+"On my way there": "Onderweg",
+"About to act": "Op het punt om te handelen",
+```
+
+TrekTracker needs:
+```
+"Relief": "Verlichting",
+"Excitement": "Opwinding",
+"Reward": "Beloning",
+"Numbness": "Gevoelloosheid",
+"Comfort": "Troost",
+"Connection": "Connectie",
+"Stimulation": "Stimulatie",
+"Escape": "Ontsnapping",
+```
+
+If any of these already exist in the `optNl` map, skip the duplicate.
+
+---
+
+## VERIFICATION
+
+After all changes, run:
+1. `npm run typecheck` — must pass with zero errors
+2. `npm run build` — must build successfully
+
+If there are errors, fix them before finishing. Do not add any new features or redesign anything beyond these fixes.

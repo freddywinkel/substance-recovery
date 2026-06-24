@@ -1,0 +1,713 @@
+1. Trigger Tracker — wat er allemaal in moet
+Doel
+
+De trigger tracker is voor real-time of bijna real-time logging van een craving/urge of risicomoment. Niet alleen “ik heb trek”, maar de hele context eromheen, zodat patronen later zichtbaar worden. Dat sluit aan op relapse-prevention en coping-with-craving aanpakken, waarin juist het herkennen van cue, context, interne staat en copingreactie centraal staat.
+
+A. Metadata die altijd automatisch vastgelegd moet worden
+
+Dit zijn systeemvelden, niet allemaal zichtbaar als stap:
+
+entry ID
+gebruiker ID of lokaal profiel ID
+datum
+tijd
+timezone
+draft of completed status
+created at
+updated at
+source:
+manual entry
+resumed draft
+started from home
+started from toolbox
+app state:
+offline/online
+version
+optional geolocation structure:
+latitude
+longitude
+place label
+maar alleen optioneel, niet verplicht
+B. Hoofdflow — gebruikersstappen
+
+Dit is de echte step-by-step flow.
+
+Stap 1 — Wat gebeurt er nu?
+
+Doel: huidige situatie in één scherm vangen.
+
+Velden:
+
+korte contextbeschrijving
+preset contexten:
+alleen thuis
+onderweg
+na werk
+conflict
+verveling
+stress
+slecht nieuws
+feest/sociale setting
+iemand gebruikt in mijn buurt
+ik zag iets dat me triggerde
+Other
+free text bij Other
+Stap 2 — Hoe sterk is de urge nu?
+
+Velden:
+
+craving intensity 0–10
+optional separate distress level 0–10
+optional sense of danger/risk:
+laag
+gemiddeld
+hoog
+Stap 3 — Welke emoties zijn aanwezig?
+
+Multi-select.
+
+Voorbeelden:
+
+angstig
+gespannen
+somber
+leeg
+boos
+gefrustreerd
+schuldig
+beschaamd
+eenzaam
+verveeld
+rusteloos
+overprikkeld
+afgewezen
+hopeloos
+juist euforisch / opgefokt
+Other
+Stap 4 — Welke gedachten spelen mee?
+
+Dit is heel belangrijk en wordt vaak vergeten.
+
+Velden:
+
+preset thought patterns:
+ik trek dit niet
+eentje kan wel
+niemand merkt het
+ik heb het verdiend
+het maakt toch niks meer uit
+ik wil gewoon rust
+ik wil voelen / juist niets voelen
+ik begin morgen opnieuw
+Other
+optional free text:
+“wat zei je hoofd letterlijk?”
+Stap 5 — Waar ben je?
+
+Velden:
+
+locatiecategorie:
+thuis
+werk
+buiten
+winkel
+bar/feest
+in vervoer
+bij iemand anders
+onbekend / liever niet zeggen
+Other
+optional saved location
+optional free text place label
+Stap 6 — Wie is er om je heen?
+
+Velden:
+
+alleen
+partner
+familie
+vrienden
+collega’s
+onbekenden
+iemand die gebruikt
+iemand die onveilig voelt
+iemand die veilig voelt
+Other
+Stap 7 — Welke fysieke signalen merk je?
+
+Multi-select.
+
+Voorbeelden:
+
+onrust
+spanning borst
+druk op hoofd
+misselijk
+zweten
+trillen
+hartslag hoog
+moe
+leeg gevoel
+zenuwachtig
+gejaagd
+drang in lichaam
+lichaam zoekt “release”
+Other
+Stap 8 — Welke interne triggers spelen mee?
+
+Hier wil je de klassieke interne triggerlaag pakken.
+
+Velden:
+
+HALT achtig:
+honger
+boos
+eenzaam
+moe
+daarnaast:
+pijn
+slapeloosheid
+stress
+verveling
+overprikkeling
+herinnering / flashback
+schaamte
+verdriet
+lichamelijk ongemak
+Other
+Stap 9 — Welke externe triggers of cues waren er?
+
+Multi-select.
+
+Voorbeelden:
+
+persoon
+plek
+tijdstip
+routine
+geld op zak
+telefoon/social media
+geur
+muziek
+straat/wijk
+gebruiksvoorwerp
+dealer/contact
+ruzie
+werkdruk
+feest / uitgaan
+loon/net betaald
+Other
+Stap 10 — Welke substantie of gedragstrigger speelt mee?
+
+Velden:
+
+substance/behavior selection:
+alcohol
+cannabis
+cocaine
+benzodiazepines
+nicotine
+stimulant
+opioid
+gokken
+porn/sex compulsive behavior
+gamen
+eten/binge
+Other
+optional multi-select als meerdere tegelijk
+optional “primary urge” keuze
+Stap 11 — Hoe lang bouwt dit al op?
+
+Velden:
+
+net begonnen
+5–15 minuten
+15–60 minuten
+enkele uren
+sinds vanochtend
+bijna de hele dag
+meerdere dagen
+Other
+Stap 12 — Hoe groot is de toegang / gelegenheid om te gebruiken?
+
+Dit is heel nuttig voor risico-inschatting.
+
+Velden:
+
+geen toegang
+lastig bereikbaar
+mogelijk bereikbaar
+makkelijk bereikbaar
+direct beschikbaar
+
+Extra:
+
+geld beschikbaar? ja/nee
+alleen? ja/nee
+vandaag al contact gehad met triggerpersoon/dealer? ja/nee
+Stap 13 — Wat ga je nu doen?
+
+Dit is de coping-/actiekeuze.
+
+Velden:
+
+use only as documentation
+urge surfing
+5-4-3-2-1 grounding
+box breathing
+cold water reset
+play the tape forward
+iemand bellen of appen
+weggaan uit de situatie
+muziek
+douchen
+wandelen
+eten/drinken
+toolbox openen
+veilige contactpersoon
+Other
+Stap 14 — Hoe zeker voel je je dat je kunt weerstaan?
+
+Velden:
+
+confidence to resist 0–10
+Stap 15 — Samenvatting voor opslaan
+
+Moet tonen:
+
+huidige context
+intensity
+belangrijkste triggers
+substance
+gekozen actie
+confidence
+draft/completed
+
+Knoppen:
+
+save as complete
+save draft
+edit previous answers
+C. Follow-up na interventie
+
+Dit is eigenlijk verplicht als je later inzichten wilt.
+
+Na toolbox of na save:
+
+heb je de techniek gebruikt?
+welke techniek precies?
+craving intensity daarna 0–10
+confidence daarna 0–10
+craving:
+afgenomen
+gelijk gebleven
+toegenomen
+ben je veilig uit de situatie gegaan?
+wil je dit moment markeren als “belangrijk patroon”?
+D. Uitkomstvelden
+
+Wat uiteindelijk in de database moet landen:
+
+craving intensity before
+craving intensity after
+confidence before
+confidence after
+chosen intervention
+used intervention yes/no
+intervention helpful yes/no/partly
+did return to use happen after this entry:
+no
+not sure
+yes
+optional follow-up note
+E. High-risk flags
+
+De app moet kalm een support pattern tonen wanneer combinaties voorkomen zoals:
+
+hoge craving + makkelijke toegang
+hoge craving + alleen + substance direct beschikbaar
+hoge craving + hopeloosheid / “maakt toch niks uit”
+recent lapse + nieuwe trigger
+severe distress
+
+Dan toon je:
+
+“Deze app is geen spoedhulp.”
+“Als je in direct gevaar bent of bang bent dat je jezelf of iemand anders wat aandoet, neem nu contact op met spoed- of crisishulp.”
+“Bij ernstige ontwenningsklachten: zoek urgente medische hulp.”
+
+Dat past bij de veiligheidstaal die SAMHSA/NIDA-achtig materiaal ondersteunt: ondersteunend, niet moralistisch, en duidelijk over grenzen van de tool.
+
+F. Wat je later uit de trigger tracker moet kunnen halen
+
+Voor analytics:
+
+meest voorkomende interne triggers
+meest voorkomende externe triggers
+top emotionele states
+top locaties
+top personen/sociale contexten
+top substances
+tijdstippen/dagdelen met hoogste urge
+meest gekozen interventies
+welke interventies het vaakst samenhangen met afname van craving
+persoonlijke frequent gebruikte “Other” antwoorden
+2. Relapse Log — wat er allemaal in moet
+Doel
+
+De relapse log is geen schuldformulier, maar een chain analysis / leerformulier na een lapse of return to use. Relapse-preventionliteratuur behandelt relapse als een proces met stages en high-risk situaties; daarom moet de log niet alleen “wat heb je gebruikt?” registreren, maar vooral wat eraan voorafging, wat gemist werd, hoe de keten liep, en wat de volgende beschermende stap is.
+
+A. Metadata die altijd vastligt
+relapse entry ID
+user/profile ID
+date logged
+event date/time
+draft/completed
+created at
+updated at
+linked craving entries if present
+linked toolbox usage if present
+privacy flag:
+include in export
+exclude free text from export
+B. Eerste keuze: hoe wil je dit labelen?
+
+Heel belangrijk voor toon.
+
+Velden:
+
+lapse
+setback
+return to use
+relapse
+liever geen label
+
+Zo voorkom je dat de app meteen moralistisch framet. Dat sluit aan op stigma-reducerende taal en op het belang van het onderscheid tussen lapse en relapse.
+
+C. Hoofdflow — gebruikersstappen
+Stap 1 — Wanneer gebeurde het?
+
+Velden:
+
+datum
+tijd
+was dit één moment of een periode?
+één moment
+meerdere uren
+hele dag
+meerdere dagen
+Stap 2 — Wat is er gebruikt of welk gedrag gebeurde?
+
+Velden:
+
+substance / behavior
+multi-select indien nodig
+primary substance
+optional free text if Other
+Stap 3 — Hoeveel / hoe vaak?
+
+Voor v1 liever veilig en simpel:
+
+klein
+gemiddeld
+veel
+meerdere keren
+binge / doorgegaan
+liever niet invullen
+
+Je kunt ook:
+
+aantal keer gebruikt
+geschatte duur episode
+
+Ik zou geen gedetailleerde doseringswizard maken; registreren mag, maar de app moet geen gebruiksdetail gaan normaliseren.
+
+Stap 4 — Wat was de eerste trigger?
+
+Velden:
+
+interne trigger
+externe trigger
+gedachte
+emotie
+gebeurtenis
+lichamelijk ongemak
+sociale druk
+craving uit het niets
+Other
+Stap 5 — Wat ging eraan vooraf in de uren/dagen ervoor?
+
+Hier zit de echte waarde.
+
+Velden:
+
+slecht geslapen
+stress
+conflict
+isolatie
+verveling
+teveel zelfvertrouwen
+geen steun gezocht
+routines losgelaten
+triggerplek opgezocht
+geld beschikbaar
+contact met triggerpersoon
+stemming werd slechter
+ik voelde me juist “te goed” / onaantastbaar
+Other
+Stap 6 — Welke warning signs heb je gemist?
+
+Dit moet aansluiten op emotionele, mentale en fysieke relapse-stages.
+
+Velden:
+
+emotionele warning signs:
+mezelf afsluiten
+niet praten
+irritatie
+slechte zelfzorg
+honger/moe/overprikkeld
+spanning liep op
+mentale warning signs:
+onderhandelen met mezelf
+romantiseren van gebruik
+“één keer kan wel”
+plannen maken
+triggers opzoeken
+geheimhouding
+hopeloos denken
+fysieke/behavioral warning signs:
+contact gezocht
+erheen gegaan
+gekocht/voorbereid
+daadwerkelijk gebruikt
+
+Relapse als proces met fasen is een standaard relapse-preventionidee.
+
+Stap 7 — Welke gedachte ging vlak ervoor door je heen?
+
+Velden:
+
+vrije tekst
+presets:
+ik kan dit niet aan
+ik stop morgen wel
+eentje maakt niet uit
+het is toch al verpest
+ik wil rust
+ik wil niet voelen
+ik heb dit verdiend
+niemand merkt het
+Other
+
+Dit is ook belangrijk omdat het “het is toch al verpest”-denken precies het soort cognitieve valkuil is dat past bij abstinence-violation effect.
+
+Stap 8 — Wat gebeurde er precies in de keten?
+
+Dit moet een mini chain analysis zijn.
+
+Velden:
+
+trigger
+gedachte
+gevoel
+lichamelijke staat
+keuze/moment
+gebruik
+direct gevolg
+gevolg later
+
+Visueel liefst als:
+
+Before
+During
+After
+Stap 9 — Was er vooraf een moment waarop je nog had kunnen afslaan?
+
+Velden:
+
+ja, vroeg in de keten
+ja, net voor gebruik
+nee, het voelde te snel
+weet ik niet
+Stap 10 — Wat had kunnen helpen op elk stadium?
+
+Per stadium invullen:
+
+vroeg stadium
+midden stadium
+laatste moment
+
+Voorbeelden:
+
+iemand appen
+naar buiten gaan
+triggerplek verlaten
+eten/slapen
+toolbox techniek
+eerlijk zijn tegen iemand
+plan erbij pakken
+geld / toegang blokkeren
+afspraak maken met behandelaar
+Other
+Stap 11 — Wie kun je nu vertellen of inschakelen?
+
+Velden:
+
+niemand
+partner
+vriend/vriendin
+familielid
+sponsor
+therapeut/behandelaar
+huisarts
+crisis/urgente hulp indien nodig
+saved contact
+Other
+Stap 12 — Wat is je eerstvolgende herstelstap?
+
+Velden:
+
+water/eten/rusten
+triggers weg
+contact opnemen
+volgende 24 uur plan
+terug naar routine
+dag structureren
+afspraak plannen
+toolbox gebruiken
+opnieuw beginnen vanaf nu
+Other
+Stap 13 — Heb je acute risico’s of medische zorgen?
+
+Niet dramatisch brengen, wel duidelijk.
+
+Velden:
+
+nee
+ik voel me onveilig
+ik ben bang dat ik doorgebruik
+ik heb ernstige ontwennings- of lichamelijke klachten
+ik ben bang mezelf of iemand anders iets aan te doen
+
+Bij risicokeuze: toon support escalation tekst, maar geen crisisdienst spelen.
+
+Stap 14 — Optionele context
+
+Free text:
+
+“Is er nog iets belangrijks dat je later wilt teruglezen?”
+Stap 15 — Supportive wrap-up
+
+Toon bijvoorbeeld:
+
+wat er is vastgelegd
+wat je volgende stap is
+welke persoon je kunt benaderen
+mogelijkheid om nu direct toolbox te openen
+mogelijkheid om dit als alleen-documentatie op te slaan
+D. Wat de relapse log verder nog moet documenteren
+
+Naast de flowantwoorden moeten deze velden in het model zitten:
+
+label type: lapse/setback/return to use/relapse
+episode start time
+episode end time optional
+primary substance
+secondary substances
+amount category
+frequency category
+first trigger type
+warning signs array
+pre-use thought
+chain analysis summary
+missed intervention points
+support contact selected
+next recovery step
+risk flag
+linked craving entries
+linked toolbox entries
+linked daily check-ins
+note export excluded yes/no
+E. Wat de app van een relapse log moet kunnen afleiden
+
+Voor dashboard/insights:
+
+meest voorkomende eerste triggers vóór return to use
+meest gemiste warning signs
+meest voorkomende gedachte vlak voor gebruik
+meest kwetsbare dagdelen / weekdagen
+welke beschermende acties achteraf het vaakst genoemd worden
+hoeveel relapse logs hadden eerder een craving entry
+hoeveel hadden geen steuncontact gekozen
+3. Wat je in beide modules hetzelfde moet houden
+Altijd aanwezig
+autosave draft
+later hervatten
+duidelijke progress bar
+back button
+preset-first
+Other → tekstveld
+multi-select waar logisch
+zachte samenvatting vóór opslaan
+privacyvriendelijke exportoptie
+non-judgmental taal
+Altijd vermijden
+“failure”
+“alles verpest”
+schuld-/schaamtecopy
+klinische claims zoals “dit voorkomt relapse”
+instructies voor gevaarlijke ontwenningsbehandeling
+glamoriserende gebruiksdetails
+4. Minimale versie vs uitgebreide versie
+Minimale versie trigger tracker
+
+Minimaal nodig:
+
+context
+intensity
+emotions
+location
+people
+physical sensations
+substance
+buildup duration
+chosen action
+confidence
+draft/completed
+follow-up outcome
+Uitgebreide versie trigger tracker
+
+Voeg toe:
+
+thoughts
+internal triggers
+external cues
+access/opportunity
+linked intervention outcomes
+safety flags
+marked pattern
+Minimale versie relapse log
+
+Minimaal nodig:
+
+when
+substance
+amount/frequency category
+first trigger
+missed warning signs
+thought before use
+what could have helped
+who can you tell
+next step
+optional context
+Uitgebreide versie relapse log
+
+Voeg toe:
+
+label type
+chain analysis timeline
+emotional/mental/physical stage markers
+linked prior craving entries
+risk screen
+export privacy options
+aftercare follow-up prompt

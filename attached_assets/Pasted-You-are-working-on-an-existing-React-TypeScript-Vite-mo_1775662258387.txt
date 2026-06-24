@@ -1,0 +1,193 @@
+You are working on an existing React + TypeScript + Vite mobile-first PWA.
+
+This is a targeted layout-safety fix.
+Do not redesign the UI.
+Do not change the visual layout unnecessarily.
+Do not restyle the app.
+Do not move major sections around unless required to prevent content from being hidden behind the bottom navigation.
+
+PRIMARY GOAL
+Ensure that no interactive or important UI element anywhere in the app can ever fall behind, be obscured by, or become hard to tap because of the bottom navigation bar or iPhone home-indicator safe area.
+
+This must be fixed app-wide.
+
+READ FIRST
+- docs/master-spec.md
+- docs/ui-principles.md
+- docs/progress.md
+- PLAN.md
+
+STRICT RULES
+- preserve current layout and styling as much as possible
+- make the smallest clean fix possible
+- do not rebuild screens
+- do not redesign spacing globally unless required for nav safety
+- do not remove sticky elements unless necessary
+- do not introduce visual regressions
+- keep the app iPhone 14 Pro friendly
+- support Safari and PWA-on-homescreen behavior
+- respect safe areas
+
+WHAT MUST NEVER HAPPEN
+No element should ever be hidden, clipped, overlapped, untappable, or partially blocked by:
+- the bottom navigation bar
+- the iPhone home indicator area
+- safe-area inset issues
+- sticky footer actions
+- floating action areas
+- keyboard + bottom nav combinations
+
+CHECK ALL POSSIBLE UI TYPES
+Audit and fix all of these if present:
+
+1. Standard page content
+- final cards in scroll views
+- last list items
+- last dashboard cards
+- last settings rows
+- final text blocks
+- final form sections
+
+2. Buttons and action rows
+- primary save buttons
+- submit buttons
+- continue buttons
+- complete buttons
+- confirm buttons
+- retry buttons
+- back/next action rows
+- bottom CTA groups
+- summary screen action buttons
+- end-of-flow buttons
+
+3. Flow-specific elements
+- step screens
+- summary screens
+- completion screens
+- interrupted draft recovery prompts
+- conditional “Other” inputs near the bottom
+- follow-up questions that appear after selection
+- buttons that appear only after entering text
+- validation messages near bottom actions
+
+4. Pop-up / conditional UI
+- expandable sections
+- accordion content
+- helper text revealed after selection
+- emergency support panels
+- supportive note panels
+- “what helped” follow-up sections
+- post-entry feedback prompts
+- after-save action prompts
+- success / wrap-up cards
+- contextual buttons that appear after an entry is saved
+
+5. Inputs
+- textareas
+- free-text notes
+- search inputs
+- sliders with helper text
+- date/time inputs
+- chip groups that wrap onto multiple lines
+- multi-select lists with final options near the bottom
+- voice placeholder controls
+- keyboard-open states
+
+6. Overlay-adjacent content
+- bottom sheets if any
+- sticky toolbars
+- toast stacks near the bottom
+- snackbars
+- inline banners anchored low on screen
+- floating buttons
+- floating status bars
+- install/update notices
+- save confirmation bars
+
+7. Special mobile cases
+- iPhone 14 Pro portrait
+- iPhone 14 Pro PWA opened from homescreen
+- mobile Safari browser UI expanded/collapsed states
+- dynamic viewport height changes
+- safe area bottom inset changes
+- keyboard open/close transitions
+
+TECHNICAL EXPECTATIONS
+Implement a robust, reusable solution for bottom-nav clearance.
+
+Prefer:
+- shared layout utilities
+- consistent bottom padding strategy
+- safe-area-aware spacing
+- scroll container padding-bottom
+- content-area min-height rules
+- bottom CTA offset rules where needed
+- reusable CSS variables/tokens for nav height + safe area
+- defensive handling for conditional content growth
+
+Avoid:
+- random one-off magic numbers scattered across screens
+- manual hacks per page unless truly necessary
+- breaking visual hierarchy
+- removing intended sticky behavior unless unavoidable
+
+IMPORTANT
+If some screens have:
+- sticky bottom action bars
+- bottom summary cards
+- bottom confirmations
+- action buttons that appear only after input
+make sure those also sit above the nav safely and remain tappable.
+
+VALIDATION REQUIREMENTS
+Audit the app for all screens and states where bottom overlap could occur, including:
+- normal viewing
+- long content
+- short content
+- after conditional reveal
+- after save
+- after error
+- after validation message appears
+- with keyboard open where relevant
+
+If you find multiple root causes, fix them cleanly at the shared layout level first, then patch any true exceptions.
+
+TESTING
+- inspect all routes/screens
+- test step flows from beginning to end
+- test summary/final screens
+- test conditional fields
+- test post-save states
+- test keyboard interaction on text inputs
+- test iPhone-safe-area behavior
+
+Run:
+- npm run build
+- npm run test
+- npm run lint
+
+Fix critical issues introduced by your changes.
+
+DOCUMENTATION
+Update docs/progress.md with:
+- objective
+- files changed
+- decisions made
+- validation performed
+- known issues
+- next step
+
+OUTPUT FORMAT
+Return:
+1. inspection summary
+2. root causes found
+3. shared fix implemented
+4. screen-specific fixes applied
+5. files changed
+6. validation results
+7. known issues
+8. next recommended step
+
+Start now.
+Do not redesign the app.
+Only make the smallest clean changes needed so no element anywhere falls behind the bottom nav bar.

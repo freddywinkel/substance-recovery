@@ -1,0 +1,206 @@
+# TrekTracker — Vrije tekstvelden + Missing Translation Fix
+
+Voeg optionele vrije tekstvelden toe aan TrekTracker voor locatie en trigger-context. Fix de ontbrekende vertaling. Houd ALLE bestaande multiple-choice opties voor statistieken.
+
+---
+
+## 1. DATA MODEL (src/db/index.ts)
+
+Wijzig de `TrekTrackerLog` interface (of het equivalent in CravingLog waar TrekTracker data in zit):
+
+```typescript
+export interface TrekTrackerLog {
+  id: string;
+  timestamp: number;
+  status: "draft" | "completed";
+  type?: string;              // bestaand
+  planningStage?: string;     // bestaand
+  need?: string;              // bestaand
+  action?: string;            // bestaand
+  confidence?: number;        // bestaand
+  // NIEUW:
+  location?: string;        // "Waar ben je?"
+  triggerNote?: string;     // "Wat zette dit in gang?"
+}
+```
+
+Als TrekTracker deelt de `CravingLog` interface, voeg deze twee optionele velden toe aan `CravingLog` (alleen voor `cravingType === "active"` logisch, maar technisch gewoon optioneel op de interface):
+
+```typescript
+export interface CravingLog {
+  // ... bestaande velden
+  location?: string;
+  triggerNote?: string;
+}
+```
+
+---
+
+## 2. TRANSLATIES (src/lib/translations.ts)
+
+### 2a. Fix de missing English option
+Zoek in de `optNl` map (Dutch) naar een TrekTracker optie die nog Engels is. Vervang de ontbrekende vertaling. De meest voorkomende zijn:
+
+- "Planning or thinking about it" → "Plannen of erover nadenken"
+- "Actively seeking it" → "Actief zoeken"
+- "Ritual / habit" → "Ritueel / gewoonte"
+- "Boredom-driven" → "Door verveling gedreven"
+- "Emotional escape" → "Emotioneel ontsnappen"
+- "Remove access or money" → "Toegang of geld verwijderen"
+- "Change location" → "Locatie veranderen"
+- "Use delay timer" → "Gebruik vertragingstimer"
+- "Just observe — don't act" → "Observeren — niet handelen"
+
+Controleer ALLE opties in de `optNl` map voor TrekTracker. Elke key die in `optEn` voorkomt en betrekking heeft op Trek (type, planning, action, need) MOET ook een `optNl` vertaling hebben.
+
+### 2b. Nieuwe vertaling keys
+
+**English (en):**
+```typescript
+"trek.location.label": "Where are you?",
+"trek.location.placeholder": "e.g., at home, work, bar...",
+"trek.location.description": "Optional — helps spot risky places",
+"trek.triggerNote.label": "What triggered this?",
+"trek.triggerNote.placeholder": "e.g., argument, stress, seeing someone use...",
+"trek.triggerNote.description": "Optional — your own words",
+"trek.context.optional": "Optional",
+```
+
+**Dutch (nl):**
+```typescript
+"trek.location.label": "Waar ben je?",
+"trek.location.placeholder": "bijv. thuis, werk, café...",
+"trek.location.description": "Optioneel — helpt risicoplekken herkennen",
+"trek.triggerNote.label": "Wat zette dit in gang?",
+"trek.triggerNote.placeholder": "bijv. ruzie, stress, iemand zag gebruiken...",
+"trek.triggerNote.description": "Optioneel — in je eigen woorden",
+"trek.context.optional": "Optioneel",
+```
+
+---
+
+## 3. UI WIJZIGINGEN — TrekTracker stappen
+
+### Stap 1: Type + Locatie (src/pages/TrekTracker.tsx)
+
+Na de type-opties ("Planning or thinking about it", "Actively seeking it", etc.) en VOOR de "Next" knop, voeg een optioneel tekstveld toe:
+
+```tsx
+{/* After type options, before Next button */}
+<div className="mt-6 pt-4 border-t border-border">
+  <label className="text-sm font-medium text-foreground mb-1 block">
+    {t("trek.location.label")}
+    <span className="text-xs text-muted-foreground ml-2 font-normal">
+      {t("trek.context.optional")}
+    </span>
+  </label>
+  <p className="text-xs text-muted-foreground mb-2">
+    {t("trek.location.description")}
+  </p>
+  <Input
+    type="text"
+    value={location || ""}
+    onChange={(e) => setLocation(e.target.value)}
+    placeholder={t("trek.location.placeholder")}
+    className="w-full"
+  />
+</div>
+```
+
+- State: `const [location, setLocation] = useState<string>(existingData?.location || "");`
+- Dit veld is **optioneel** — de Next knop werkt gewoon, ook leeg
+- Opslaan bij stap-wissel of submit: `draft.location = location`
+
+### Stap 2: Planning + Trigger Note
+
+Na de planning stage opties ("Just thinking about it", "Getting money", etc.) en VOOR de "Next" knop, voeg een optioneel tekstveld toe:
+
+```tsx
+{/* After planning options, before Next button */}
+<div className="mt-6 pt-4 border-t border-border">
+  <label className="text-sm font-medium text-foreground mb-1 block">
+    {t("trek.triggerNote.label")}
+    <span className="text-xs text-muted-foreground ml-2 font-normal">
+      {t("trek.context.optional")}
+    </span>
+  </label>
+  <p className="text-xs text-muted-foreground mb-2">
+    {t("trek.triggerNote.description")}
+  </p>
+  <Textarea
+    value={triggerNote || ""}
+    onChange={(e) => setTriggerNote(e.target.value)}
+    placeholder={t("trek.triggerNote.placeholder")}
+    className="w-full min-h-[80px]"
+    rows={3}
+  />
+</div>
+```
+
+- State: `const [triggerNote, setTriggerNote] = useState<string>(existingData?.triggerNote || "");`
+- Gebruik `Textarea` (meerregelig) — of `Input` als Textarea niet beschikbaar is, dan gewoon `<input>` met multiline via CSS of `textarea` HTML element
+- Optioneel — Next werkt gewoon leeg
+- Opslaan bij stap-wissel of submit: `draft.triggerNote = triggerNote`
+
+### Layout regels
+- Tekstvelden staan **onder** de opties, gescheiden door een `border-t` (subtiele scheidslijn)
+- Label is `text-sm font-medium` 
+- "Optioneel" badge is `text-xs text-muted-foreground` inline
+- Description is `text-xs text-muted-foreground` op nieuwe regel
+- Input heeft de bestaande `Input` component styling (niet custom CSS)
+
+---
+
+## 4. CONFIDENCE SLIDER TEXT FIX (opnieuw verifiëren)
+
+De vorige fix was: `"Hoe zeker ben je dat je niet gaat gebruiken?"` (niet "gaat gebruiken"). Verifiëer dat deze correct is in `src/lib/translations.ts` Dutch section. Als hij terug is naar de verkeerde versie, corrigeer:
+
+- **Dutch:** `"Hoe zeker ben je dat je niet gaat gebruiken?"` (niet = lowercase)
+- **English:** `"How confident are you that you won't use?"` (of equivalent)
+
+---
+
+## 5. DB MIGRATIE / BACKWARDS COMPATIBILITY
+
+Oude logs hebben geen `location` of `triggerNote`. Dat is prima — de velden zijn optioneel (`?:`).
+
+Bij het laden van een draft of bestaande log:
+```typescript
+const [location, setLocation] = useState(draft?.location || "");
+const [triggerNote, setTriggerNote] = useState(draft?.triggerNote || "");
+```
+
+Geen migratie nodig. IndexedDB accepteert nieuwe velden automatisch.
+
+---
+
+## 6. STATS / ANALYTICS
+
+De bestaande stats (`topPlanningStages`, `topNeeds`, etc.) blijven werken op de multiple-choice velden. De vrije tekstvelden (`location`, `triggerNote`) hoeven **niet** in de analytics te verschijnen. Ze zijn puur voor de gebruiker zelf en voor eventuele export/therapie-gesprek.
+
+Als je ze WEL wilt tonen in de history/detail-view: voeg ze toe aan de log-detail weergave, maar dat is optioneel en buiten scope van deze prompt.
+
+---
+
+## 7. VERIFICATIE
+
+1. `npm run typecheck` — 0 errors
+2. `npm run build` — succes
+3. Check dat:
+   - Alle TrekTracker opties in Dutch mode Nederlands zijn (geen Engels)
+   - Stap 1 heeft "Waar ben je?" veld, optioneel, onder de opties
+   - Stap 2 heeft "Wat zette dit in gang?" veld, optioneel, onder de opties
+   - Next knop werkt ook als tekstvelden leeg zijn
+   - Data wordt opgeslagen in IndexedDB
+   - Confidence slider vraagt "Hoe zeker ben je dat je niet gaat gebruiken?"
+4. Geen wijzigingen aan: Home, CravingTracker, RelapseLog, BoxBreathing, Progress, CheckIn
+
+---
+
+## BELANGRIJKE REGELS
+
+- Multiple-choice opties blijven bestaan — houd ze allemaal
+- Tekstvelden zijn **optioneel** — de flow moet snel blijven in crisis
+- Gebruik bestaande componenten (`Input`, `Textarea`, `label`, `Card` etc.)
+- Geen design-changes aan de rest van de app
+- Dutch vertalingen moeten correct zijn — check `optNl` compleet

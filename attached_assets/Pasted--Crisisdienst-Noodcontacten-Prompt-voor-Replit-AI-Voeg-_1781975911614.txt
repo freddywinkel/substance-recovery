@@ -1,0 +1,228 @@
+# Crisisdienst & Noodcontacten — Prompt voor Replit AI
+
+Voeg crisisdienst- en noodcontact-functionaliteit toe aan de app. Alleen in **Settings** en **Help** tab. **Niet** op het homescreen. Geen redesign.
+
+---
+
+## 1. DATA MODEL (src/db/index.ts)
+
+Voeg toe aan de bestaande interfaces, **niet** bestaande wijzigen:
+
+```typescript
+export interface CrisisService {
+  id: string;
+  name: string;
+  number: string;
+  isCustom: boolean;
+}
+
+export interface EmergencyContact {
+  id: string;
+  name: string;
+  relationship: string;
+  phone: string;
+}
+```
+
+Voeg toe aan `SettingsData` interface:
+```typescript
+export interface SettingsData {
+  // ... bestaande velden
+  crisisService?: CrisisService;
+  emergencyContacts?: EmergencyContact[];
+}
+```
+
+Default waarden bij `initDB` (crisisService = null, emergencyContacts = [])
+
+---
+
+## 2. TRANSLATIES (src/lib/translations.ts)
+
+Voeg toe aan **beide** `en` en `nl` secties, op de juiste plek (bij andere settings/help keys):
+
+**English:**
+```typescript
+"settings.crisisService": "Crisis Service",
+"settings.crisisService.description": "Choose a crisis service for emergency support",
+"settings.crisisService.choose": "Choose crisis service",
+"settings.crisisService.custom": "Add custom number",
+"settings.crisisService.customName": "Service name",
+"settings.crisisService.customNumber": "Phone number",
+"settings.emergencyContacts": "Emergency Contacts",
+"settings.emergencyContacts.description": "People you can reach in a crisis",
+"settings.emergencyContacts.name": "Name",
+"settings.emergencyContacts.relationship": "Relationship",
+"settings.emergencyContacts.phone": "Phone number",
+"settings.emergencyContacts.add": "Add contact",
+"settings.emergencyContacts.max": "Maximum 3 contacts",
+"settings.emergencyContacts.remove": "Remove",
+"help.crisisService.title": "Crisis Service",
+"help.crisisService.call": "Call now",
+"help.emergencyContacts.title": "Emergency Contacts",
+"help.emergencyContacts.call": "Call",
+"crisis.112": "112 — Emergency",
+"crisis.113": "113 Suicide Prevention",
+"crisis.luisterlijn": "Luisterlijn",
+"crisis.mind": "MIND Helpline",
+"crisis.drugsinfo": "Alcohol & Drugs Infolijn",
+"crisis.vnn": "VNN Addiction Care",
+"crisis.tactus": "Tactus Addiction Care",
+"crisis.antes": "Crisis Service Antes (Rotterdam)",
+"crisis.ggnet": "Crisis Service GGNet",
+"crisis.dierbare": "Help My Loved One Is Addicted",
+"crisis.brijder": "Brijder (Zuid-Holland)",
+"crisis.indigo": "Indigo Haaglanden",
+"crisis.veiligthuis": "Veilig Thuis",
+"crisis.depressielijn": "Depression Line",
+"crisis.meldpunt": "Report Concerning Behaviour",
+"crisis.ypsilon": "Ypsilon (for loved ones)",
+"crisis.kindertelefoon": "Child Helpline",
+"crisis.injebol": "In je bol (young people)",
+```
+
+**Dutch (nl):**
+```typescript
+"settings.crisisService": "Crisisdienst",
+"settings.crisisService.description": "Kies een crisisdienst voor noodgevallen",
+"settings.crisisService.choose": "Kies crisisdienst",
+"settings.crisisService.custom": "Eigen nummer toevoegen",
+"settings.crisisService.customName": "Naam dienst",
+"settings.crisisService.customNumber": "Telefoonnummer",
+"settings.emergencyContacts": "Noodcontacten",
+"settings.emergencyContacts.description": "Mensen die je kunt bereiken in een crisis",
+"settings.emergencyContacts.name": "Naam",
+"settings.emergencyContacts.relationship": "Relatie",
+"settings.emergencyContacts.phone": "Telefoonnummer",
+"settings.emergencyContacts.add": "Contact toevoegen",
+"settings.emergencyContacts.max": "Maximaal 3 contacten",
+"settings.emergencyContacts.remove": "Verwijderen",
+"help.crisisService.title": "Crisisdienst",
+"help.crisisService.call": "Nu bellen",
+"help.emergencyContacts.title": "Noodcontacten",
+"help.emergencyContacts.call": "Bellen",
+"crisis.112": "112 — Noodnummer",
+"crisis.113": "113 Zelfmoordpreventie",
+"crisis.luisterlijn": "Luisterlijn",
+"crisis.mind": "MIND Hulplijn",
+"crisis.drugsinfo": "Alcohol & Drugs Infolijn",
+"crisis.vnn": "VNN Verslavingszorg",
+"crisis.tactus": "Tactus Verslavingszorg",
+"crisis.antes": "Crisisdienst Antes (Rotterdam)",
+"crisis.ggnet": "Crisisdienst GGNet",
+"crisis.dierbare": "Help mijn dierbare is verslaafd",
+"crisis.brijder": "Brijder (Zuid-Holland)",
+"crisis.indigo": "Indigo Haaglanden",
+"crisis.veiligthuis": "Veilig Thuis",
+"crisis.depressielijn": "Depressielijn",
+"crisis.meldpunt": "Meldpunt Zorgwekkend Gedrag",
+"crisis.ypsilon": "Ypsilon (voor naasten)",
+"crisis.kindertelefoon": "Kindertelefoon",
+"crisis.injebol": "In je bol (jongeren)",
+```
+
+---
+
+## 3. CRISISDIENST-CONSTANTEN (src/lib/constants.ts of nieuw bestand)
+
+Maak een nieuw bestand `src/lib/crisisServices.ts`:
+
+```typescript
+export const DEFAULT_CRISIS_SERVICES = [
+  { id: "112", nameKey: "crisis.112", number: "112" },
+  { id: "113", nameKey: "crisis.113", number: "113" },
+  { id: "luisterlijn", nameKey: "crisis.luisterlijn", number: "088 0767 000" },
+  { id: "mind", nameKey: "crisis.mind", number: "0900-1450" },
+  { id: "drugsinfo", nameKey: "crisis.drugsinfo", number: "0900-1995" },
+  { id: "vnn", nameKey: "crisis.vnn", number: "088 234 34 34" },
+  { id: "tactus", nameKey: "crisis.tactus", number: "088 382 28 87" },
+  { id: "antes", nameKey: "crisis.antes", number: "088 358 15 00" },
+  { id: "ggnet", nameKey: "crisis.ggnet", number: "088 933 4400" },
+  { id: "dierbare", nameKey: "crisis.dierbare", number: "070 416 17 81" },
+  { id: "brijder", nameKey: "crisis.brijder", number: "088 358 22 60" },
+  { id: "indigo", nameKey: "crisis.indigo", number: "088 357 17 77" },
+  { id: "veiligthuis", nameKey: "crisis.veiligthuis", number: "0800-2000" },
+  { id: "depressielijn", nameKey: "crisis.depressielijn", number: "088-505 4334" },
+  { id: "meldpunt", nameKey: "crisis.meldpunt", number: "0800-1205" },
+  { id: "ypsilon", nameKey: "crisis.ypsilon", number: "088-000 21 20" },
+  { id: "kindertelefoon", nameKey: "crisis.kindertelefoon", number: "0800-0432" },
+  { id: "injebol", nameKey: "crisis.injebol", number: "0800-0450" },
+];
+```
+
+---
+
+## 4. SETTINGS PAGINA — CRISISDIENST & NOODCONTACTEN
+
+In `src/pages/Settings.tsx` (of het bestaande settings-scherm), voeg twee nieuwe secties toe **onderaan** de bestaande settings, **boven** de versie-info.
+
+### 4a. Crisisdienst-sectie
+- Label: `t("settings.crisisService")` met description `t("settings.crisisService.description")`
+- Dropdown/select: toon alle 18 `DEFAULT_CRISIS_SERVICES` + optie `"custom"` met label `t("settings.crisisService.custom")`
+- Bij selectie van een default: sla op als `{ id, name, number, isCustom: false }`
+  - `name` moet de vertaalde string zijn (via `t(nameKey)`), niet de key zelf
+- Bij selectie van `"custom"`: toon twee invoervelden:
+  - "Service name" (`t("settings.crisisService.customName")`) — tekst
+  - "Phone number" (`t("settings.crisisService.customNumber")`) — tekst, valideer dat er minstens 3 cijfers in zitten
+- Sla custom op als `{ id: "custom", name: (input), number: (input), isCustom: true }`
+- Bij wisselen van default naar custom: leegmaken, bij wisselen van custom naar default: velden verbergen
+
+### 4b. Noodcontacten-sectie
+- Label: `t("settings.emergencyContacts")` met description `t("settings.emergencyContacts.description")`
+- Toon bestaande contacten als kaartjes (naam, relatie, nummer) met verwijder-knop (`t("settings.emergencyContacts.remove")`)
+- "Add contact" knop (`t("settings.emergencyContacts.add")`) — toont alleen als er minder dan 3 zijn. Anders toon `t("settings.emergencyContacts.max")` als grijze tekst
+- Bij "Add contact": toon 3 invoervelden:
+  - Naam (`t("settings.emergencyContacts.name")`) — tekst, verplicht
+  - Relatie (`t("settings.emergencyContacts.relationship")`) — tekst, verplicht (geen dropdown, vrij in te vullen)
+  - Telefoonnummer (`t("settings.emergencyContacts.phone")`) — tekst, verplicht, minstens 3 cijfers
+  - "Opslaan" knop + "Annuleren" knop
+- Validatie: alle 3 velden verplicht, telefoonnummer minstens 3 cijfers. Toon geen alert, maar rode border/error text bij invalid
+- Sla op in IndexedDB als `EmergencyContact[]` (max 3 items)
+
+---
+
+## 5. HELP TAB — WEERGAVE
+
+In `src/pages/Help.tsx` (of het bestaande help-scherm), voeg twee nieuwe secties toe **bovenaan**, voor de bestaande FAQ/accordion.
+
+### 5a. Crisisdienst-kaart
+- Alleen tonen als `crisisService` is ingesteld (name + number bestaan)
+- Titel: `t("help.crisisService.title")` + naam van dienst
+- Grote knop: `t("help.crisisService.call")` — linkt naar `tel:{number}`
+- Styling: alert/destacated card (bijv. `bg-red-50 border-red-200` in light mode, `bg-red-950/20 border-red-800/30` in dark mode) zodat het opvalt
+- Icoon: `Phone` (Lucide) naast titel
+
+### 5b. Noodcontacten-kaart
+- Alleen tonen als `emergencyContacts` array niet leeg is
+- Titel: `t("help.emergencyContacts.title")` + `Phone` icoon
+- Per contact: kaartje met naam, relatie, nummer
+- Per contact: "Bellen" knop (`t("help.emergencyContacts.call")`) → `tel:{phone}`
+- Max 3 contacten, verticaal gestapeld
+- Styling: subtiele kaarten, `bg-card border border-border`
+
+---
+
+## 6. DARK MODE
+Zorg dat de crisisdienst-kaart in dark mode ook zichtbaar/rood is (niet onzichtbaar). Gebruik `dark:` prefixen waar nodig.
+
+---
+
+## 7. VERIFICATIE
+
+1. `npm run typecheck` — moet slagen zonder errors
+2. `npm run build` — moet slagen zonder errors
+3. Geen functionaliteit wijzigen buiten deze secties
+4. Geen wijzigingen aan homescreen, TrekTracker, CravingTracker, RelapseLog, etc.
+
+---
+
+## BELANGRIJKE REGELS
+
+- **Geen** wijzigingen op het homescreen (Home.tsx)
+- **Geen** wijzigingen aan trackers, check-in, of analytics
+- **Alleen** settings invoer + help weergave
+- Telefoonnummer velden: **geen** strict telefoon-validatie, alleen check op minstens 3 cijfers (spaties, streepjes, + zijn toegestaan)
+- Relatie is **vrij tekstveld**, geen dropdown
+- Maximaal **3** noodcontacten
+- Sla alles op in IndexedDB settings (bestaande `saveSettings` / `loadSettings` functies)
+- Gebruik bestaande UI patterns (Card, Button, Input, Label componenten)

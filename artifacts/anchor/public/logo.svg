@@ -1,0 +1,13 @@
+<svg width="160" height="48" viewBox="0 0 160 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <g stroke="#ECA94B" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <circle cx="24" cy="9" r="4.5"/>
+    <line x1="24" y1="13.5" x2="24" y2="40"/>
+    <line x1="15" y1="19" x2="33" y2="19"/>
+    <path d="M11 27 C11 38 17.5 42 24 42 C30.5 42 37 38 37 27"/>
+    <path d="M11 27 L6.5 29"/>
+    <path d="M11 27 L14.5 23.5"/>
+    <path d="M37 27 L41.5 29"/>
+    <path d="M37 27 L33.5 23.5"/>
+  </g>
+  <text x="52" y="31" font-family="Inter, system-ui, -apple-system, sans-serif" font-size="22" font-weight="600" fill="#E8EBF0">Anchor</text>
+</svg>

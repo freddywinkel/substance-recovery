@@ -1,0 +1,492 @@
+Make the following comprehensive changes to the Anchor app. Keep the data model backward-compatible. Do NOT add new features beyond what's specified. Do NOT change routing, styling, or component structure beyond what's needed.
+
+Run `npm run typecheck` and `npm run build` after all changes to verify.
+
+═══════════════════════════════════════════════════════════════
+SECTION 0: DATABASE (src/db/index.ts)
+═══════════════════════════════════════════════════════════════
+
+Add to the CravingLog interface (after `status` field):
+  cravingType?: "active" | "passive"; // NEW — undefined for old records
+  onsetType?: string; // for passive: how craving started
+  planningStage?: string; // for active: how far in the plan
+  needType?: string; // for active: what need drives it
+
+No DB migration needed — IndexedDB is schemaless. Old records simply won't have these fields.
+
+═══════════════════════════════════════════════════════════════
+SECTION 1: HOME PAGE (src/pages/Home.tsx)
+═══════════════════════════════════════════════════════════════
+
+Replace the single "I have a craving" card with TWO cards:
+
+Card 1 — Active/Trek:
+- Icon: <Flame size={22} className="text-orange-500" />
+- Title: t("home.trek.title")
+- Subtitle: t("home.trek.sub")
+- Link: "/trek"
+- Style: use warm accent colors (orange/amber tint) to distinguish from passive
+
+Card 2 — Passive/Craving:
+- Icon: <Zap size={22} className="text-primary" /> (keep existing icon)
+- Title: t("home.craving.title")
+- Subtitle: t("home.craving.sub")
+- Link: "/craving"
+- Style: use default primary colors
+
+Both cards should have the same layout as the existing craving card (icon left, text right, arrow). Remove the existing single craving card.
+
+═══════════════════════════════════════════════════════════════
+SECTION 2: ROUTING (src/App.tsx)
+═══════════════════════════════════════════════════════════════
+
+Add a new import:
+import { TrekTracker } from "@/pages/TrekTracker";
+
+Add a new route inside AppRoutes:
+<Route path="/trek" component={TrekTracker} />
+
+Keep the existing `/craving` route pointing to CravingTracker.
+
+═══════════════════════════════════════════════════════════════
+SECTION 3: NEW FILE — TrekTracker (src/pages/TrekTracker.tsx)
+═══════════════════════════════════════════════════════════════
+
+Create a new file `src/pages/TrekTracker.tsx` following the same patterns as `CravingTracker.tsx` and `AnxietyTracker.tsx` (same UI components: IntensitySlider, ChipGrid, ChipCol, MultiChip, GridMultiChip, PageHeader, progress bar, bottom action bar).
+
+5 steps: ["type", "planning", "need", "action", "done"]
+
+Step 1 — Type & Intensity:
+- Heading: "Wat voor trek heb je?" / "What kind of desire?"
+- GridMultiChip options (1-2 select):
+  "Planning or thinking about it", "Actively seeking it", "Ritual / habit", "Boredom-driven", "Emotional escape", "Social pressure"
+- Intensity slider (1-10), default 5
+- Confidence slider (1-10), default 5: "Hoe zeker ben je dat je gaat gebruiken?" / "How certain are you that you'll use?"
+
+Step 2 — Planning Stage & Context:
+- Heading: "Hoe ver ben je?" / "How far into the plan?"
+- ChipCol options (single select):
+  "Just thinking about it", "Getting money or resources", "On my way there", "About to act"
+- Heading: "Waar ben je?" / "Where are you?"
+- ChipCol options: "Home", "Work", "Outside", "Shop or bar", "In transit", "Someone else's place"
+- Heading: "Wat zette dit in gang?" / "What set this off?"
+- ChipCol options: "Boredom", "Stress", "Habit / routine", "Social pressure", "Money available", "Feeling good / celebratory", "Conflict", "Other"
+
+Step 3 — What You Need:
+- Heading: "Wat zoek je eigenlijk?" / "What are you actually seeking?"
+- ChipCol options (single select):
+  "Relief", "Excitement", "Reward", "Numbness", "Comfort", "Connection", "Stimulation", "Escape"
+- Save the selected value to `needType`
+
+Step 4 — Action:
+- Heading: "Wat ga je nu doen?" / "What will you do now?"
+- ChipCol options (single select):
+  "Remove access or money", "Change location", "Use delay timer", "Call or text someone", "Use a tool from the toolbox", "Just observe — don't act"
+- Confidence after slider (1-10): "Hoe zeker ben je dat dit gaat werken?" / "How confident are you this will work?"
+
+Step 5 — Done:
+- Show icon + "Geregistreerd" / "Logged"
+- Show completion message based on chosen action:
+  - "Remove access": "Toegang verwijderd — elke stap terug is een overwinning" / "Access removed — every step back is a win"
+  - "Change location": "Locatie veranderd — omgeving bepaalt gedrag" / "Location changed — environment shapes behavior"
+  - "Delay timer": "Uitgesteld — elke seconde telt" / "Delayed — every second counts"
+  - "Call someone": "Iemand gebeld — verbinding helpt" / "Called someone — connection helps"
+  - "Use tool": "Tool gebruikt — slim" / "Tool used — smart"
+  - "Just observe": "Observeren is ook een keuze" / "Observing is also a choice"
+- Show button: "Bekijk tools" / "Browse tools" → navigate to /tools
+- Show button: "Terug naar home" / "Back home" → navigate to /
+
+Data model: Save to CravingLog with:
+- `cravingType: "active"`
+- `intensity`: from slider
+- `confidenceBefore`: from step 1
+- `planningStage`: from step 2
+- `location`: from step 2
+- `situationPresets`: [trigger from step 2] — reuse existing field for trigger type
+- `needType`: from step 3
+- `chosenAction`: from step 4
+- `confidenceAfter`: from step 4
+- `status: "completed"`
+- `highRiskFlag`: false (unless intensity > 8 AND confidenceBefore > 8)
+
+Use the same styling patterns as AnxietyTracker (min-h-dvh, bg-background, PageHeader, progress bar, bottom action bar with Back + Next buttons).
+
+═══════════════════════════════════════════════════════════════
+SECTION 4: SIMPLIFY CravingTracker (src/pages/CravingTracker.tsx)
+═══════════════════════════════════════════════════════════════
+
+Reduce from 11 steps to 4 steps. Keep the existing file but strip out unused steps.
+
+4 steps: ["onset", "trigger", "action", "done"]
+
+Step 1 — Onset & Intensity:
+- Heading: "Hoe begon het?" / "How did it start?"
+- ChipCol options (single select):
+  "Sudden cue (saw/smelled/heard)", "Physical sensation", "Memory or flashback", "Social trigger", "Random / no reason"
+- Save to `onsetType`
+- Intensity slider (1-10), default 5
+- Confidence before slider (1-10), default 5
+
+Step 2 — Trigger & Body:
+- Heading: "Wat triggerde het?" / "What triggered it?"
+- Keep the existing trigger presets (who, when, where, substance, emotion, physical, thought)
+- Heading: "Lichamelijke sensaties" / "Physical sensations"
+- Keep the existing physical sensations checklist
+- Heading: "Hoe lang bouwt het op?" / "How long building?"
+- Keep the existing buildup duration options
+
+Step 3 — Action & Outcome:
+- Heading: "Wat deed je?" / "What did you do?"
+- ChipCol options (single select):
+  "Urge surfing", "Box breathing", "Grounding", "Distraction", "Called someone", "Used", "Just observed"
+- If "Used" selected → redirect to /relapse after saving
+- Heading: "Outcome" / "Uitkomst"
+- ChipCol options (single select):
+  "Decreased", "Same", "Increased", "Don't know"
+- Save to `cravingOutcome`
+- Intensity after slider (1-10), optional
+
+Step 4 — Done:
+- Same done screen as existing but simplified
+- Show message based on outcome:
+  - "Decreased": "Goed gedaan — het verlangen nam af" / "Well done — the craving decreased"
+  - "Same": "Het bleef hetzelfde — dat is ook informatie" / "It stayed the same — that's also information"
+  - "Increased": "Het nam toe — dat gebeurt. Proef een andere tool" / "It increased — that happens. Try another tool"
+
+Data model: Save to CravingLog with:
+- `cravingType: "passive"`
+- `intensity`: from slider
+- `onsetType`: from step 1
+- `confidenceBefore`: from step 1
+- `physicalSensations`: from step 2
+- `buildupDuration`: from step 2
+- `situationPresets`: [trigger from step 2]
+- `chosenAction`: from step 3
+- `cravingOutcome`: from step 3
+- `intensityAfter`: from step 3
+- `status: "completed"`
+
+Remove all other steps (emotions, thoughts, location, social, substance, confidence step as separate, etc.). Keep only these 4 steps.
+
+═══════════════════════════════════════════════════════════════
+SECTION 5: ANALYTICS (src/lib/analytics.ts)
+═══════════════════════════════════════════════════════════════
+
+Modify `computeCravingStats` to split by craving type:
+
+Add to `CravingStats` interface:
+  activeTotal: number;
+  passiveTotal: number;
+  topPlanningStages: FreqItem[];
+  topNeeds: FreqItem[];
+  topOnsetTypes: FreqItem[];
+
+In the function body:
+- Split logs into `activeLogs` and `passiveLogs` using `cravingType`
+- Old logs without `cravingType` → count as `passive` (backward compatible)
+- `activeTotal` = activeLogs.length
+- `passiveTotal` = passiveLogs.length
+- `topPlanningStages` = topFrequencies(activeLogs.map(l => l.planningStage).filter(Boolean))
+- `topNeeds` = topFrequencies(activeLogs.map(l => l.needType).filter(Boolean))
+- `topOnsetTypes` = topFrequencies(passiveLogs.map(l => l.onsetType).filter(Boolean))
+- Keep all existing stats but compute them from the combined logs (for backward compatibility)
+
+═══════════════════════════════════════════════════════════════
+SECTION 6: PROGRESS PAGE (src/pages/Progress.tsx)
+═══════════════════════════════════════════════════════════════
+
+In the craving stats section, show TWO cards side by side (or stacked on mobile):
+- Card 1: "Actieve trek" / "Active desires" — shows `activeTotal` + `topPlanningStages`
+- Card 2: "Passieve cravings" / "Passive cravings" — shows `passiveTotal` + `topOnsetTypes`
+
+Show these only if `cStats.activeTotal > 0 || cStats.passiveTotal > 0`.
+
+Keep the existing combined stats (total, avg intensity, etc.) above these two cards.
+
+═══════════════════════════════════════════════════════════════
+SECTION 7: LOGS PAGE (src/pages/Logs.tsx)
+═══════════════════════════════════════════════════════════════
+
+In the craving log detail view, show a small badge/tag indicating the type:
+- "Actief" / "Active" (orange badge) if `cravingType === "active"`
+- "Passief" / "Passive" (blue badge) if `cravingType === "passive"`
+- No badge for old records without `cravingType`
+
+For the list view, show the icon based on type:
+- Active: Flame icon
+- Passive: Zap icon
+
+═══════════════════════════════════════════════════════════════
+SECTION 8: RELAPSE LOG (src/pages/RelapseLog.tsx) — SHORTEN TO 6 STEPS
+═══════════════════════════════════════════════════════════════
+
+Keep the data model (Draft type, all fields) unchanged. Only merge the UI steps.
+
+A. Simplify LABEL_OPTIONS to 3 choices:
+   - { value: "lapse", label: "A lapse", sub: "One instance, caught quickly" }
+   - { value: "relapse", label: "A relapse", sub: "A more serious return" }
+   - { value: "no-label", label: "No label", sub: "I just want to document this" }
+   Remove "setback" and "return-to-use" options.
+
+B. Merge step 2: Combine "when" and "substance" into ONE step:
+   - Show WHEN_OPTIONS + DURATION_OPTIONS
+   - Then show SUBSTANCES + AMOUNT_OPTIONS
+   - All on one scrollable page with clear sub-headings
+
+C. Merge step 4: Combine "before", "warnings", "thought", and "help" into ONE step called "before":
+   - Sub-heading: "Wat eraan voorafging" / "What led up to this"
+   - Section 1: PRE_USE_FACTORS (multi-select ChipGrid)
+   - Section 2: MISSED_WARNINGS (multi-select ChipGrid)
+   - Section 3: THOUGHT_PRESETS (single-select, then free text textarea)
+   - Section 4: COULD_HELP_OPTIONS (single multi-select ChipGrid — merge the 3 separate early/middle/last lists into one list. Save selected values to ALL THREE fields: couldHaveHelpedEarly, couldHaveHelpedMiddle, couldHaveHelpedLast, so analytics still works.)
+   - Make this step optional (show Skip button)
+
+D. Merge step 5: Keep the "next" step as safety/action step: support contact + next step + risk
+   - Move the "needs" (what you actually needed) question to this same step as a final question
+   - Add a small optional textarea for notes at the bottom of this step
+
+E. Update STEP_ORDER to: ["label", "when", "trigger", "before", "next", "done"]
+
+F. Remove the separate "note" step — merge it into step 5.
+
+G. Fix the Next button: Remove the `<ArrowRight size={16} />` icon (we'll add a consistent one in Section 15).
+
+═══════════════════════════════════════════════════════════════
+SECTION 9: ANXIETY TRACKER (src/pages/AnxietyTracker.tsx)
+═══════════════════════════════════════════════════════════════
+
+A. Split the crowded step 3 (urgency) into two steps:
+   - Step 3: "Urgency" — just the urgency toggle + quick tools (if urgent)
+   - Step 4: "Details" — context, linked state, reassurance patterns, trigger (all optional, show Skip button prominently)
+   - Update STEP_ORDER to: ["type", "body", "urgency", "details", "reaction"]
+   - Update the progress bar and step counter accordingly.
+
+═══════════════════════════════════════════════════════════════
+SECTION 10: BOREDOM TRACKER (src/pages/BoredomTracker.tsx)
+═══════════════════════════════════════════════════════════════
+
+A. Fix the bug where ALL 25 rescue options show when no stimulation need is selected:
+   - Change the rescue section conditions from `(!stimulationNeed || stimulationNeed === "calming")` to just `(stimulationNeed === "calming")` for each category.
+   - If no stimulation need is selected in step 2, show a message in step 4: "Kies eerst een behoefte in de vorige stap" / "Pick a need in the previous step first" with a button to go back.
+
+B. Make the stimulation need selection required in step 2 (don't let the user proceed to step 3 without selecting one).
+
+C. Fix the Next button: Add `<ArrowRight size={16} />` icon (see Section 15).
+
+═══════════════════════════════════════════════════════════════
+SECTION 11: BOX BREATHING (src/tools/BoxBreathing.tsx)
+═══════════════════════════════════════════════════════════════
+
+A. Add an inline milestone banner that appears when cycles >= 4:
+   - Show below the cycle counter: "4 cycli voltooid — dat is vaak genoeg om een verschil te voelen. Je kunt stoppen of doorgaan." (Dutch) / "4 cycles completed — that's often enough to feel a shift. You can stop or keep going." (English)
+   - Add a "Klaar" / "Done" button next to the existing pause/play button that navigates home.
+   - Keep existing controls visible too.
+
+B. Add translation keys: `breath.milestone` and `breath.done_btn`.
+
+═══════════════════════════════════════════════════════════════
+SECTION 12: TRANSLATIONS (src/lib/translations.ts)
+═══════════════════════════════════════════════════════════════
+
+A. Replace "Verlangen Surfen" with "Gevoelsurfen" everywhere (5 places as identified before).
+
+B. Add these new keys:
+
+English:
+"home.trek.title": "I have a desire",
+"home.trek.sub": "An active urge — I feel it coming",
+"home.craving.title": "I have a craving",
+"home.craving.sub": "It suddenly overwhelms me",
+"trek.title": "Desire",
+"trek.step.type": "What kind",
+"trek.step.planning": "How far",
+"trek.step.need": "What you need",
+"trek.step.action": "Action",
+"trek.q.type": "What kind of desire do you have?",
+"trek.q.intensity": "How strong is the desire?",
+"trek.q.planning": "How far into the plan are you?",
+"trek.q.location": "Where are you?",
+"trek.q.trigger": "What set this off?",
+"trek.q.need": "What are you actually seeking?",
+"trek.q.action": "What will you do now?",
+"trek.msg.remove_access": "Access removed — every step back is a win",
+"trek.msg.change_location": "Location changed — environment shapes behavior",
+"trek.msg.delay": "Delayed — every second counts",
+"trek.msg.call": "Called someone — connection helps",
+"trek.msg.tool": "Tool used — smart",
+"trek.msg.observe": "Observing is also a choice",
+"craving.q.onset": "How did it start?",
+"craving.q.onset_sub": "Recognizing the onset helps you respond faster next time",
+"craving.onset.sudden": "Sudden cue (saw/smelled/heard)",
+"craving.onset.physical": "Physical sensation",
+"craving.onset.memory": "Memory or flashback",
+"craving.onset.social": "Social trigger",
+"craving.onset.random": "Random / no reason",
+"craving.msg.decreased": "Well done — the craving decreased",
+"craving.msg.same": "It stayed the same — that's also information",
+"craving.msg.increased": "It increased — that happens. Try another tool",
+"progress.active.title": "Active desires",
+"progress.passive.title": "Passive cravings",
+"progress.active.planning": "Most common planning stages",
+"progress.passive.onset": "Most common onset types",
+"logs.active": "Active",
+"logs.passive": "Passive",
+"breath.milestone": "4 cycles completed — that's often enough to feel a shift. You can stop or keep going.",
+"breath.done_btn": "Done",
+"common.step_of": "Step {n} of {total}",
+
+Dutch:
+"home.trek.title": "Ik heb trek",
+"home.trek.sub": "Een actief verlangen — ik voel het aankomen",
+"home.craving.title": "Ik heb een craving",
+"home.craving.sub": "Het overvalt me, plotseling",
+"trek.title": "Trek",
+"trek.step.type": "Wat voor trek",
+"trek.step.planning": "Hoe ver",
+"trek.step.need": "Wat je nodig hebt",
+"trek.step.action": "Actie",
+"trek.q.type": "Wat voor trek heb je?",
+"trek.q.intensity": "Hoe sterk is de trek?",
+"trek.q.planning": "Hoe ver ben je in het plan?",
+"trek.q.location": "Waar ben je?",
+"trek.q.trigger": "Wat zette dit in gang?",
+"trek.q.need": "Wat zoek je eigenlijk?",
+"trek.q.action": "Wat ga je nu doen?",
+"trek.msg.remove_access": "Toegang verwijderd — elke stap terug is een overwinning",
+"trek.msg.change_location": "Locatie veranderd — omgeving bepaalt gedrag",
+"trek.msg.delay": "Uitgesteld — elke seconde telt",
+"trek.msg.call": "Iemand gebeld — verbinding helpt",
+"trek.msg.tool": "Tool gebruikt — slim",
+"trek.msg.observe": "Observeren is ook een keuze",
+"craving.q.onset": "Hoe begon het?",
+"craving.q.onset_sub": "Het herkennen van het begin helpt je volgende keer sneller te reageren",
+"craving.onset.sudden": "Plotselinge cue (zag/ruikte/hoorde)",
+"craving.onset.physical": "Lichamelijke sensatie",
+"craving.onset.memory": "Herinnering of flashback",
+"craving.onset.social": "Sociale trigger",
+"craving.onset.random": "Willekeurig / geen reden",
+"craving.msg.decreased": "Goed gedaan — het verlangen nam af",
+"craving.msg.same": "Het bleef hetzelfde — dat is ook informatie",
+"craving.msg.increased": "Het nam toe — dat gebeurt. Proef een andere tool",
+"progress.active.title": "Actieve trek",
+"progress.passive.title": "Passieve cravings",
+"progress.active.planning": "Meest voorkomende planningfases",
+"progress.passive.onset": "Meest voorkomende onset-types",
+"logs.active": "Actief",
+"logs.passive": "Passief",
+"breath.milestone": "4 cycli voltooid — dat is vaak genoeg om een verschil te voelen. Je kunt stoppen of doorgaan.",
+"breath.done_btn": "Klaar",
+"common.step_of": "Stap {n} van {total}",
+
+C. Add missing progress boredom keys:
+"progress.boredom.checkins": "Restlessness check-ins",
+"progress.boredom.avg_sub": "out of 10",
+"progress.boredom.checkins": "Rusteloosheid check-ins",
+"progress.boredom.avg_sub": "van 10",
+
+D. Remove dead keys as before (bb.*, sc.*, grounding.*).
+
+E. Change Dutch "common.next" from "Volgende →" to just "Volgende" (remove arrow).
+
+═══════════════════════════════════════════════════════════════
+SECTION 13: PROGRESS PAGE FIXES (src/pages/Progress.tsx)
+═══════════════════════════════════════════════════════════════
+
+A. Fix the wrong translation keys in the boredom section:
+   - `label={t("progress.anxiety.checkins")}` → `label={t("progress.boredom.checkins")}`
+   - `sub={t("progress.anxiety.avg_sub")}` → `sub={t("progress.boredom.avg_sub")}`
+
+B. Add the new active/passive craving cards as specified in Section 6.
+
+═══════════════════════════════════════════════════════════════
+SECTION 14: CRAVINGTRACKER FIXES (src/pages/CravingTracker.tsx)
+═══════════════════════════════════════════════════════════════
+
+A. Fix the distress slider default: In `blankDraft()`, change `distressLevel: -1` to `distressLevel: 5`. (The slider currently starts at 0 due to -1 mapping.)
+
+B. Fix untranslated action sub-texts: Around line 621, change `{sub}` to `{tOpt(sub)}`.
+
+C. Remove the ArrowRight icon from the Next button (see Section 15).
+
+D. Remove the double arrow issue: The button currently shows "Volgende → ➡️". By removing the ArrowRight icon AND changing the translation to "Volgende" (without arrow), we fix this.
+
+═══════════════════════════════════════════════════════════════
+SECTION 15: CONSISTENT NEXT BUTTONS (all tracker files)
+═══════════════════════════════════════════════════════════════
+
+Make ALL tracker bottom buttons consistent:
+- All use: `<ArrowRight size={16} />` icon next to the text
+- CravingTracker: REMOVE the extra ArrowRight, then add it back consistently
+- RelapseLog: REMOVE the extra ArrowRight, then add it back consistently
+- AnxietyTracker: ADD the ArrowRight icon
+- BoredomTracker: ADD the ArrowRight icon
+- TrekTracker: ADD the ArrowRight icon (as part of new file)
+
+The button text should be: `<span>{t("common.next")}</span><ArrowRight size={16} />` for all trackers.
+
+═══════════════════════════════════════════════════════════════
+SECTION 16: MIN-H SCREEN FIX (various files)
+═══════════════════════════════════════════════════════════════
+
+Change `min-h-screen` to `min-h-dvh` in these files:
+- src/tools/UrgeSurfing.tsx (2 places)
+- src/tools/SelfCompassion.tsx (2 places)
+- src/tools/PlayTheTape.tsx (3 places)
+- src/tools/Grounding54321.tsx (2 places)
+- src/tools/Distraction.tsx (3 places)
+- src/tools/ColdWaterReset.tsx (3 places)
+- src/tools/BoxBreathing.tsx (1 place)
+- src/pages/CrisisNow.tsx (1 place)
+- src/pages/Settings.tsx (1 place)
+- src/pages/Tools.tsx (1 place)
+- src/pages/not-found.tsx (1 place)
+
+DO NOT change pages already using `min-h-dvh`.
+
+═══════════════════════════════════════════════════════════════
+SECTION 17: 404 PAGE (src/pages/not-found.tsx)
+═══════════════════════════════════════════════════════════════
+
+Change `bg-gray-50` to `bg-background`.
+
+═══════════════════════════════════════════════════════════════
+SECTION 18: JOURNAL NEW ENTRY (src/pages/JournalNewEntry.tsx)
+═══════════════════════════════════════════════════════════════
+
+Change the default craving from `null` to `1`:
+- In the `logEntry` call, change `cravingIntensity: craving` to `cravingIntensity: craving ?? 1`
+
+═══════════════════════════════════════════════════════════════
+SECTION 19: SETTINGS PAGE (src/pages/Settings.tsx)
+═══════════════════════════════════════════════════════════════
+
+Fix the date input styling in the sobriety section:
+- Add `appearance-none` to the `type="date"` input
+- Ensure dark-mode compatible text color
+- Ensure the saved date text doesn't overflow on small screens
+
+═══════════════════════════════════════════════════════════════
+SECTION 20: RELAPSE LOG TRANSLATIONS
+═══════════════════════════════════════════════════════════════
+
+Add missing translations for risk buttons in the optNl section:
+- "No concern": "Geen zorgen"
+- "Some safety concern": "Enige veiligheidszorg"
+- "Fear of continued use": "Bang om door te gaan"
+- "Withdrawal concern": "Ontwenningszorgen"
+
+═══════════════════════════════════════════════════════════════
+SECTION 21: USESTORE (src/hooks/useStore.ts)
+═══════════════════════════════════════════════════════════════
+
+No changes needed — `logCraving` already accepts `Omit<CravingLog, "id">` and the new `cravingType` field will be included automatically.
+
+═══════════════════════════════════════════════════════════════
+VERIFICATION
+═══════════════════════════════════════════════════════════════
+
+After all changes, run:
+1. `npm run typecheck` — must pass with zero errors
+2. `npm run build` — must build successfully
+
+If there are errors, fix them before finishing.

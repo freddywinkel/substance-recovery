@@ -1,0 +1,297 @@
+# Replit Prompt: Fix Registration Step Gating + UI Consistency + Logic Bugs
+
+> Apply these changes to the **Anchor** PWA in `artifacts/anchor/src`. This prompt targets the latest "Recovery-Path (edit)" codebase.
+
+---
+
+## 1. REGISTRATION STEP GATING — CRITICAL
+
+In all tracker wizards, users can currently click "Next" without answering required questions on certain steps. Add validation so **EVERY required field on a step must be answered before the Next button is enabled.**
+
+### 1a. `src/pages/CravingTracker.tsx`
+
+**Find `canProceed` (around line 271):**
+```typescript
+  const canProceed = useMemo(() => {
+    switch (step) {
+      case "onset":   return draft.onsetType !== "" && (draft.onsetType !== "Other" || draft.onsetOther.trim() !== "");
+      case "trigger": return draft.buildupDuration !== "" && (!draft.situationPresets.includes("Other") || draft.triggerOther.trim() !== "");
+      case "action":  return draft.chosenAction !== "";
+      case "outcome": return draft.useOutcome !== "";
+      default:        return true;
+    }
+  }, [...]);
+```
+
+**Replace with:**
+```typescript
+  const canProceed = useMemo(() => {
+    switch (step) {
+      case "onset":   return draft.onsetType !== "" && (draft.onsetType !== "Other" || draft.onsetOther.trim() !== "");
+      case "trigger": return draft.situationPresets.length > 0 && draft.buildupDuration !== "" && (!draft.situationPresets.includes("Other") || draft.triggerOther.trim() !== "");
+      case "inner":   return draft.emotions.length > 0 || draft.thoughtPresets.length > 0 || draft.thoughtFreeText.trim() !== "";
+      case "substance": return draft.substances.length > 0;
+      case "action":  return draft.chosenAction !== "";
+      case "outcome": return draft.useOutcome !== "";
+      default:        return true;
+    }
+  }, [step, draft.onsetType, draft.onsetOther, draft.situationPresets, draft.triggerOther, draft.buildupDuration, draft.emotions, draft.thoughtPresets, draft.thoughtFreeText, draft.substances, draft.chosenAction, draft.useOutcome]);
+```
+
+**Why:** The `trigger` step was only checking `buildupDuration` but NOT `situationPresets` (the main trigger selection). The `inner` and `substance` steps had NO validation at all.
+
+---
+
+### 1b. `src/pages/TrekTracker.tsx`
+
+**Find `canProceed` (around line 306):**
+```typescript
+  const canProceed = useMemo(() => {
+    switch (step) {
+      case "type":     return draft.trekTypes.length > 0;
+      case "planning": return draft.planningStage !== "" && draft.location !== "" && (draft.location !== "Other" || draft.locationOther.trim() !== "") && draft.triggers.length > 0;
+      case "need":     return draft.needTypes.length > 0 && (!draft.needTypes.includes("Other") || draft.needOther.trim() !== "");
+      case "action":   return draft.chosenAction !== "";
+      case "outcome":  return draft.useOutcome !== "";
+      default:         return true;
+    }
+  }, [...]);
+```
+
+**Replace with:**
+```typescript
+  const canProceed = useMemo(() => {
+    switch (step) {
+      case "type":     return draft.trekTypes.length > 0;
+      case "planning": return draft.planningStage !== "" && draft.location !== "" && (draft.location !== "Other" || draft.locationOther.trim() !== "") && draft.triggers.length > 0 && (!draft.triggers.includes("Other") || draft.triggerNote.trim() !== "");
+      case "inner":    return draft.emotions.length > 0 || draft.physicalSensations.length > 0 || draft.thoughtPresets.length > 0 || draft.thoughtFreeText.trim() !== "";
+      case "need":     return draft.needTypes.length > 0 && (!draft.needTypes.includes("Other") || draft.needOther.trim() !== "");
+      case "substance": return draft.substances.length > 0;
+      case "action":   return draft.chosenAction !== "";
+      case "outcome":  return draft.useOutcome !== "";
+      default:         return true;
+    }
+  }, [step, draft.trekTypes, draft.planningStage, draft.location, draft.locationOther, draft.triggers, draft.triggerNote, draft.emotions, draft.physicalSensations, draft.thoughtPresets, draft.thoughtFreeText, draft.needTypes, draft.needOther, draft.substances, draft.chosenAction, draft.useOutcome]);
+```
+
+**Why:** The `inner` and `substance` steps had NO validation. The `planning` step didn't validate `triggerNote` when "Other" trigger was selected.
+
+---
+
+### 1c. `src/pages/AnxietyTracker.tsx`
+
+**Find `canProceed` (around line 354):**
+```typescript
+  const canProceed = useMemo(() => {
+    switch (step) {
+      case "type":     return anxietyTypes.length > 0;
+      case "reaction": return reaction !== "";
+      default:         return true;
+    }
+  }, [step, anxietyTypes, reaction]);
+```
+
+**Replace with:**
+```typescript
+  const canProceed = useMemo(() => {
+    switch (step) {
+      case "type":     return anxietyTypes.length > 0;
+      case "body":     return bodyLocations.length > 0;
+      case "urgency":  return true; // urgencyHigh defaults to false, both buttons are valid states
+      case "reaction": return reaction !== "";
+      default:         return true;
+    }
+  }, [step, anxietyTypes, bodyLocations, reaction]);
+```
+
+**Why:** The `body` step had NO validation — users could proceed without selecting any body locations.
+
+---
+
+### 1d. `src/pages/BoredomTracker.tsx`
+
+`canProceed` is mostly correct, but verify the `action` step doesn't allow skipping:
+
+**Find `canProceed` (around line 330):**
+```typescript
+  const canProceed = useMemo(() => {
+    switch (step) {
+      case "type":      return restlessnessTypes.length > 0;
+      case "need":      return stimulationNeeds.length > 0 && convertCheck !== "";
+      case "situation": return situation !== "";
+      case "action":    return action !== "";
+      default:          return true;
+    }
+  }, [...]);
+```
+
+This is already correct.
+
+---
+
+### 1e. `src/pages/RelapseLog.tsx`
+
+**Find `canProceed` (around line 293):**
+```typescript
+  const canProceed = (() => {
+    switch (step) {
+      case "when":    return draft.substances.length > 0;
+      case "trigger": return draft.firstTriggerType !== "";
+      case "next":    return (draft.supportContact !== "" || draft.supportContactOther.trim() !== "")
+        && (draft.nextStep !== "" || draft.nextStepOther.trim() !== "");
+      default:        return true;
+    }
+  })();
+```
+
+**Replace with:**
+```typescript
+  const canProceed = (() => {
+    switch (step) {
+      case "label":   return draft.label !== "";
+      case "when":    return draft.substances.length > 0 && draft.episodeDuration !== "" && draft.amountCategory !== "";
+      case "trigger": return draft.firstTriggerType !== "";
+      case "next":    return (draft.supportContact !== "" || draft.supportContactOther.trim() !== "")
+        && (draft.nextStep !== "" || draft.nextStepOther.trim() !== "");
+      default:        return true;
+    }
+  })();
+```
+
+**Why:** The `label` step had NO validation. The `when` step didn't validate `episodeDuration` or `amountCategory` (both are required UI fields).
+
+---
+
+## 2. ICON COLOR CONSISTENCY — TOOLS / HELP TAB
+
+### 2a. `src/pages/CrisisNow.tsx` — Unify tool icon colors
+
+**Problem:** In CrisisNow, "immediate" tools use `bg-primary/10 text-primary` while "sustained" tools use `bg-muted text-muted-foreground`. But in `Tools.tsx` (the toolbox), ALL tools use `bg-muted/60 text-primary`. This is inconsistent — the same tool has different icon colors in different screens.
+
+**Fix:** Make ALL tools in CrisisNow use the same icon color as in Tools.tsx (`bg-muted/60 text-primary` or `bg-primary/10 text-primary` — pick one and apply consistently).
+
+**Find in CrisisNow.tsx (around line 86 and 107):**
+```tsx
+// Immediate tools
+<div className="rounded-xl p-2.5 bg-primary/10 text-primary shrink-0">
+
+// Sustained tools
+<div className="rounded-xl p-2.5 bg-muted text-muted-foreground shrink-0">
+```
+
+**Replace BOTH with:**
+```tsx
+<div className="rounded-xl p-2.5 bg-primary/10 text-primary shrink-0">
+```
+
+**Why:** All tools should use the same primary-colored icon styling everywhere they appear, matching the Tools page.
+
+---
+
+### 2b. Done-screen tool icons (AnxietyTracker, BoredomTracker, CravingTracker, TrekTracker)
+
+**Problem:** When trackers show tool buttons at the end (done screen), the icons should match the primary color used everywhere else.
+
+**In `src/pages/AnxietyTracker.tsx` done screen (around line 698):**
+```tsx
+<Timer size={16} className="text-primary" />
+```
+This is already correct.
+
+**In `src/pages/BoredomTracker.tsx` done screen (around line 624):**
+```tsx
+<Timer size={16} className="text-primary" />
+```
+This is already correct.
+
+**In `src/pages/CravingTracker.tsx` done screen (around line 404):**
+The tool launch button doesn't show an icon. If you add an icon later, ensure it uses `text-primary`.
+
+---
+
+## 3. SLIDER MIN VALUE INCONSISTENCY — LOGS EDITOR
+
+### 3a. `src/pages/Logs.tsx` — `trek_intensity` uses wrong min
+
+**Find (around line 292):**
+```tsx
+    case "trek_intensity": return (<IntensitySlider value={draft.intensity} onChange={v => patch({ intensity: v })} min={1} lowLabel={t("logs.cr_intensity_low")} highLabel={t("logs.cr_intensity_high")} />);
+```
+
+**Replace with:**
+```tsx
+    case "trek_intensity": return (<IntensitySlider value={draft.intensity} onChange={v => patch({ intensity: v })} min={0} lowLabel={t("logs.cr_intensity_low")} highLabel={t("logs.cr_intensity_high")} />);
+```
+
+**Why:** The TrekTracker uses `min={0}` for intensity. The log editor should match, otherwise users can't set intensity to 0 when editing old logs.
+
+---
+
+## 4. UI LABEL / TRANSLATION INCONSISTENCIES
+
+### 4a. `src/pages/AnxietyTracker.tsx` — `details` step has a "Skip" button that bypasses validation
+
+**Find (around line 557):**
+```tsx
+<button
+  onClick={() => setStep("reaction")}
+  className="text-sm text-primary hover:opacity-75 transition-opacity touch-target"
+>
+  {t("common.skip")}
+</button>
+```
+
+**Behavior check:** The `details` step is currently optional (all fields marked optional). The skip button is fine, but ensure it doesn't break the `canProceed` logic if you add validation to `details`. Since `details` should remain optional, no change needed here.
+
+---
+
+## 5. MISSING VALIDATION DEPENDENCIES IN USEMEMO
+
+### 5a. `src/pages/CravingTracker.tsx`
+
+After modifying `canProceed` in section 1a, ensure the `useMemo` dependency array includes ALL fields checked in the switch statement. The replacement provided in 1a already has the correct dependency array.
+
+### 5b. `src/pages/TrekTracker.tsx`
+
+After modifying `canProceed` in section 1b, ensure the `useMemo` dependency array includes ALL fields. The replacement provided in 1b already has the correct dependency array.
+
+---
+
+## 6. LOGIC BUG: `useMemo` DEPENDENCY ARRAYS
+
+### 6a. `src/pages/AnxietyTracker.tsx` — `canProceed` missing `bodyLocations`
+
+Even before adding the `body` case, the dependency array was missing `bodyLocations`. After applying the fix in 1c, the array is correct.
+
+---
+
+## Summary Table of All Files to Change
+
+| File | Change | Why |
+|------|--------|-----|
+| `src/pages/CravingTracker.tsx` | Fix `canProceed` — add validation for `trigger` (situationPresets), `inner`, `substance` steps | Users can skip required fields |
+| `src/pages/TrekTracker.tsx` | Fix `canProceed` — add validation for `inner`, `substance`, `planning` (triggerNote) steps | Users can skip required fields |
+| `src/pages/AnxietyTracker.tsx` | Fix `canProceed` — add validation for `body` step | Users can skip body locations |
+| `src/pages/RelapseLog.tsx` | Fix `canProceed` — add validation for `label` and `when` (episodeDuration, amountCategory) steps | Users can skip required fields |
+| `src/pages/CrisisNow.tsx` | Unify all tool icons to `bg-primary/10 text-primary` | Inconsistent with Tools page |
+| `src/pages/Logs.tsx` | Change `trek_intensity` slider from `min={1}` to `min={0}` | Inconsistent with TrekTracker |
+
+---
+
+## Post-Apply Checklist
+
+After applying these changes, run:
+
+```bash
+pnpm run typecheck
+# or
+npm run typecheck
+```
+
+**Expected:** Zero type errors. The main risk is missing a dependency in the `useMemo` arrays for `canProceed`.
+
+**Manual test:** Open each tracker, try to click "Next" on each step without answering anything. The button should be disabled until all required fields are filled.
+
+---
+
+*End of prompt. Apply all changes above, then typecheck and build.*
