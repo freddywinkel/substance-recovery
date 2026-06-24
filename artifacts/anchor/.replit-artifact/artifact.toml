@@ -1,6 +1,6 @@
 kind = "web"
 previewPath = "/"
-title = "Anchor — Recovery Support"
+title = "Substance Recovery"
 version = "1.0.0"
 id = "artifacts/anchor"
 router = "path"

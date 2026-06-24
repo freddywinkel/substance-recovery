@@ -39,8 +39,8 @@ export default defineConfig({
         "favicon.svg",
       ],
       manifest: {
-        name: "Anchor — Recovery Support",
-        short_name: "Anchor",
+        name: "Substance Recovery",
+        short_name: "Substance Recovery",
         description: "A private, offline-capable companion for addiction recovery support.",
         lang: "en",
         theme_color: "#131820",
