@@ -253,6 +253,34 @@ const en: Record<string, string> = {
   "settings.reset.body": "This will permanently delete all your journal entries, check-in history, sobriety date, and settings. This cannot be undone.",
   "settings.reset.confirm": "Erase all",
 
+  // ── Export / Import ────────────────────────────────────────
+  "export.title": "Export data",
+  "export.subtitle": "Download all your data as a JSON file",
+  "export.btn": "Export to file",
+  "export.success": "Export ready. Check your downloads folder.",
+  "export.error": "Export failed. Please try again.",
+  "import.title": "Import data",
+  "import.subtitle": "Restore from a previously exported JSON file",
+  "import.btn": "Import from file",
+  "import.success": "Import complete. {n} items restored.",
+  "import.error": "Import failed. The file may be damaged or incompatible.",
+  "import.confirm.title": "Overwrite existing data?",
+  "import.confirm.body": "Importing will merge with your current data. Any records with the same ID will be overwritten. This cannot be undone.",
+  "import.confirm.btn": "Import and overwrite",
+  "import.file.placeholder": "Select a JSON file…",
+
+  // ── Reminders ───────────────────────────────────────────────
+  "reminder.section": "Reminders",
+  "reminder.title": "Daily check-in reminder",
+  "reminder.subtitle": "Get a gentle nudge to check in each day",
+  "reminder.enable": "Enable reminder",
+  "reminder.time": "Reminder time",
+  "reminder.permission": "Allow notifications",
+  "reminder.permission.sub": "Your browser needs permission to show reminders",
+  "reminder.permission.granted": "Notifications allowed",
+  "reminder.permission.denied": "Notifications blocked. Please enable them in your browser settings.",
+  "reminder.no_support": "Your browser does not support notifications.",
+
   // ── Journal ───────────────────────────────────────────────
   "journal.title": "Journal",
   "journal.subtitle": "Private · stays on your device",
@@ -1274,6 +1302,34 @@ const nl: Record<string, string> = {
   "settings.reset.title": "Alles verwijderen?",
   "settings.reset.body": "Dit verwijdert permanent al je dagboeknotities, incheckergeschiedenis, nuchterheidsdatum en instellingen. Dit kan niet ongedaan worden gemaakt.",
   "settings.reset.confirm": "Alles verwijderen",
+
+  // ── Export / Import ────────────────────────────────────────
+  "export.title": "Gegevens exporteren",
+  "export.subtitle": "Download al je gegevens als JSON-bestand",
+  "export.btn": "Exporteren naar bestand",
+  "export.success": "Export gereed. Controleer je downloads-map.",
+  "export.error": "Exporteren mislukt. Probeer het opnieuw.",
+  "import.title": "Gegevens importeren",
+  "import.subtitle": "Herstel vanuit een eerder geëxporteerd JSON-bestand",
+  "import.btn": "Importeren vanuit bestand",
+  "import.success": "Import voltooid. {n} items hersteld.",
+  "import.error": "Importeren mislukt. Het bestand is mogelijk beschadigd of incompatibel.",
+  "import.confirm.title": "Bestaande gegevens overschrijven?",
+  "import.confirm.body": "Importeren zal samenvoegen met je huidige gegevens. Records met hetzelfde ID worden overschreven. Dit kan niet ongedaan worden gemaakt.",
+  "import.confirm.btn": "Importeren en overschrijven",
+  "import.file.placeholder": "Selecteer een JSON-bestand…",
+
+  // ── Reminders ───────────────────────────────────────────────
+  "reminder.section": "Herinneringen",
+  "reminder.title": "Dagelijkse check-in herinnering",
+  "reminder.subtitle": "Krijg een zachte zet om elke dag in te checken",
+  "reminder.enable": "Herinnering inschakelen",
+  "reminder.time": "Herinneringstijd",
+  "reminder.permission": "Meldingen toestaan",
+  "reminder.permission.sub": "Je browser heeft toestemming nodig om herinneringen te tonen",
+  "reminder.permission.granted": "Meldingen toegestaan",
+  "reminder.permission.denied": "Meldingen geblokkeerd. Schakel ze in via je browserinstellingen.",
+  "reminder.no_support": "Je browser ondersteunt geen meldingen.",
 
   // ── Journal ───────────────────────────────────────────────
   "journal.title": "Dagboek",

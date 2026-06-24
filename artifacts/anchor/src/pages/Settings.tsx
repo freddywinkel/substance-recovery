@@ -5,7 +5,8 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { useSync } from "@/contexts/SyncContext";
 import { useT } from "@/hooks/useT";
 import { PageHeader } from "@/components/PageHeader";
-import { Moon, Sun, Download, Trash2, Phone, Shield, Calendar, Languages, UserPlus, X, Cloud, LogOut, RefreshCw, Check, CloudOff, AlertCircle } from "lucide-react";
+import { useReminders } from "@/hooks/useReminders";
+import { Moon, Sun, Download, Trash2, Phone, Shield, Calendar, Languages, UserPlus, X, Cloud, LogOut, RefreshCw, Check, CloudOff, AlertCircle, Upload, Bell } from "lucide-react";
 import { EmergencyContact } from "@/db";
 import { DEFAULT_CRISIS_SERVICES } from "@/lib/crisisServices";
 import { Show, useUser, useClerk } from "@clerk/react";
@@ -15,6 +16,7 @@ export function Settings() {
   const {
     theme, setTheme, resetAllData, sobrietyStartDate, setSobrietyStartDate,
     crisisService, setCrisisService, emergencyContacts, setEmergencyContacts,
+    exportData, importData,
   } = useStore();
   const { installPrompt, isInstalled, install } = usePWA();
   const { language, setLanguage } = useLanguage();
@@ -26,6 +28,14 @@ export function Settings() {
   const [confirmReset, setConfirmReset] = useState(false);
   const [resetDone, setResetDone] = useState(false);
   const [dateInput, setDateInput] = useState(sobrietyStartDate ?? "");
+
+  const [exportStatus, setExportStatus] = useState<"idle" | "success" | "error">("idle");
+  const [importStatus, setImportStatus] = useState<"idle" | "success" | "error">("idle");
+  const [importMessage, setImportMessage] = useState("");
+  const [importConfirm, setImportConfirm] = useState(false);
+  const [pendingImport, setPendingImport] = useState<Record<string, unknown> | null>(null);
+
+  const { settings: reminderSettings, saveSettings: saveReminderSettings, permission: reminderPermission, requestPermission: requestReminderPermission } = useReminders();
 
   const [selectedServiceId, setSelectedServiceId] = useState<string>("");
   const [customName, setCustomName] = useState("");
@@ -59,6 +69,67 @@ export function Settings() {
     setSelectedServiceId("");
     setCustomName("");
     setCustomNumber("");
+  };
+
+  const handleExport = async () => {
+    setExportStatus("idle");
+    try {
+      const data = await exportData();
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `substance-recovery-backup-${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      setExportStatus("success");
+      setTimeout(() => setExportStatus("idle"), 3000);
+    } catch {
+      setExportStatus("error");
+      setTimeout(() => setExportStatus("idle"), 5000);
+    }
+  };
+
+  const handleImportFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const payload = JSON.parse(String(ev.target?.result ?? "{}"));
+        if (!payload || typeof payload !== "object" || !payload.version) {
+          setImportStatus("error");
+          setImportMessage(t("import.error"));
+          return;
+        }
+        setPendingImport(payload);
+        setImportConfirm(true);
+      } catch {
+        setImportStatus("error");
+        setImportMessage(t("import.error"));
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+  };
+
+  const handleImportConfirm = async () => {
+    if (!pendingImport) return;
+    setImportConfirm(false);
+    try {
+      const result = await importData(pendingImport);
+      setImportStatus("success");
+      setImportMessage(t("import.success").replace("{n}", String(result.imported)));
+      setPendingImport(null);
+      setTimeout(() => setImportStatus("idle"), 3000);
+    } catch {
+      setImportStatus("error");
+      setImportMessage(t("import.error"));
+      setPendingImport(null);
+      setTimeout(() => setImportStatus("idle"), 5000);
+    }
   };
 
   const handleDateSave = async () => {
@@ -522,6 +593,118 @@ export function Settings() {
           </div>
         </section>
 
+        {/* Export / Import */}
+        <section>
+          <p className="text-xs text-muted-foreground uppercase tracking-widest px-1 mb-3">{t("export.title")}</p>
+          <div className="bg-card border border-border rounded-2xl p-4 flex flex-col gap-3">
+            <p className="text-xs text-muted-foreground leading-relaxed">{t("export.subtitle")}</p>
+            <div className="flex gap-2">
+              <button
+                onClick={handleExport}
+                className="flex-1 flex items-center justify-center gap-2 bg-primary text-primary-foreground rounded-xl py-3 font-semibold text-sm hover:opacity-90 active:scale-95 transition-all touch-target"
+              >
+                <Download size={16} />
+                {t("export.btn")}
+              </button>
+              <label className="flex-1 flex items-center justify-center gap-2 border border-border rounded-xl py-3 font-medium text-sm text-foreground hover:bg-muted/40 transition-colors touch-target cursor-pointer">
+                <Upload size={16} />
+                {t("import.btn")}
+                <input type="file" accept="application/json" onChange={handleImportFile} className="hidden" />
+              </label>
+            </div>
+            {exportStatus === "success" && (
+              <p className="text-xs text-primary animate-fade-up">{t("export.success")}</p>
+            )}
+            {exportStatus === "error" && (
+              <p className="text-xs text-destructive animate-fade-up">{t("export.error")}</p>
+            )}
+            {importStatus === "success" && (
+              <p className="text-xs text-primary animate-fade-up">{importMessage}</p>
+            )}
+            {importStatus === "error" && (
+              <p className="text-xs text-destructive animate-fade-up">{importMessage}</p>
+            )}
+          </div>
+        </section>
+
+        {/* Reminders */}
+        <section>
+          <p className="text-xs text-muted-foreground uppercase tracking-widest px-1 mb-3">{t("reminder.section")}</p>
+          <div className="bg-card border border-border rounded-2xl p-4 flex flex-col gap-3">
+            <div className="flex items-start gap-3">
+              <Bell size={18} className="text-primary mt-0.5 shrink-0" />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-foreground">{t("reminder.title")}</p>
+                <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{t("reminder.subtitle")}</p>
+              </div>
+            </div>
+
+            {!("Notification" in window) ? (
+              <p className="text-xs text-muted-foreground">{t("reminder.no_support")}</p>
+            ) : (
+              <>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-foreground">{t("reminder.enable")}</span>
+                  <button
+                    onClick={() => {
+                      const next = !reminderSettings.enabled;
+                      saveReminderSettings({ ...reminderSettings, enabled: next });
+                    }}
+                    className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors touch-target ${
+                      reminderSettings.enabled ? "bg-primary" : "bg-muted"
+                    }`}
+                    role="switch"
+                    aria-checked={reminderSettings.enabled}
+                  >
+                    <span
+                      className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform duration-200 ${
+                        reminderSettings.enabled ? "translate-x-6" : "translate-x-1"
+                      }`}
+                    />
+                  </button>
+                </div>
+
+                {reminderSettings.enabled && (
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm text-foreground">{t("reminder.time")}</span>
+                    <input
+                      type="time"
+                      value={reminderSettings.time}
+                      onChange={(e) => {
+                        const next = e.target.value;
+                        saveReminderSettings({ ...reminderSettings, time: next });
+                      }}
+                      className="bg-background border border-input rounded-xl px-3 py-2 text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-ring appearance-none [color-scheme:inherit]"
+                    />
+                  </div>
+                )}
+
+                {reminderPermission === "granted" ? (
+                  <p className="text-xs text-primary flex items-center gap-1">
+                    <Check size={12} />
+                    {t("reminder.permission.granted")}
+                  </p>
+                ) : reminderPermission === "denied" ? (
+                  <p className="text-xs text-destructive">{t("reminder.permission.denied")}</p>
+                ) : (
+                  <button
+                    onClick={async () => {
+                      const granted = await requestReminderPermission();
+                      if (!granted) {
+                        saveReminderSettings({ ...reminderSettings, enabled: false });
+                      }
+                    }}
+                    className="flex items-center justify-center gap-2 w-full bg-primary text-primary-foreground rounded-xl py-2.5 font-semibold text-sm hover:opacity-90 active:scale-95 transition-all touch-target"
+                  >
+                    <Bell size={14} />
+                    {t("reminder.permission")}
+                  </button>
+                )}
+              </>
+            )}
+          </div>
+        </section>
+
         {/* Data management */}
         <section>
           <p className="text-xs text-muted-foreground uppercase tracking-widest px-1 mb-3">{t("settings.section.data")}</p>
@@ -584,6 +767,32 @@ export function Settings() {
           </div>
         </div>
       )}
+      {/* Confirm import dialog */}
+      {importConfirm && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-background/80 backdrop-blur-sm px-4 pb-8">
+          <div className="bg-card border border-border rounded-3xl p-6 w-full max-w-sm">
+            <h3 className="font-semibold text-foreground mb-1">{t("import.confirm.title")}</h3>
+            <p className="text-sm text-muted-foreground mb-5 leading-relaxed">
+              {t("import.confirm.body")}
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => { setImportConfirm(false); setPendingImport(null); }}
+                className="flex-1 border border-border rounded-xl py-3 font-medium text-foreground touch-target"
+              >
+                {t("common.cancel")}
+              </button>
+              <button
+                onClick={handleImportConfirm}
+                className="flex-1 bg-primary text-primary-foreground rounded-xl py-3 font-semibold touch-target"
+              >
+                {t("import.confirm.btn")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+

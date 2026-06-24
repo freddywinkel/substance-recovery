@@ -219,6 +219,16 @@ export function useStore(): StoreState & StoreActions {
 
   const refresh = useCallback(async () => { await load(); }, [load]);
 
+  const exportData = useCallback(async () => {
+    return import("@/db").then((mod) => mod.exportAllData());
+  }, []);
+
+  const importData = useCallback(async (payload: Record<string, unknown>) => {
+    const result = await import("@/db").then((mod) => mod.importAllData(payload));
+    await load();
+    return result;
+  }, [load]);
+
   return {
     journal, cravingLogs, relapseLogs, anxietyLogs, boredomLogs,
     theme, sobrietyStartDate, crisisService, emergencyContacts, loading,
@@ -229,6 +239,6 @@ export function useStore(): StoreState & StoreActions {
     logBoredom, removeBoredom,
     setTheme, setSobrietyStartDate,
     setCrisisService, setEmergencyContacts,
-    resetAllData, refresh,
+    resetAllData, refresh, exportData, importData,
   };
 }

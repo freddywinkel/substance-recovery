@@ -944,3 +944,110 @@ export async function clearDeviceLocalData(): Promise<void> {
     await db.delete("settings", key);
   }
 }
+
+/**
+ * Export all local data (journal, logs, settings, contacts, crisis service)
+ * as a JSON blob that can be downloaded or shared. Useful for non-signed-in
+ * users who want a manual backup.
+ */
+export async function exportAllData(): Promise<Record<string, unknown>> {
+  const db = await getDB();
+  const journal = await db.getAll("journal");
+  const cravingLogs = await db.getAll("cravingLogs");
+  const relapseLogs = await db.getAll("relapseLogs");
+  const anxietyLogs = await db.getAll("anxietyLogs");
+  const boredomLogs = await db.getAll("boredomLogs");
+  const settings = await db.getAll("settings");
+  const contacts = await getEmergencyContacts();
+  const crisis = await getCrisisService();
+
+  return {
+    version: 1,
+    exportedAt: Date.now(),
+    journal: journal.filter((e) => !e.deleted),
+    cravingLogs: cravingLogs.filter((e) => !e.deleted),
+    relapseLogs: relapseLogs.filter((e) => !e.deleted),
+    anxietyLogs: anxietyLogs.filter((e) => !e.deleted),
+    boredomLogs: boredomLogs.filter((e) => !e.deleted),
+    settings,
+    emergencyContacts: contacts,
+    crisisService: crisis,
+  };
+}
+
+/**
+ * Import a previously exported JSON blob. Overwrites existing data for the
+ * imported record IDs, and inserts new ones. Does NOT wipe the whole database
+ * first — so merging is possible. Call clearAllData() before import if a full
+ * restore is desired.
+ */
+export async function importAllData(
+  payload: Record<string, unknown>,
+): Promise<{ imported: number; skipped: number; errors: string[] }> {
+  const db = await getDB();
+  const errors: string[] = [];
+  let imported = 0;
+  let skipped = 0;
+
+  const stores = [
+    { key: "journal", store: "journal" as const },
+    { key: "cravingLogs", store: "cravingLogs" as const },
+    { key: "relapseLogs", store: "relapseLogs" as const },
+    { key: "anxietyLogs", store: "anxietyLogs" as const },
+    { key: "boredomLogs", store: "boredomLogs" as const },
+  ];
+
+  for (const { key, store } of stores) {
+    const arr = payload[key];
+    if (!Array.isArray(arr)) continue;
+    for (const item of arr) {
+      if (!item || typeof item !== "object" || !item.id) {
+        skipped++;
+        continue;
+      }
+      try {
+        await db.put(store, item);
+        imported++;
+      } catch (e) {
+        skipped++;
+        errors.push(`Failed to import ${key} ${item.id}: ${String(e)}`);
+      }
+    }
+  }
+
+  const settingsArr = payload.settings;
+  if (Array.isArray(settingsArr)) {
+    for (const s of settingsArr) {
+      if (s && s.key) {
+        try {
+          await db.put("settings", s);
+          imported++;
+        } catch (e) {
+          errors.push(`Failed to import setting ${s.key}: ${String(e)}`);
+        }
+      }
+    }
+  }
+
+  const contacts = payload.emergencyContacts;
+  if (Array.isArray(contacts)) {
+    try {
+      await saveEmergencyContacts(contacts as EmergencyContact[]);
+      imported++;
+    } catch (e) {
+      errors.push(`Failed to import contacts: ${String(e)}`);
+    }
+  }
+
+  const crisis = payload.crisisService;
+  if (crisis && typeof crisis === "object") {
+    try {
+      await saveCrisisService(crisis as CrisisService);
+      imported++;
+    } catch (e) {
+      errors.push(`Failed to import crisis service: ${String(e)}`);
+    }
+  }
+
+  return { imported, skipped, errors };
+}
