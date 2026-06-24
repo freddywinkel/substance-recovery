@@ -24,7 +24,9 @@ export function stripBase(path: string): string {
 }
 
 if (!clerkPubKey) {
-  throw new Error("Missing VITE_CLERK_PUBLISHABLE_KEY");
+  console.warn(
+    "Missing VITE_CLERK_PUBLISHABLE_KEY — auth features will be disabled. The app works fully in offline/signed-out mode.",
+  );
 }
 
 // Branded appearance for the Anchor sign-in / sign-up pages. The app is dark by
