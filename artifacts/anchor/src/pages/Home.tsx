@@ -94,7 +94,7 @@ export function Home() {
         className="px-5 pt-5 pb-4"
         style={{ paddingTop: "calc(1.25rem + env(safe-area-inset-top, 0px))" }}
       >
-        <p className="text-[11px] text-muted-foreground uppercase tracking-widest mb-0.5">Anchor</p>
+        <p className="text-[11px] text-muted-foreground uppercase tracking-widest mb-0.5">Substance Recovery</p>
         <h1 className="text-2xl font-semibold text-foreground leading-snug">{timeGreeting()}</h1>
         <p className="text-muted-foreground text-sm mt-0.5">{t("home.private")}</p>
       </header>

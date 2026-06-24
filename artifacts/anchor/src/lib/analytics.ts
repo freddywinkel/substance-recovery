@@ -313,7 +313,6 @@ export interface BoredomStats {
   escapedPct: number | null;
   delayedCount: number;
   delayedPct: number | null;
-  avgDelayDuration: string | null;
   hasOutcomeData: boolean;
   improvedCount: number;
   improvedPct: number | null;
@@ -326,13 +325,6 @@ export function computeBoredomStats(logs: BoredomLog[]): BoredomStats {
   const delayed = logs.filter(
     (l) => l.action === "Delayed action" || l.action === "Sat with it — didn't react"
   );
-
-  // Most common delay duration among those who delayed
-  const durations = logs
-    .filter((l) => l.delayDuration)
-    .map((l) => l.delayDuration);
-  const durFreq = topFrequencies(durations, 1);
-  const avgDelayDuration = durFreq[0]?.label ?? null;
 
   const withOutcome = logs.filter((l) => l.outcomeAfter != null);
   const improved = logs.filter((l) => l.outcomeAfter === "decreased");
@@ -353,7 +345,6 @@ export function computeBoredomStats(logs: BoredomLog[]): BoredomStats {
     escapedPct: n > 0 ? (escaped.length / n) * 100 : null,
     delayedCount: delayed.length,
     delayedPct: n > 0 ? (delayed.length / n) * 100 : null,
-    avgDelayDuration,
     hasOutcomeData: withOutcome.length > 0,
     improvedCount: improved.length,
     improvedPct: withOutcome.length > 0 ? (improved.length / withOutcome.length) * 100 : null,

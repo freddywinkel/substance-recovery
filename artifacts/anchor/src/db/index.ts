@@ -217,8 +217,6 @@ export interface AnxietyLog extends SyncFields {
   linkedState?: string;           // legacy single-select: triggered craving, restlessness, etc.
   linkedStates?: string[];        // linked states (multi-select)
   triggers?: string[];            // triggers (multi-select)
-  worryPostponed?: boolean;
-  postponeMinutes?: number | null;
   outcomeAfter?: "decreased" | "same" | "increased" | null; // set on done screen
 }
 

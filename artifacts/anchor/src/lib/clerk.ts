@@ -29,7 +29,7 @@ if (!clerkPubKey) {
   );
 }
 
-// Branded appearance for the Anchor sign-in / sign-up pages. The app is dark by
+// Branded appearance for the Substance Recovery sign-in / sign-up pages. The app is dark by
 // default; the auth pages render in the dark palette regardless of the in-app
 // theme toggle. cssLayerName ensures Tailwind utilities (utilities layer) win
 // over Clerk's own styles (clerk layer) without needing !important.

@@ -17,20 +17,22 @@ export function BoxBreathing() {
   const [cycles, setCycles] = useState(0);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const PHASES: Record<Phase, { label: string; instruction: string; duration: number; color: string }> = {
-    inhale: { label: t("breath.inhale"),     instruction: t("breath.inhale_inst"),  duration: 4, color: "hsl(var(--primary))" },
-    hold1:  { label: t("breath.hold"),       instruction: t("breath.hold_inst"),    duration: 4, color: "hsl(var(--accent))" },
-    exhale: { label: t("breath.exhale"),     instruction: t("breath.exhale_inst"),  duration: 4, color: "hsl(160 35% 50%)" },
-    hold2:  { label: t("breath.hold"),       instruction: t("breath.hold2_inst"),   duration: 4, color: "hsl(var(--muted-foreground))" },
+  const DURATION = 4;
+
+  const PHASES: Record<Phase, { label: string; instruction: string; color: string }> = {
+    inhale: { label: t("breath.inhale"), instruction: t("breath.inhale_inst"), color: "hsl(var(--primary))" },
+    hold1:  { label: t("breath.hold"), instruction: t("breath.hold_inst"), color: "hsl(var(--accent))" },
+    exhale: { label: t("breath.exhale"), instruction: t("breath.exhale_inst"), color: "hsl(160 35% 50%)" },
+    hold2:  { label: t("breath.hold"), instruction: t("breath.hold2_inst"), color: "hsl(var(--muted-foreground))" },
   };
 
   const currentPhase = PHASE_ORDER[phaseIdx];
   const config = PHASES[currentPhase];
-  const progress = tick / config.duration;
+  const progress = tick / DURATION;
 
   const advance = useCallback(() => {
     setTick((tickVal) => {
-      if (tickVal >= config.duration - 1) {
+      if (tickVal >= DURATION - 1) {
         setPhaseIdx((p) => {
           const next = (p + 1) % 4;
           if (next === 0) setCycles((c) => c + 1);
@@ -40,7 +42,7 @@ export function BoxBreathing() {
       }
       return tickVal + 1;
     });
-  }, [config.duration]);
+  }, []);
 
   useEffect(() => {
     if (running) {
@@ -91,7 +93,7 @@ export function BoxBreathing() {
           />
           <div className="relative z-10 text-center">
             <div className="text-4xl font-light tabular-nums transition-colors duration-500" style={{ color: config.color }}>
-              {config.duration - tick}
+              {DURATION - tick}
             </div>
             <div className="text-sm font-medium text-foreground mt-1">{config.label}</div>
             <div className="text-xs text-muted-foreground mt-0.5">{config.instruction}</div>

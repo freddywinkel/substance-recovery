@@ -335,7 +335,7 @@ export function TrekTracker() {
 
   const save = async () => {
     setSaving(true);
-    const highRiskFlag = draft.intensity >= 8 && draft.confidenceBefore <= 3;
+    const highRiskFlag = draft.intensity >= 8;
     await logCraving({
       cravingType: "active",
       timestamp: Date.now(),

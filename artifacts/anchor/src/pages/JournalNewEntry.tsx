@@ -34,6 +34,7 @@ export function JournalNewEntry() {
   const [craving, setCraving] = useState<number>(5);
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
 
   const { logEntry } = useStore();
   const [, navigate] = useLocation();
@@ -48,15 +49,21 @@ export function JournalNewEntry() {
 
   const handleSave = async () => {
     setSaving(true);
-    await logEntry({
-      timestamp: Date.now(),
-      mood,
-      cravingIntensity: craving,
-      note: note.trim(),
-      toolUsed: null,
-    });
-    setSaving(false);
-    navigate("/journal");
+    setError("");
+    try {
+      await logEntry({
+        timestamp: Date.now(),
+        mood,
+        cravingIntensity: craving,
+        note: note.trim(),
+        toolUsed: null,
+      });
+      navigate("/journal");
+    } catch (e) {
+      setError(t("common.save_error") ?? "Could not save. Please try again.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -121,6 +128,9 @@ export function JournalNewEntry() {
         className="fixed left-0 right-0 bg-background/95 backdrop-blur-sm border-t border-border px-4 pt-3 pb-3 z-40"
         style={{ bottom: "calc(3.5rem + env(safe-area-inset-bottom))" }}
       >
+        {error && (
+          <p className="text-sm text-red-500 mb-2 text-center">{error}</p>
+        )}
         <div className="flex gap-3 max-w-lg mx-auto">
           <button
             onClick={() => navigate("/journal")}
