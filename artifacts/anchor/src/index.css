@@ -34,6 +34,8 @@
   --color-destructive-foreground: hsl(var(--destructive-foreground));
 
   --font-sans: var(--app-font-sans);
+  --spacing: 0.25rem; /* 4px base unit — 8-pt grid uses even multiples (2,4,6,8...) */
+  --radius-card: var(--radius);
 
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
@@ -78,6 +80,14 @@
 
   --app-font-sans: 'Inter', system-ui, -apple-system, sans-serif;
   --radius: 1rem;
+  /* 8-pt spacing scale (multiples of 8px) */
+  --space-8: 0.5rem;
+  --space-16: 1rem;
+  --space-24: 1.5rem;
+  --space-32: 2rem;
+  --space-40: 2.5rem;
+  --space-48: 3rem;
+  --space-64: 4rem;
 }
 
 /* ── LIGHT MODE (override via data-theme="light") ───────────── */
@@ -168,6 +178,56 @@
 }
 
 @layer utilities {
+  /* ── Design tokens: micro-interactions ─────────────────────── */
+  .transition-interactive {
+    transition-property: all;
+    transition-duration: 150ms;
+    transition-timing-function: ease-in-out;
+  }
+
+  .active-scale {
+    transition-property: transform;
+    transition-duration: 150ms;
+    transition-timing-function: ease-in-out;
+  }
+  .active-scale:active {
+    transform: scale(0.95);
+  }
+
+  .hover-elevate {
+    transition-property: transform, box-shadow;
+    transition-duration: 150ms;
+    transition-timing-function: ease-in-out;
+  }
+  .hover-elevate:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  }
+  .hover-elevate:active {
+    transform: translateY(0) scale(0.98);
+  }
+
+  .active-elevate-2 {
+    transition-property: transform;
+    transition-duration: 150ms;
+    transition-timing-function: ease-in-out;
+  }
+  .active-elevate-2:active {
+    transform: scale(0.95);
+  }
+
+  .card-interactive {
+    transition-property: all;
+    transition-duration: 150ms;
+    transition-timing-function: ease-in-out;
+  }
+  .card-interactive:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  }
+  .card-interactive:active {
+    transform: scale(0.98);
+  }
+
   /* Safe area helpers */
   .pb-safe {
     /* 6rem clears the floating BottomNav pill. --return-banner-h is set by
