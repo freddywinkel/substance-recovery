@@ -154,24 +154,24 @@ export function Home() {
         {/* ── Sobriety streak hero ────────────────────────── */}
         {sobriety ? (
           <section aria-label="Sobriety streak" className="animate-fade-up">
-            <div className="bg-primary/8 border border-primary/20 rounded-2xl p-5 flex flex-col gap-4">
+            <div className="bg-primary/8 border border-primary/20 rounded-2xl p-4 flex flex-col gap-3">
 
-              {/* Current streak */}
-              <div className="flex items-end gap-3">
-                <div className="flex items-center gap-2 shrink-0">
-                  <CalendarCheck size={22} className="text-primary" />
+              {/* Current streak — compact horizontal layout */}
+              <div className="flex items-center gap-3">
+                <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-primary/15 text-primary shrink-0">
+                  <CalendarCheck size={20} />
                 </div>
-                <div>
-                  <p className="text-5xl font-bold text-foreground tabular-nums leading-none">
+                <div className="flex items-baseline gap-2">
+                  <p className="text-3xl font-bold text-foreground tabular-nums leading-none">
                     {sobriety.currentStreakDays}
                   </p>
-                  <p className="text-sm text-muted-foreground mt-1">
+                  <p className="text-sm text-muted-foreground">
                     {sobriety.currentStreakDays === 1 ? t("home.day") : t("home.days")} {t("home.sober")}
                   </p>
                 </div>
               </div>
 
-              <p className="text-sm text-foreground/70 leading-relaxed -mt-1">
+              <p className="text-sm text-foreground/70 leading-relaxed">
                 {milestoneLabel(sobriety.currentStreakDays, t)}
               </p>
 
@@ -194,7 +194,7 @@ export function Home() {
               )}
 
               {!sobriety.hasRelapse && (
-                <p className="text-[10px] text-muted-foreground/60 -mt-2">
+                <p className="text-[10px] text-muted-foreground/60">
                   {t("home.since")} {new Date(sobriety.startDate + "T00:00:00").toLocaleDateString(language === "nl" ? "nl-NL" : undefined, {
                     month: "long", day: "numeric", year: "numeric",
                   })}
