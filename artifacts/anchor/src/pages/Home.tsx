@@ -7,11 +7,23 @@ import { useClerkAvailable } from "@/lib/clerk-safe";
 import { getTodaysQuote } from "@/lib/recoveryQuotes";
 import { hapticLight } from "@/lib/haptics";
 import { calculateRiskScore } from "@/lib/riskScore";
+import { usePinnedTools } from "@/hooks/usePinnedTools";
 import {
+  Wind, Eye, Droplets, Waves, Rewind, Heart, Shuffle,
   Zap, AlertTriangle, Brain, Coffee,
   Flame, CalendarCheck, RotateCcw, User, LogIn,
   BookOpen, TrendingUp, PenLine, Wrench, HeartPulse, Info,
 } from "lucide-react";
+
+const TOOL_META: Record<string, { icon: typeof Wind; labelKey: string; to: string }> = {
+  "/tools/breathing": { icon: Wind, labelKey: "tools.breathing.title", to: "/tools/breathing" },
+  "/tools/grounding": { icon: Eye, labelKey: "tools.grounding.title", to: "/tools/grounding" },
+  "/tools/cold-water": { icon: Droplets, labelKey: "tools.cold.title", to: "/tools/cold-water" },
+  "/tools/urge-surfing": { icon: Waves, labelKey: "tools.urge.title", to: "/tools/urge-surfing" },
+  "/tools/tape": { icon: Rewind, labelKey: "tools.tape.title", to: "/tools/tape" },
+  "/tools/self-compassion": { icon: Heart, labelKey: "tools.compassion.title", to: "/tools/self-compassion" },
+  "/tools/distraction": { icon: Shuffle, labelKey: "tools.distraction.title", to: "/tools/distraction" },
+};
 import {
   Tooltip,
   TooltipContent,
@@ -63,6 +75,7 @@ export function Home() {
   const { session, clearSession } = useActiveRegistration();
   const [, navigate] = useLocation();
   const clerkAvailable = useClerkAvailable();
+  const { pinned } = usePinnedTools();
   const lastCraving = cravingLogs[0];
   const todaysQuote = useMemo(() => getTodaysQuote(), []);
 
@@ -276,6 +289,30 @@ export function Home() {
             <p className="mt-2 text-sm leading-6 text-foreground/70">{todaysQuote}</p>
           </div>
         </section>
+
+        {/* Pinned tools */}
+        {pinned.length > 0 && (
+          <section aria-label="Pinned tools" className="animate-fade-up">
+            <p className="text-xs text-muted-foreground uppercase tracking-widest px-1 mb-3">{t("tools.pinned.title")}</p>
+            <div className="grid grid-cols-2 gap-3">
+              {pinned.map((id) => {
+                const meta = TOOL_META[id];
+                if (!meta) return null;
+                const Icon = meta.icon;
+                return (
+                  <Link key={id} href={meta.to} asChild>
+                    <a className="block">
+                      <div className="rounded-[1.5rem] border border-border/50 bg-card/50 p-4 flex items-center gap-3 transition-all duration-300 hover:bg-card/70 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50">
+                        <Icon size={18} strokeWidth={1.8} className="text-primary shrink-0" />
+                        <span className="text-sm font-medium text-foreground leading-tight">{t(meta.labelKey)}</span>
+                      </div>
+                    </a>
+                  </Link>
+                );
+              })}
+            </div>
+          </section>
+        )}
 
         {/* Quick actions */}
         <section aria-label="Quick actions">

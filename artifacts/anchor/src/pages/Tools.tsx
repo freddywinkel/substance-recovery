@@ -3,6 +3,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { ToolCard } from "@/components/ToolCard";
 import { useT } from "@/hooks/useT";
 import { useStore } from "@/hooks/useStore";
+import { usePinnedTools } from "@/hooks/usePinnedTools";
 import {
   Wind,
   Eye,
@@ -12,7 +13,34 @@ import {
   Heart,
   Shuffle,
   Phone,
+  Pin,
+  PinOff,
 } from "lucide-react";
+
+function PinButton({ toolId }: { toolId: string }) {
+  const { t } = useT();
+  const { isPinned, togglePin } = usePinnedTools();
+  const pinned = isPinned(toolId);
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        togglePin(toolId);
+      }}
+      className={`p-2 rounded-xl transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 ${
+        pinned
+          ? "text-amber-300 bg-amber-400/10"
+          : "text-muted-foreground hover:text-foreground hover:bg-muted/40"
+      }`}
+      aria-label={pinned ? t("tools.unpin") : t("tools.pin")}
+      title={pinned ? t("tools.unpin") : t("tools.pin")}
+    >
+      {pinned ? <Pin size={16} strokeWidth={2} /> : <PinOff size={16} strokeWidth={2} />}
+    </button>
+  );
+}
 
 export function Tools() {
   const { t } = useT();
@@ -153,9 +181,6 @@ export function Tools() {
             {t("crisis.subtitle")}
           </p>
 
-          <p className="text-xs text-muted-foreground uppercase tracking-widest px-1">
-            {t("crisis.fast")}
-          </p>
           <div className="flex flex-col gap-2 mt-1">
             {CRISIS_TOOLS.filter((t) => t.urgency === "immediate").map(
               (tool) => (
@@ -177,6 +202,9 @@ export function Tools() {
                         <p className="text-sm text-muted-foreground mt-1 leading-snug">
                           {tool.description}
                         </p>
+                      </div>
+                      <div className="shrink-0 self-center">
+                        <PinButton toolId={tool.to} />
                       </div>
                     </div>
                   </a>
@@ -209,6 +237,9 @@ export function Tools() {
                         <p className="text-sm text-muted-foreground mt-1 leading-snug">
                           {tool.description}
                         </p>
+                      </div>
+                      <div className="shrink-0 self-center">
+                        <PinButton toolId={tool.to} />
                       </div>
                     </div>
                   </a>
@@ -289,7 +320,7 @@ export function Tools() {
           </p>
 
           {COPING_TOOLS.map((tool) => (
-            <ToolCard key={tool.to} {...tool} />
+            <ToolCard key={tool.to} {...tool} pinButton={<PinButton toolId={tool.to} />} />
           ))}
 
           <div className="mt-2 bg-muted/30 border border-border/40 rounded-2xl p-4 text-center">

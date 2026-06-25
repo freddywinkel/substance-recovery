@@ -116,6 +116,9 @@ const en: Record<string, string> = {
   "insights.evening": "Evening",
   "insights.night": "Night",
 
+  // ── SOS ──────────────────────────────────────────────────
+  "sos.label": "SOS — I need help now",
+
   // ── Help / CrisisNow ──────────────────────────────────────
   "help.title": "I need help right now.",
   "help.subtitle": "You're not alone in this. Pick any tool — there's no right choice. Just pick one and start.",
@@ -126,6 +129,10 @@ const en: Record<string, string> = {
   "help.crisis_number": "088 358 1500 · 24/7 crisis support",
   "help.crisis_full": "Crisisdienst Antes — 088 358 1500",
   "help.counselor": "Or speak to a counsellor, sponsor, or doctor.",
+
+  "tools.pin": "Pin to Home",
+  "tools.unpin": "Unpin from Home",
+  "tools.pinned.title": "Your tools",
 
   // ── Tools page ────────────────────────────────────────────
   "tools.title": "All Tools",
@@ -1257,6 +1264,9 @@ const nl: Record<string, string> = {
   "insights.evening": "Avond",
   "insights.night": "Nacht",
 
+  // ── SOS ──────────────────────────────────────────────────
+  "sos.label": "SOS — Ik heb nu hulp nodig",
+
   // ── Help / CrisisNow ──────────────────────────────────────
   "help.title": "Ik heb nu hulp nodig.",
   "help.subtitle": "Je staat er niet alleen voor. Kies een hulpmiddel — er is geen goede of foute keuze. Kies er een en begin.",
@@ -1267,6 +1277,10 @@ const nl: Record<string, string> = {
   "help.crisis_number": "088 358 1500 · 24/7 crisishulp",
   "help.crisis_full": "Crisisdienst Antes — 088 358 1500",
   "help.counselor": "Of spreek met een hulpverlener, sponsor of arts.",
+
+  "tools.pin": "Vastzetten op Thuis",
+  "tools.unpin": "Losmaken van Thuis",
+  "tools.pinned.title": "Jouw hulpmiddelen",
 
   // ── Tools page ────────────────────────────────────────────
   "tools.title": "Alle Hulpmiddelen",

@@ -113,6 +113,8 @@ function ClerkQueryClientCacheInvalidator() {
   return null;
 }
 
+import { SOSButton } from "@/components/SOSButton";
+
 function AppShell() {
   const { isOffline } = usePWA();
 
@@ -129,6 +131,7 @@ function AppShell() {
         <RegistrationReturnBanner />
         <BottomNav />
       </div>
+      <SOSButton />
       <Toaster />
     </>
   );
