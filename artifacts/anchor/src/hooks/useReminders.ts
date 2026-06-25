@@ -48,7 +48,7 @@ export function useReminders() {
 
   const showReminder = useCallback(() => {
     if ("Notification" in window && Notification.permission === "granted") {
-      new Notification("Substance Recovery", {
+      new Notification("Anchor - Substance Recovery", {
         body: "How are you feeling today? Take a moment to check in.",
         icon: "/icon-192.png",
         tag: "daily-checkin",

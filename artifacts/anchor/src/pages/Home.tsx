@@ -101,7 +101,7 @@ export function Home() {
         style={{ paddingTop: "calc(1.25rem + env(safe-area-inset-top, 0px))" }}
       >
         <div className="flex-1 min-w-0">
-          <p className="text-[11px] text-white/35 uppercase tracking-widest mb-0.5">Substance Recovery</p>
+          <p className="text-[11px] text-white/35 uppercase tracking-widest mb-0.5">Anchor - Substance Recovery</p>
           <h1 className="text-2xl font-semibold text-white/92 leading-snug tracking-[-0.03em]">{timeGreeting()}</h1>
           <p className="text-white/50 text-sm mt-0.5">{t("home.private")}</p>
         </div>
