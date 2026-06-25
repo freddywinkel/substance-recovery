@@ -21,29 +21,43 @@ export function BottomNav() {
 
   return (
     <nav
-      className="fixed bottom-0 left-0 right-0 z-50 bg-card/95 backdrop-blur-md border-t border-border"
-      style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+      className="fixed bottom-4 left-1/2 z-50 w-[calc(100%-2rem)] max-w-md -translate-x-1/2 rounded-full border border-white/10 bg-[#151313]/80 px-3 py-2 shadow-2xl shadow-black/50 backdrop-blur-2xl"
+      style={{ paddingBottom: "calc(0.5rem + env(safe-area-inset-bottom))" }}
       aria-label={t("nav.aria")}
     >
-      <div className="flex items-stretch justify-around max-w-lg mx-auto">
+      <div className="grid grid-cols-6 items-center">
         {navItems.map(({ to, icon: Icon, label }) => {
           const isActive =
             to === "/" ? location === "/" : location.startsWith(to);
           return (
             <Link key={to} href={to} asChild>
               <a
-                className={`flex flex-col items-center justify-center gap-0.5 flex-1 py-2 px-0.5 min-h-[52px] transition-colors duration-150 ${
-                  isActive ? "text-primary" : "text-muted-foreground hover:text-foreground/70"
-                }`}
+                className="group relative flex flex-col items-center justify-center gap-1 rounded-full py-1.5 transition-all duration-300"
                 aria-label={label}
                 aria-current={isActive ? "page" : undefined}
               >
-                <Icon
-                  size={20}
-                  strokeWidth={isActive ? 2.2 : 1.6}
-                  className={`transition-transform duration-200 ${isActive ? "scale-110" : ""}`}
+                {/* Active glow background */}
+                <span
+                  className={`absolute inset-x-1.5 inset-y-0.5 rounded-full transition-all duration-300 ${
+                    isActive
+                      ? "bg-white/10 shadow-[0_0_24px_rgba(255,255,255,0.08)]"
+                      : "bg-white/0"
+                  }`}
                 />
-                <span className="text-[9px] font-medium leading-none tracking-tight">{label}</span>
+                <Icon
+                  size={18}
+                  strokeWidth={isActive ? 2.2 : 1.6}
+                  className={`relative transition-all duration-300 ${
+                    isActive ? "text-white scale-110" : "text-white/40 group-hover:text-white/60"
+                  }`}
+                />
+                <span
+                  className={`relative text-[9px] font-medium tracking-tight transition-colors duration-300 ${
+                    isActive ? "text-white" : "text-white/35 group-hover:text-white/50"
+                  }`}
+                >
+                  {label}
+                </span>
               </a>
             </Link>
           );

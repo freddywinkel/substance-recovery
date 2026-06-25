@@ -45,29 +45,30 @@
 :root {
   color-scheme: dark;
 
-  --background:   222 18% 10%;
-  --foreground:   210 20% 90%;
+  /* Warm espresso palette */
+  --background:   20 6% 4%;
+  --foreground:   0 0% 92%;
 
-  --card:         222 16% 14%;
-  --card-foreground: 210 20% 90%;
+  --card:         20 8% 10%;
+  --card-foreground: 0 0% 92%;
 
-  --popover:      222 16% 14%;
-  --popover-foreground: 210 20% 90%;
+  --popover:      20 8% 10%;
+  --popover-foreground: 0 0% 92%;
 
-  --border:       222 12% 22%;
-  --input:        222 12% 26%;
+  --border:       20 6% 18%;
+  --input:        20 6% 22%;
   --ring:         35 80% 58%;
 
   /* Warm amber primary */
   --primary:      35 80% 58%;
-  --primary-foreground: 222 18% 8%;
+  --primary-foreground: 20 6% 4%;
 
   /* Muted sage secondary */
   --secondary:    160 20% 22%;
   --secondary-foreground: 160 30% 82%;
 
-  --muted:        222 14% 18%;
-  --muted-foreground: 210 12% 55%;
+  --muted:        20 6% 12%;
+  --muted-foreground: 0 0% 52%;
 
   --accent:       160 35% 35%;
   --accent-foreground: 160 40% 88%;
@@ -83,17 +84,17 @@
 [data-theme="light"] {
   color-scheme: light;
 
-  --background:   36 28% 96%;
-  --foreground:   222 18% 14%;
+  --background:   36 20% 96%;
+  --foreground:   20 15% 12%;
 
   --card:         0 0% 100%;
-  --card-foreground: 222 18% 14%;
+  --card-foreground: 20 15% 12%;
 
   --popover:      0 0% 100%;
-  --popover-foreground: 222 18% 14%;
+  --popover-foreground: 20 15% 12%;
 
-  --border:       222 12% 86%;
-  --input:        222 12% 80%;
+  --border:       20 10% 88%;
+  --input:        20 10% 84%;
   --ring:         35 80% 45%;
 
   --primary:      35 80% 45%;
@@ -102,8 +103,8 @@
   --secondary:    160 20% 88%;
   --secondary-foreground: 160 35% 25%;
 
-  --muted:        36 20% 90%;
-  --muted-foreground: 222 12% 45%;
+  --muted:        36 15% 92%;
+  --muted-foreground: 20 10% 45%;
 
   --accent:       160 35% 78%;
   --accent-foreground: 160 40% 20%;
@@ -157,10 +158,10 @@
 @layer utilities {
   /* Safe area helpers */
   .pb-safe {
-    /* 5rem clears the fixed BottomNav. --return-banner-h is set by
+    /* 6rem clears the floating BottomNav pill. --return-banner-h is set by
        RegistrationReturnBanner only while the "Continue your check-in"
        banner is on screen, so in-flow page buttons never sit under it. */
-    padding-bottom: calc(env(safe-area-inset-bottom) + 5rem + var(--return-banner-h, 0px));
+    padding-bottom: calc(env(safe-area-inset-bottom) + 6rem + var(--return-banner-h, 0px));
   }
 
   .bottom-safe {
@@ -289,4 +290,15 @@
 .cl-formFieldInput:focus {
   border-color: hsl(35 80% 58%);
   box-shadow: 0 0 0 2px hsl(35 80% 58% / 0.25);
+}
+
+/* ── Reduced motion support ─────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
 }

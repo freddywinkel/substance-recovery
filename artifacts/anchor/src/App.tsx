@@ -14,6 +14,7 @@ import { RegistrationReturnBanner } from "@/components/RegistrationReturnBanner"
 import { usePWA } from "@/hooks/usePWA";
 import { queryClient } from "@/lib/queryClient";
 import { ClerkAvailableContext } from "@/lib/clerk-safe";
+import { AtmosphericBackground } from "@/components/AtmosphericBackground";
 import {
   clerkPubKey,
   clerkProxyUrl,
@@ -116,9 +117,10 @@ function AppShell() {
 
   return (
     <>
+      <AtmosphericBackground />
       <OfflineBanner isOffline={isOffline} />
       <div
-        className="flex flex-col bg-background"
+        className="relative flex flex-col"
         style={{ minHeight: "100dvh" }}
       >
         <AppRoutes />

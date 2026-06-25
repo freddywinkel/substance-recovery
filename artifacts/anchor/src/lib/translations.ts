@@ -78,6 +78,15 @@ const en: Record<string, string> = {
   "home.milestone.1d": "Every day you choose this.",
   "home.milestone.0d": "Today is day one. That counts.",
 
+  "home.streak_label": "Current streak",
+  "home.log_today": "Log today",
+  "home.status.cravings": "Cravings",
+  "home.status.logged": "logged",
+  "home.status.checkins": "Check-ins",
+  "home.status.journal": "Journal",
+  "home.status.write": "Write today",
+  "home.insight.label": "Today's anchor",
+
   // ── Help / CrisisNow ──────────────────────────────────────
   "help.title": "I need help right now.",
   "help.subtitle": "You're not alone in this. Pick any tool — there's no right choice. Just pick one and start.",
@@ -1135,6 +1144,15 @@ const nl: Record<string, string> = {
   "home.milestone.7d": "Een volle week. Ga door.",
   "home.milestone.1d": "Elke dag kies jij hiervoor.",
   "home.milestone.0d": "Vandaag is dag één. Dat telt.",
+
+  "home.streak_label": "Huidige reeks",
+  "home.log_today": "Log vandaag",
+  "home.status.cravings": "Cravings",
+  "home.status.logged": "gelogd",
+  "home.status.checkins": "Check-ins",
+  "home.status.journal": "Dagboek",
+  "home.status.write": "Schrijf vandaag",
+  "home.insight.label": "Anker van vandaag",
 
   // ── Help / CrisisNow ──────────────────────────────────────
   "help.title": "Ik heb nu hulp nodig.",
