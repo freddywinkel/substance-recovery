@@ -151,6 +151,17 @@ const en: Record<string, string> = {
   "registrations.yesterday": "Yesterday",
   "registrations.days_ago": "{n} days ago",
 
+  // ── Quick Log ─────────────────────────────────────────────
+  "quicklog.title": "Quick Log",
+  "quicklog.type": "What are you experiencing?",
+  "quicklog.intensity": "Intensity",
+  "quicklog.note": "Note (optional)",
+  "quicklog.types.trek": "Trek",
+  "quicklog.types.craving": "Craving",
+  "quicklog.types.anxiety": "Anxiety",
+  "quicklog.types.boredom": "Boredom",
+  "quicklog.types.relapse": "Relapse",
+
   // ── Progress ──────────────────────────────────────────────
   "progress.title": "Progress",
   "progress.subtitle": "Patterns in your logs",
@@ -1248,6 +1259,17 @@ const nl: Record<string, string> = {
   "registrations.today": "Vandaag",
   "registrations.yesterday": "Gisteren",
   "registrations.days_ago": "{n} dagen geleden",
+
+  // ── Quick Log ─────────────────────────────────────────────
+  "quicklog.title": "Snel Loggen",
+  "quicklog.type": "Wat ervaar je nu?",
+  "quicklog.intensity": "Intensiteit",
+  "quicklog.note": "Notitie (optioneel)",
+  "quicklog.types.trek": "Trek",
+  "quicklog.types.craving": "Craving",
+  "quicklog.types.anxiety": "Angst",
+  "quicklog.types.boredom": "Verveling",
+  "quicklog.types.relapse": "Terugval",
 
   // ── Progress ──────────────────────────────────────────────
   "progress.title": "Voortgang",
