@@ -133,7 +133,7 @@ export function Home() {
           <h1 className="text-2xl font-semibold text-foreground leading-snug tracking-[-0.03em]">{timeGreeting()}</h1>
           <p className="text-muted-foreground text-sm mt-0.5">{t("home.private")}</p>
         </div>
-        <button onClick={() => navigate("/settings")} className="shrink-0 mt-0.5 p-2 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors touch-target" aria-label={t("nav.settings")}>
+        <button onClick={() => navigate("/settings")} className="shrink-0 mt-0.5 p-2 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors touch-target focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50" aria-label={t("nav.settings")}>
           {clerkAvailable ? <User size={20} strokeWidth={1.8} /> : <LogIn size={20} strokeWidth={1.8} />}
         </button>
       </header>

@@ -1,21 +1,26 @@
 /**
  * Haptic feedback utility for mobile PWA.
- * Only vibrates on supported devices.
+ * Respects prefers-reduced-motion. Only vibrates on supported devices.
  */
-export function hapticLight() {
-  if (typeof navigator !== "undefined" && navigator.vibrate) {
-    navigator.vibrate(8);
+function shouldVibrate(): boolean {
+  if (typeof navigator === "undefined" || !navigator.vibrate) return false;
+  if (typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    return false;
   }
+  return true;
+}
+
+export function hapticLight() {
+  if (!shouldVibrate()) return;
+  navigator.vibrate(8);
 }
 
 export function hapticMedium() {
-  if (typeof navigator !== "undefined" && navigator.vibrate) {
-    navigator.vibrate(12);
-  }
+  if (!shouldVibrate()) return;
+  navigator.vibrate(12);
 }
 
 export function hapticSuccess() {
-  if (typeof navigator !== "undefined" && navigator.vibrate) {
-    navigator.vibrate([8, 40, 8]);
-  }
+  if (!shouldVibrate()) return;
+  navigator.vibrate([8, 40, 8]);
 }
