@@ -54,7 +54,7 @@ export function RegistrationReturnBanner() {
       ref={ref}
       onClick={() => navigate(pending.returnRoute)}
       className="fixed left-0 right-0 z-[55] bg-primary text-primary-foreground px-4 py-3 flex items-center justify-center gap-2 text-sm font-semibold shadow-lg active:opacity-90 transition-opacity"
-      style={{ bottom: "calc(52px + env(safe-area-inset-bottom, 0px))" }}
+      style={{ bottom: "calc(5.5rem + env(safe-area-inset-bottom, 0px))" }}
     >
       <RotateCcw size={16} />
       {t("resume.banner")}

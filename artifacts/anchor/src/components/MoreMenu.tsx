@@ -8,9 +8,9 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import {
+  BarChart2,
   Settings,
   BookOpen,
-  Zap,
   HelpCircle,
   ChevronRight,
 } from "lucide-react";
@@ -18,7 +18,8 @@ import { useState } from "react";
 
 const MORE_ITEMS = [
   { to: "/journal", icon: BookOpen, labelKey: "nav.journal" },
-  { to: "/help", icon: Zap, labelKey: "nav.help" },
+  { to: "/insights", icon: BarChart2, labelKey: "nav.insights" },
+  { to: "/help", icon: HelpCircle, labelKey: "nav.help" },
   { to: "/settings", icon: Settings, labelKey: "nav.settings" },
 ];
 
@@ -36,13 +37,13 @@ export function MoreMenu({
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>
         <button
-          className="group relative flex flex-col items-center justify-center gap-0.5 rounded-full py-1.5 transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+          className="group relative flex min-h-[3.25rem] flex-col items-center justify-center gap-0.5 rounded-full px-1 py-1.5 transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
           aria-label={t("nav.more")}
           aria-expanded={open}
           type="button"
         >
           <span
-            className={`absolute inset-x-1 inset-y-0.5 rounded-full transition-all duration-300 ${
+            className={`absolute inset-x-1 inset-y-1 rounded-full transition-all duration-300 ${
               isActive
                 ? "bg-white/10 shadow-[0_0_24px_rgba(255,255,255,0.08)]"
                 : "bg-white/0"

@@ -189,7 +189,7 @@ export function Journal() {
       <button
         onClick={() => navigate("/journal/new")}
         className="fixed right-5 z-[60] w-14 h-14 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center hover:opacity-90 active:scale-95 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
-        style={{ bottom: "calc(5rem + env(safe-area-inset-bottom))" }}
+        style={{ bottom: "calc(6.25rem + env(safe-area-inset-bottom))" }}
         aria-label={t("journal.add_aria")}
       >
         <Plus size={24} strokeWidth={2} />

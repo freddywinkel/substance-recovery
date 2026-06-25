@@ -39,7 +39,7 @@ export function Registraties() {
       label: t("registrations.craving.title"),
       sub: t("registrations.craving.sub"),
       color: "teal",
-      lastLog: lastCraving?.cravingType !== "active" ? lastCraving.timestamp : undefined,
+      lastLog: lastCraving && lastCraving.cravingType !== "active" ? lastCraving.timestamp : undefined,
     },
     {
       to: "/boredom",
@@ -67,12 +67,12 @@ export function Registraties() {
     },
   ];
 
-  const colorMap: Record<string, { icon: string; ring: string; hover: string }> = {
-    amber: { icon: "text-amber-300", ring: "ring-amber-300/20", hover: "hover:ring-amber-300/30" },
-    teal: { icon: "text-teal-300", ring: "ring-teal-300/20", hover: "hover:ring-teal-300/30" },
-    emerald: { icon: "text-emerald-300", ring: "ring-emerald-300/20", hover: "hover:ring-emerald-300/30" },
-    violet: { icon: "text-violet-300", ring: "ring-violet-300/20", hover: "hover:ring-violet-300/30" },
-    rose: { icon: "text-rose-300", ring: "ring-rose-300/20", hover: "hover:ring-rose-300/30" },
+  const colorMap: Record<string, { bg: string; icon: string; ring: string; hover: string }> = {
+    amber: { bg: "bg-amber-400/10", icon: "text-amber-300", ring: "ring-amber-300/20", hover: "hover:ring-amber-300/30" },
+    teal: { bg: "bg-teal-400/10", icon: "text-teal-300", ring: "ring-teal-300/20", hover: "hover:ring-teal-300/30" },
+    emerald: { bg: "bg-emerald-400/10", icon: "text-emerald-300", ring: "ring-emerald-300/20", hover: "hover:ring-emerald-300/30" },
+    violet: { bg: "bg-violet-400/10", icon: "text-violet-300", ring: "ring-violet-300/20", hover: "hover:ring-violet-300/30" },
+    rose: { bg: "bg-rose-400/10", icon: "text-rose-300", ring: "ring-rose-300/20", hover: "hover:ring-rose-300/30" },
   };
 
   const formatLastLog = (ts: number | undefined) => {
@@ -116,7 +116,7 @@ export function Registraties() {
             <Link key={reg.to} href={reg.to} asChild>
               <a className="block animate-fade-up" style={{ animationDelay: `${i * 0.03}s` }}>
                 <div className="group h-[120px] rounded-[1.5rem] border border-border/50 bg-card/50 backdrop-blur-xl p-4 shadow-lg shadow-black/10 transition-all duration-300 hover:bg-card/70 hover:-translate-y-0.5 active:scale-[0.98] flex items-center gap-4">
-                  <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-${reg.color}-400/10 ${colors.icon} ring-1 ${colors.ring} ${colors.hover} transition-all`}>
+                  <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ${colors.bg} ${colors.icon} ring-1 ${colors.ring} ${colors.hover} transition-all`}>
                     <reg.icon size={22} strokeWidth={2} />
                   </div>
                   <div className="flex-1 min-w-0">

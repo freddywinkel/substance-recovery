@@ -84,7 +84,7 @@ export function JournalNewEntry() {
 
       <div
         className="flex-1 overflow-y-auto scroll-smooth-ios px-4 pt-4 flex flex-col gap-6"
-        style={{ paddingBottom: "calc(9rem + env(safe-area-inset-bottom))" }}
+        style={{ paddingBottom: "calc(12rem + env(safe-area-inset-bottom))" }}
       >
         {/* Mood */}
         <div>
@@ -174,7 +174,7 @@ export function JournalNewEntry() {
 
       <div
         className="fixed left-0 right-0 bg-background/95 backdrop-blur-sm border-t border-border px-4 pt-3 pb-3 z-40"
-        style={{ bottom: "calc(3.5rem + env(safe-area-inset-bottom))" }}
+        style={{ bottom: "calc(6.25rem + env(safe-area-inset-bottom))" }}
       >
         {error && (
           <p className="text-sm text-red-500 mb-2 text-center">{error}</p>
