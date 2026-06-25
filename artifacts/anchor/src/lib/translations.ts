@@ -35,6 +35,9 @@ const en: Record<string, string> = {
   "nav.insights": "Insights",
   "nav.settings": "Settings",
   "nav.aria": "Main navigation",
+  "nav.log": "Log",
+  "nav.tools": "Tools",
+  "nav.more": "More",
 
   // ── Home ─────────────────────────────────────────────────
   "home.greeting.night": "Still going.",
@@ -1130,6 +1133,9 @@ const nl: Record<string, string> = {
   "nav.insights": "Voortgang",
   "nav.settings": "Instellingen",
   "nav.aria": "Hoofdnavigatie",
+  "nav.log": "Log",
+  "nav.tools": "Hulpmiddelen",
+  "nav.more": "Meer",
 
   // ── Home ─────────────────────────────────────────────────
   "home.greeting.night": "Nog steeds bezig.",
