@@ -296,7 +296,8 @@ const en: Record<string, string> = {
   "settings.privacy.footer": "Anchor - Substance Recovery contains no analytics, no tracking pixels, and no advertising. Without an account, it stays fully local with no back-end.",
   "settings.section.account": "Account",
   "settings.account.signedOutTitle": "Back up & sync",
-  "settings.account.signedOutBody": "Optional. Sign in to securely back up your data and sync it across your devices. Anchor - Substance Recovery stays fully usable offline without an account.",
+  "settings.account.signedOutBody": "Optional. Sign in to securely back up your data and sync it across your devices. Anchor stays fully usable offline without an account.",
+  "settings.account.localNote": "Your data remains on this device unless you sign in. Nothing is uploaded or shared without your account.",
   "settings.account.signIn": "Sign in",
   "settings.account.signUp": "Create account",
   "settings.account.signedInTitle": "Cloud sync on",
@@ -323,7 +324,8 @@ const en: Record<string, string> = {
   "account.title": "Account",
   "account.login": "Login to Sync",
   "account.logout": "Logout",
-  "account.description": "Login is optional. Your data is stored locally on this device. Login enables cloud backup across devices.",
+  "account.description": "Login is optional. Your data stays on this device unless you choose to sign in for cloud backup.",
+  "account.localNote": "Your data remains local until you sign in. Nothing is uploaded or shared without your account.",
   "account.offlineNotice": "Working offline",
 
   // ── Export / Import ────────────────────────────────────────
@@ -1435,7 +1437,8 @@ const nl: Record<string, string> = {
   "settings.privacy.footer": "Anchor - Substance Recovery bevat geen analyses, geen trackingpixels en geen advertenties. Zonder account blijft alles volledig lokaal, zonder backend.",
   "settings.section.account": "Account",
   "settings.account.signedOutTitle": "Back-up & synchronisatie",
-  "settings.account.signedOutBody": "Optioneel. Log in om je gegevens veilig te back-uppen en te synchroniseren tussen je apparaten. Anchor - Substance Recovery blijft volledig offline bruikbaar zonder account.",
+  "settings.account.signedOutBody": "Optioneel. Log in om je gegevens veilig te back-uppen en te synchroniseren tussen je apparaten. Anchor blijft volledig offline bruikbaar zonder account.",
+  "settings.account.localNote": "Je gegevens blijven op dit apparaat tenzij je inlogt. Er wordt niets geüpload of gedeeld zonder jouw account.",
   "settings.account.signIn": "Inloggen",
   "settings.account.signUp": "Account aanmaken",
   "settings.account.signedInTitle": "Cloudsynchronisatie aan",
@@ -1462,7 +1465,8 @@ const nl: Record<string, string> = {
   "account.title": "Account",
   "account.login": "Inloggen voor Synchronisatie",
   "account.logout": "Uitloggen",
-  "account.description": "Inloggen is optioneel. Je gegevens worden lokaal opgeslagen. Inloggen maakt cloud-backup mogelijk.",
+  "account.description": "Inloggen is optioneel. Je gegevens blijven op dit apparaat tenzij je inlogt voor cloud-backup.",
+  "account.localNote": "Je gegevens blijven lokaal tot je inlogt. Er wordt niets geüpload of gedeeld zonder jouw account.",
   "account.offlineNotice": "Offline modus",
 
   // ── Export / Import ────────────────────────────────────────

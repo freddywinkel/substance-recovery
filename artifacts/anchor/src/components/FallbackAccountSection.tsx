@@ -19,19 +19,18 @@ export function FallbackAccountSection() {
             <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
               {t("account.description")}
             </p>
+            <p className="text-xs text-muted-foreground/70 mt-1 leading-relaxed">
+              {t("account.localNote")}
+            </p>
           </div>
         </div>
         <button
           onClick={() => setShowModal(true)}
-          className="w-full flex items-center justify-center gap-2 bg-primary text-primary-foreground rounded-xl py-3 font-semibold text-sm hover:opacity-90 active:scale-95 transition-all touch-target"
+          className="w-full flex items-center justify-center gap-2 bg-primary text-primary-foreground rounded-xl py-3 font-semibold text-sm hover:opacity-90 active:scale-95 transition-all touch-target focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
         >
           <LogIn size={16} />
           {t("account.login")}
         </button>
-        <p className="text-xs text-primary flex items-center gap-1">
-          <Cloud size={12} />
-          {t("account.offlineNotice")}
-        </p>
       </div>
 
       {/* Modal */}
@@ -42,7 +41,7 @@ export function FallbackAccountSection() {
               <h3 className="font-semibold text-foreground">{t("account.login")}</h3>
               <button
                 onClick={() => setShowModal(false)}
-                className="text-muted-foreground hover:text-foreground transition-colors p-1 touch-target"
+                className="text-muted-foreground hover:text-foreground transition-colors p-1 touch-target focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 rounded-lg"
                 aria-label={t("common.cancel")}
               >
                 <X size={18} />
@@ -55,13 +54,13 @@ export function FallbackAccountSection() {
                   {t("account.description")}
                 </p>
                 <p className="text-xs text-muted-foreground mt-3 leading-relaxed">
-                  {t("account.offlineNotice")}
+                  {t("account.localNote")}
                 </p>
               </div>
             </div>
             <button
               onClick={() => setShowModal(false)}
-              className="w-full bg-primary text-primary-foreground rounded-xl py-3 font-semibold text-sm hover:opacity-90 active:scale-95 transition-all touch-target"
+              className="w-full bg-primary text-primary-foreground rounded-xl py-3 font-semibold text-sm hover:opacity-90 active:scale-95 transition-all touch-target focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
             >
               {t("common.done")}
             </button>

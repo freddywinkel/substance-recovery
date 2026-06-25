@@ -574,70 +574,77 @@ export function Settings() {
           </div>
         </section>
 
-        {/* Export / Import */}
+        {/* Export / Import — redesigned with cards */}
         <section>
           <p className="text-xs text-muted-foreground uppercase tracking-widest px-1 mb-3">{t("export.title")}</p>
-          <div className="bg-card border border-border rounded-2xl p-4 flex flex-col gap-4">
-            {/* Header with icon */}
-            <div className="flex items-start gap-3">
-              <Cloud size={18} className="text-primary mt-0.5 shrink-0" />
-              <div className="flex-1">
-                <p className="text-sm font-medium text-foreground">{t("export.title")}</p>
-                <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
-                  {t("export.subtitle")}
-                </p>
+          <div className="flex flex-col gap-3">
+            {/* Export card */}
+            <div className="rounded-[1.5rem] border border-border/50 bg-card/50 p-4 flex flex-col gap-3">
+              <div className="flex items-start gap-3">
+                <div className="rounded-xl bg-primary/10 p-2.5 text-primary shrink-0">
+                  <FileDown size={18} strokeWidth={1.8} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-foreground">{t("export.btn")}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{t("export.subtitle")}</p>
+                </div>
               </div>
+              <button
+                onClick={handleExport}
+                className="w-full flex items-center justify-center gap-2 bg-primary text-primary-foreground rounded-xl py-3 font-semibold text-sm hover:opacity-90 active:scale-95 transition-all touch-target focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+              >
+                <FileDown size={16} />
+                {t("export.btn")}
+              </button>
+              {lastExported && (
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <Clock size={12} />
+                  <span>{formatLastExported(lastExported)}</span>
+                </div>
+              )}
+              {exportStatus === "success" && (
+                <div className="flex items-center gap-2 text-xs text-primary animate-fade-up">
+                  <CheckCircle2 size={14} />
+                  <span>{t("export.success")}</span>
+                </div>
+              )}
+              {exportStatus === "error" && (
+                <div className="flex items-center gap-2 text-xs text-destructive animate-fade-up">
+                  <AlertCircle size={14} />
+                  <span>{t("export.error")}</span>
+                </div>
+              )}
             </div>
 
-            {/* Buttons */}
-            <div className="flex flex-col gap-2">
-              <div className="flex gap-2">
-                <button
-                  onClick={handleExport}
-                  className="flex-1 flex items-center justify-center gap-2 bg-primary text-primary-foreground rounded-xl py-3 font-semibold text-sm hover:opacity-90 active:scale-95 transition-all touch-target"
-                >
-                  <FileDown size={16} />
-                  {t("export.btn")}
-                </button>
-                <label className="flex-1 flex items-center justify-center gap-2 border border-border rounded-xl py-3 font-medium text-sm text-foreground hover:bg-muted/40 transition-colors touch-target cursor-pointer">
-                  <FileUp size={16} />
-                  {t("import.btn")}
-                  <input type="file" accept="application/json" onChange={handleImportFile} className="hidden" />
-                </label>
+            {/* Import card */}
+            <div className="rounded-[1.5rem] border border-border/50 bg-card/50 p-4 flex flex-col gap-3">
+              <div className="flex items-start gap-3">
+                <div className="rounded-xl bg-primary/10 p-2.5 text-primary shrink-0">
+                  <FileUp size={18} strokeWidth={1.8} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-foreground">{t("import.btn")}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{t("import.subtitle")}</p>
+                </div>
               </div>
-
-              {/* Last exported timestamp */}
-              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                <Clock size={12} />
-                <span>{formatLastExported(lastExported)}</span>
-              </div>
+              <label className="flex items-center justify-center gap-2 border border-border rounded-xl py-3 font-medium text-sm text-foreground hover:bg-muted/40 transition-colors touch-target cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50">
+                <FileUp size={16} />
+                {t("import.btn")}
+                <input type="file" accept="application/json" onChange={handleImportFile} className="hidden" />
+              </label>
+              {importStatus === "success" && (
+                <div className="flex items-center gap-2 text-xs text-primary animate-fade-up">
+                  <CheckCircle2 size={14} />
+                  <span>{importMessage || t("import.success")}</span>
+                </div>
+              )}
+              {importStatus === "error" && (
+                <div className="flex items-center gap-2 text-xs text-destructive animate-fade-up">
+                  <AlertCircle size={14} />
+                  <span>{importMessage || t("import.error")}</span>
+                </div>
+              )}
             </div>
-
-            {/* Status indicators */}
-            {exportStatus === "success" && (
-              <div className="flex items-center gap-2 text-xs text-primary animate-fade-up">
-                <CheckCircle2 size={14} />
-                <span>{t("export.success")}</span>
-              </div>
-            )}
-            {exportStatus === "error" && (
-              <div className="flex items-center gap-2 text-xs text-destructive animate-fade-up">
-                <AlertCircle size={14} />
-                <span>{t("export.error")}</span>
-              </div>
-            )}
-            {importStatus === "success" && (
-              <div className="flex items-center gap-2 text-xs text-primary animate-fade-up">
-                <CheckCircle2 size={14} />
-                <span>{importMessage || t("import.success")}</span>
-              </div>
-            )}
-            {importStatus === "error" && (
-              <div className="flex items-center gap-2 text-xs text-destructive animate-fade-up">
-                <AlertCircle size={14} />
-                <span>{importMessage || t("import.error")}</span>
-              </div>
-            )}
           </div>
         </section>
 
