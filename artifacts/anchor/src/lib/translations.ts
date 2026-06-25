@@ -105,6 +105,17 @@ const en: Record<string, string> = {
   "home.risk.tooltip_aria": "About this risk score",
   "home.risk.action": "Log a check-in",
 
+  // ── Insights ──────────────────────────────────────────────
+  "insights.entries.title": "Entries",
+  "insights.patterns.title": "Patterns",
+  "insights.entries.empty": "No entries yet. Start logging to see your history here.",
+  "insights.timeOfDay.title": "By time of day",
+  "insights.byTrigger.title": "By trigger",
+  "insights.morning": "Morning",
+  "insights.afternoon": "Afternoon",
+  "insights.evening": "Evening",
+  "insights.night": "Night",
+
   // ── Help / CrisisNow ──────────────────────────────────────
   "help.title": "I need help right now.",
   "help.subtitle": "You're not alone in this. Pick any tool — there's no right choice. Just pick one and start.",
@@ -1216,6 +1227,17 @@ const nl: Record<string, string> = {
   "home.risk.tooltip": "Deze score is alleen voor zelfreflectie. Het is geen medische diagnose of klinische beoordeling. Als je in crisis bent, neem dan contact op met een zorgprofessional.",
   "home.risk.tooltip_aria": "Over deze risicoscore",
   "home.risk.action": "Log een check-in",
+
+  // ── Insights ──────────────────────────────────────────────
+  "insights.entries.title": "Invoeren",
+  "insights.patterns.title": "Patronen",
+  "insights.entries.empty": "Nog geen invoeren. Begin met loggen om je geschiedenis hier te zien.",
+  "insights.timeOfDay.title": "Per tijdstip",
+  "insights.byTrigger.title": "Per trigger",
+  "insights.morning": "Ochtend",
+  "insights.afternoon": "Middag",
+  "insights.evening": "Avond",
+  "insights.night": "Nacht",
 
   // ── Help / CrisisNow ──────────────────────────────────────
   "help.title": "Ik heb nu hulp nodig.",

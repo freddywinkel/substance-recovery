@@ -25,7 +25,7 @@ export function BottomNav() {
     { to: "/", icon: Home, label: t("nav.home") },
     { to: "/registraties", icon: ClipboardList, label: t("nav.log") },
     { to: "/tools", icon: Zap, label: t("nav.tools") },
-    { to: "/progress", icon: BarChart2, label: t("nav.insights") },
+    { to: "/insights", icon: BarChart2, label: t("nav.insights") },
   ];
 
   const isMoreActive =
