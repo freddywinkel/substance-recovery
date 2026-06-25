@@ -25,6 +25,10 @@ export interface JournalEntry extends SyncFields {
   cravingIntensity: number | null; // 0-10
   note: string;
   toolUsed: string | null;
+  // v2 optional fields
+  trigger?: string;
+  coping?: string;
+  favourite?: boolean;
 }
 
 export interface AppSettings {

@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { useStore } from "@/hooks/useStore";
 import { useT } from "@/hooks/useT";
 import { PageHeader } from "@/components/PageHeader";
+import { Star } from "lucide-react";
 
 function Slider({ value, onChange }: { value: number; onChange: (v: number) => void }) {
   const { t } = useT();
@@ -33,6 +34,9 @@ export function JournalNewEntry() {
   const [mood, setMood] = useState<1 | 2 | 3 | 4 | 5>(3);
   const [craving, setCraving] = useState<number>(5);
   const [note, setNote] = useState("");
+  const [trigger, setTrigger] = useState("");
+  const [coping, setCoping] = useState("");
+  const [favourite, setFavourite] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -57,6 +61,9 @@ export function JournalNewEntry() {
         cravingIntensity: craving,
         note: note.trim(),
         toolUsed: null,
+        trigger: trigger.trim() || undefined,
+        coping: coping.trim() || undefined,
+        favourite: favourite || undefined,
       });
       navigate("/journal");
     } catch (e) {
@@ -87,7 +94,7 @@ export function JournalNewEntry() {
               <button
                 key={v}
                 onClick={() => setMood(v)}
-                className={`flex-1 flex flex-col items-center gap-1 py-3 rounded-2xl border transition-all touch-target ${
+                className={`flex-1 flex flex-col items-center gap-1 py-3 rounded-2xl border transition-all touch-target focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 ${
                   mood === v
                     ? "border-primary bg-primary/10 text-primary"
                     : "border-border bg-card text-muted-foreground hover:border-primary/30"
@@ -107,6 +114,32 @@ export function JournalNewEntry() {
           <Slider value={craving} onChange={setCraving} />
         </div>
 
+        {/* Optional prompt: Trigger */}
+        <div>
+          <p className="text-base font-medium text-foreground mb-1">{t("journal.trigger_q")}</p>
+          <p className="text-sm text-muted-foreground mb-3">{t("journal.trigger_sub")}</p>
+          <textarea
+            value={trigger}
+            onChange={(e) => setTrigger(e.target.value)}
+            placeholder={t("journal.trigger_placeholder")}
+            rows={3}
+            className="w-full bg-card border border-input rounded-2xl px-4 py-3.5 text-foreground placeholder:text-muted-foreground/50 text-sm resize-none focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+          />
+        </div>
+
+        {/* Optional prompt: Coping */}
+        <div>
+          <p className="text-base font-medium text-foreground mb-1">{t("journal.coping_q")}</p>
+          <p className="text-sm text-muted-foreground mb-3">{t("journal.coping_sub")}</p>
+          <textarea
+            value={coping}
+            onChange={(e) => setCoping(e.target.value)}
+            placeholder={t("journal.coping_placeholder")}
+            rows={3}
+            className="w-full bg-card border border-input rounded-2xl px-4 py-3.5 text-foreground placeholder:text-muted-foreground/50 text-sm resize-none focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+          />
+        </div>
+
         {/* Note */}
         <div>
           <p className="text-base font-medium text-foreground mb-1">{t("journal.note_q")}</p>
@@ -116,12 +149,27 @@ export function JournalNewEntry() {
             onChange={(e) => setNote(e.target.value)}
             placeholder={t("journal.note_placeholder")}
             rows={6}
-            className="w-full bg-card border border-input rounded-2xl px-4 py-3.5 text-foreground placeholder:text-muted-foreground/50 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring"
+            className="w-full bg-card border border-input rounded-2xl px-4 py-3.5 text-foreground placeholder:text-muted-foreground/50 text-sm resize-none focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
           />
           <p className="text-xs text-muted-foreground mt-2">
             {t("journal.privacy_note")}
           </p>
         </div>
+
+        {/* Favourite toggle */}
+        <button
+          type="button"
+          onClick={() => setFavourite((f) => !f)}
+          className={`flex items-center gap-2 self-start rounded-xl border px-4 py-3 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 ${
+            favourite
+              ? "border-amber-300/40 bg-amber-400/10 text-amber-300"
+              : "border-border/50 bg-card text-muted-foreground hover:text-foreground"
+          }`}
+          aria-pressed={favourite}
+        >
+          <Star size={16} strokeWidth={2} className={favourite ? "fill-amber-300" : ""} />
+          <span className="text-sm font-medium">{t("journal.favourite")}</span>
+        </button>
       </div>
 
       <div
@@ -134,14 +182,14 @@ export function JournalNewEntry() {
         <div className="flex gap-3 max-w-lg mx-auto">
           <button
             onClick={() => navigate("/journal")}
-            className="touch-target px-5 py-3.5 border border-border rounded-2xl font-medium text-muted-foreground hover:text-foreground transition-colors"
+            className="touch-target px-5 py-3.5 border border-border rounded-2xl font-medium text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
           >
             {t("common.cancel")}
           </button>
           <button
             onClick={handleSave}
             disabled={saving}
-            className="flex-1 bg-primary text-primary-foreground rounded-2xl py-3.5 font-semibold touch-target hover:opacity-90 active:scale-95 transition-all disabled:opacity-60"
+            className="flex-1 bg-primary text-primary-foreground rounded-2xl py-3.5 font-semibold touch-target hover:opacity-90 active:scale-95 transition-all disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
           >
             {saving ? t("journal.saving") : t("journal.save")}
           </button>

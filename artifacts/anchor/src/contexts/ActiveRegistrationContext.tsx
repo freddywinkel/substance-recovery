@@ -13,7 +13,7 @@ import { getSetting, setSetting } from "@/db";
 // survives bottom-nav navigation and full reloads. Only one is active at a
 // time; starting a different tracker replaces it.
 
-export type RegistrationType = "craving" | "trek" | "anxiety" | "boredom";
+export type RegistrationType = "craving" | "trek" | "anxiety" | "boredom" | "relapse";
 
 export interface PendingReturn {
   returnRoute: string;
@@ -35,7 +35,7 @@ export interface ActiveRegistration {
 }
 
 const SETTING_KEY = "activeRegistration";
-const REG_TYPES: RegistrationType[] = ["craving", "trek", "anxiety", "boredom"];
+const REG_TYPES: RegistrationType[] = ["craving", "trek", "anxiety", "boredom", "relapse"];
 
 interface StartArgs {
   type: RegistrationType;

@@ -8,6 +8,7 @@ interface ToolCardProps {
   description: string;
   duration: string;
   accent?: string;
+  pinButton?: React.ReactNode;
 }
 
 export function ToolCard({
@@ -17,10 +18,11 @@ export function ToolCard({
   description,
   duration,
   accent = "text-primary",
+  pinButton,
 }: ToolCardProps) {
   return (
     <Link href={to} asChild>
-      <a className="block animate-fade-up">
+      <a className="block animate-fade-up focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 rounded-2xl">
         <div className="bg-card border border-border rounded-2xl p-4 active:scale-[0.98] transition-all duration-200 hover:border-primary/40">
           <div className="flex items-start gap-3">
             <div
@@ -41,6 +43,7 @@ export function ToolCard({
                 {description}
               </p>
             </div>
+            {pinButton && <div className="shrink-0 self-center">{pinButton}</div>}
           </div>
         </div>
       </a>

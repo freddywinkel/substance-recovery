@@ -23,18 +23,21 @@ export function AccountSection() {
               <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
                 {t("settings.account.signedOutBody")}
               </p>
+              <p className="text-xs text-muted-foreground/70 mt-1 leading-relaxed">
+                {t("settings.account.localNote")}
+              </p>
             </div>
           </div>
           <div className="flex gap-2 pt-1">
             <button
               onClick={() => navigate("/sign-in")}
-              className="flex-1 bg-primary text-primary-foreground rounded-xl py-3 font-semibold text-sm hover:opacity-90 active:scale-95 transition-all touch-target"
+              className="flex-1 bg-primary text-primary-foreground rounded-xl py-3 font-semibold text-sm hover:opacity-90 active:scale-95 transition-all touch-target focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
             >
               {t("settings.account.signIn")}
             </button>
             <button
               onClick={() => navigate("/sign-up")}
-              className="flex-1 border border-border rounded-xl py-3 font-medium text-sm text-foreground hover:bg-muted/40 transition-colors touch-target"
+              className="flex-1 border border-border rounded-xl py-3 font-medium text-sm text-foreground hover:bg-muted/40 transition-colors touch-target focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
             >
               {t("settings.account.signUp")}
             </button>
@@ -72,7 +75,7 @@ export function AccountSection() {
             <button
               onClick={syncNow}
               disabled={syncStatus === "syncing"}
-              className="shrink-0 text-xs font-medium text-primary hover:opacity-80 disabled:opacity-40 transition-opacity touch-target px-1"
+              className="shrink-0 text-xs font-medium text-primary hover:opacity-80 disabled:opacity-40 transition-opacity touch-target px-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 rounded"
             >
               {t("settings.account.syncNow")}
             </button>
@@ -80,7 +83,7 @@ export function AccountSection() {
 
           <button
             onClick={() => signOut()}
-            className="w-full flex items-center justify-center gap-2 border border-border rounded-xl py-3 font-medium text-sm text-foreground hover:bg-muted/40 transition-colors touch-target"
+            className="w-full flex items-center justify-center gap-2 border border-border rounded-xl py-3 font-medium text-sm text-foreground hover:bg-muted/40 transition-colors touch-target focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
           >
             <LogOut size={16} />
             {t("settings.account.signOut")}

@@ -29,9 +29,8 @@ import { Tools } from "@/pages/Tools";
 import { Journal } from "@/pages/Journal";
 import { JournalNewEntry } from "@/pages/JournalNewEntry";
 import { Registraties } from "@/pages/Registraties";
-import { Progress } from "@/pages/Progress";
+import { Insights } from "@/pages/Insights";
 import { Settings } from "@/pages/Settings";
-import { Logs } from "@/pages/Logs";
 import { CravingTracker } from "@/pages/CravingTracker";
 import { RelapseLog } from "@/pages/RelapseLog";
 import { AnxietyTracker } from "@/pages/AnxietyTracker";
@@ -81,8 +80,7 @@ function AppRoutes() {
       <Route path="/registraties" component={Registraties} />
       <Route path="/journal" component={Journal} />
       <Route path="/journal/new" component={JournalNewEntry} />
-      <Route path="/progress" component={Progress} />
-      <Route path="/logs" component={Logs} />
+      <Route path="/insights" component={Insights} />
       <Route path="/settings" component={Settings} />
       <Route path="/sign-in/*?" component={SignInPage} />
       <Route path="/sign-up/*?" component={SignUpPage} />
@@ -115,6 +113,8 @@ function ClerkQueryClientCacheInvalidator() {
   return null;
 }
 
+import { SOSButton } from "@/components/SOSButton";
+
 function AppShell() {
   const { isOffline } = usePWA();
 
@@ -131,6 +131,7 @@ function AppShell() {
         <RegistrationReturnBanner />
         <BottomNav />
       </div>
+      <SOSButton />
       <Toaster />
     </>
   );

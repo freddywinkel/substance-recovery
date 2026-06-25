@@ -35,6 +35,9 @@ const en: Record<string, string> = {
   "nav.insights": "Insights",
   "nav.settings": "Settings",
   "nav.aria": "Main navigation",
+  "nav.log": "Log",
+  "nav.tools": "Tools",
+  "nav.more": "More",
 
   // ── Home ─────────────────────────────────────────────────
   "home.greeting.night": "Still going.",
@@ -97,7 +100,24 @@ const en: Record<string, string> = {
   "home.risk.low": "Last check-in {n} days ago. You're doing well.",
   "home.risk.medium": "No check-in for {n} days. Consider logging how you're feeling.",
   "home.risk.high": "No check-in for {n} days. Your support tools are here when you need them.",
+  "home.risk.score": "Score",
+  "home.risk.tooltip": "This score is for self-reflection only. It is not a medical diagnosis or clinical assessment. If you are in crisis, please reach out to a healthcare professional.",
+  "home.risk.tooltip_aria": "About this risk score",
   "home.risk.action": "Log a check-in",
+
+  // ── Insights ──────────────────────────────────────────────
+  "insights.entries.title": "Entries",
+  "insights.patterns.title": "Patterns",
+  "insights.entries.empty": "No entries yet. Start logging to see your history here.",
+  "insights.timeOfDay.title": "By time of day",
+  "insights.byTrigger.title": "By trigger",
+  "insights.morning": "Morning",
+  "insights.afternoon": "Afternoon",
+  "insights.evening": "Evening",
+  "insights.night": "Night",
+
+  // ── SOS ──────────────────────────────────────────────────
+  "sos.label": "SOS — I need help now",
 
   // ── Help / CrisisNow ──────────────────────────────────────
   "help.title": "I need help right now.",
@@ -109,6 +129,10 @@ const en: Record<string, string> = {
   "help.crisis_number": "088 358 1500 · 24/7 crisis support",
   "help.crisis_full": "Crisisdienst Antes — 088 358 1500",
   "help.counselor": "Or speak to a counsellor, sponsor, or doctor.",
+
+  "tools.pin": "Pin to Home",
+  "tools.unpin": "Unpin from Home",
+  "tools.pinned.title": "Your tools",
 
   // ── Tools page ────────────────────────────────────────────
   "tools.title": "All Tools",
@@ -147,6 +171,17 @@ const en: Record<string, string> = {
   "registrations.today": "Today",
   "registrations.yesterday": "Yesterday",
   "registrations.days_ago": "{n} days ago",
+
+  // ── Quick Log ─────────────────────────────────────────────
+  "quicklog.title": "Quick Log",
+  "quicklog.type": "What are you experiencing?",
+  "quicklog.intensity": "Intensity",
+  "quicklog.note": "Note (optional)",
+  "quicklog.types.trek": "Trek",
+  "quicklog.types.craving": "Craving",
+  "quicklog.types.anxiety": "Anxiety",
+  "quicklog.types.boredom": "Boredom",
+  "quicklog.types.relapse": "Relapse",
 
   // ── Progress ──────────────────────────────────────────────
   "progress.title": "Progress",
@@ -268,7 +303,8 @@ const en: Record<string, string> = {
   "settings.privacy.footer": "Anchor - Substance Recovery contains no analytics, no tracking pixels, and no advertising. Without an account, it stays fully local with no back-end.",
   "settings.section.account": "Account",
   "settings.account.signedOutTitle": "Back up & sync",
-  "settings.account.signedOutBody": "Optional. Sign in to securely back up your data and sync it across your devices. Anchor - Substance Recovery stays fully usable offline without an account.",
+  "settings.account.signedOutBody": "Optional. Sign in to securely back up your data and sync it across your devices. Anchor stays fully usable offline without an account.",
+  "settings.account.localNote": "Your data remains on this device unless you sign in. Nothing is uploaded or shared without your account.",
   "settings.account.signIn": "Sign in",
   "settings.account.signUp": "Create account",
   "settings.account.signedInTitle": "Cloud sync on",
@@ -295,7 +331,8 @@ const en: Record<string, string> = {
   "account.title": "Account",
   "account.login": "Login to Sync",
   "account.logout": "Logout",
-  "account.description": "Login is optional. Your data is stored locally on this device. Login enables cloud backup across devices.",
+  "account.description": "Login is optional. Your data stays on this device unless you choose to sign in for cloud backup.",
+  "account.localNote": "Your data remains local until you sign in. Nothing is uploaded or shared without your account.",
   "account.offlineNotice": "Working offline",
 
   // ── Export / Import ────────────────────────────────────────
@@ -1000,6 +1037,22 @@ const en: Record<string, string> = {
   "journal.craving_q": "Any cravings right now?",
   "journal.craving_sub": "Optional — select the closest level.",
   "journal.craving.none_short": "None",
+  "journal.trigger_q": "What triggered you?",
+  "journal.trigger_sub": "Optional — what set this off, if anything?",
+  "journal.trigger_placeholder": "What happened just before you started feeling this way?",
+  "journal.coping_q": "What helped you cope?",
+  "journal.coping_sub": "Optional — what got you through, if anything?",
+  "journal.coping_placeholder": "What did you do that helped, or what might help next time?",
+  "journal.favourite": "Favourite this entry",
+  "journal.search_placeholder": "Search entries…",
+  "journal.filter.all": "All",
+  "journal.filter.today": "Today",
+  "journal.filter.week": "This week",
+  "journal.filter.month": "This month",
+  "journal.no_results": "No entries match your search.",
+  "journal.trigger_label": "Trigger:",
+  "journal.coping_label": "Coping:",
+  "journal.local_storage": "Your entries stay on this device unless you sign in. They are never uploaded or shared without your account.",
   "journal.note_q": "Anything on your mind?",
   "journal.note_sub": "Optional — write as much or as little as you want.",
   "journal.note_placeholder": "What's on your mind right now?",
@@ -1130,6 +1183,9 @@ const nl: Record<string, string> = {
   "nav.insights": "Voortgang",
   "nav.settings": "Instellingen",
   "nav.aria": "Hoofdnavigatie",
+  "nav.log": "Log",
+  "nav.tools": "Hulpmiddelen",
+  "nav.more": "Meer",
 
   // ── Home ─────────────────────────────────────────────────
   "home.greeting.night": "Nog steeds bezig.",
@@ -1192,7 +1248,24 @@ const nl: Record<string, string> = {
   "home.risk.low": "Laatste check-in {n} dagen geleden. Het gaat goed.",
   "home.risk.medium": "Geen check-in voor {n} dagen. Overweeg om te loggen hoe je je voelt.",
   "home.risk.high": "Geen check-in voor {n} dagen. Je ondersteuningshulpmiddelen zijn hier wanneer je ze nodig hebt.",
+  "home.risk.score": "Score",
+  "home.risk.tooltip": "Deze score is alleen voor zelfreflectie. Het is geen medische diagnose of klinische beoordeling. Als je in crisis bent, neem dan contact op met een zorgprofessional.",
+  "home.risk.tooltip_aria": "Over deze risicoscore",
   "home.risk.action": "Log een check-in",
+
+  // ── Insights ──────────────────────────────────────────────
+  "insights.entries.title": "Invoeren",
+  "insights.patterns.title": "Patronen",
+  "insights.entries.empty": "Nog geen invoeren. Begin met loggen om je geschiedenis hier te zien.",
+  "insights.timeOfDay.title": "Per tijdstip",
+  "insights.byTrigger.title": "Per trigger",
+  "insights.morning": "Ochtend",
+  "insights.afternoon": "Middag",
+  "insights.evening": "Avond",
+  "insights.night": "Nacht",
+
+  // ── SOS ──────────────────────────────────────────────────
+  "sos.label": "SOS — Ik heb nu hulp nodig",
 
   // ── Help / CrisisNow ──────────────────────────────────────
   "help.title": "Ik heb nu hulp nodig.",
@@ -1204,6 +1277,10 @@ const nl: Record<string, string> = {
   "help.crisis_number": "088 358 1500 · 24/7 crisishulp",
   "help.crisis_full": "Crisisdienst Antes — 088 358 1500",
   "help.counselor": "Of spreek met een hulpverlener, sponsor of arts.",
+
+  "tools.pin": "Vastzetten op Thuis",
+  "tools.unpin": "Losmaken van Thuis",
+  "tools.pinned.title": "Jouw hulpmiddelen",
 
   // ── Tools page ────────────────────────────────────────────
   "tools.title": "Alle Hulpmiddelen",
@@ -1242,6 +1319,17 @@ const nl: Record<string, string> = {
   "registrations.today": "Vandaag",
   "registrations.yesterday": "Gisteren",
   "registrations.days_ago": "{n} dagen geleden",
+
+  // ── Quick Log ─────────────────────────────────────────────
+  "quicklog.title": "Snel Loggen",
+  "quicklog.type": "Wat ervaar je nu?",
+  "quicklog.intensity": "Intensiteit",
+  "quicklog.note": "Notitie (optioneel)",
+  "quicklog.types.trek": "Trek",
+  "quicklog.types.craving": "Craving",
+  "quicklog.types.anxiety": "Angst",
+  "quicklog.types.boredom": "Verveling",
+  "quicklog.types.relapse": "Terugval",
 
   // ── Progress ──────────────────────────────────────────────
   "progress.title": "Voortgang",
@@ -1363,7 +1451,8 @@ const nl: Record<string, string> = {
   "settings.privacy.footer": "Anchor - Substance Recovery bevat geen analyses, geen trackingpixels en geen advertenties. Zonder account blijft alles volledig lokaal, zonder backend.",
   "settings.section.account": "Account",
   "settings.account.signedOutTitle": "Back-up & synchronisatie",
-  "settings.account.signedOutBody": "Optioneel. Log in om je gegevens veilig te back-uppen en te synchroniseren tussen je apparaten. Anchor - Substance Recovery blijft volledig offline bruikbaar zonder account.",
+  "settings.account.signedOutBody": "Optioneel. Log in om je gegevens veilig te back-uppen en te synchroniseren tussen je apparaten. Anchor blijft volledig offline bruikbaar zonder account.",
+  "settings.account.localNote": "Je gegevens blijven op dit apparaat tenzij je inlogt. Er wordt niets geüpload of gedeeld zonder jouw account.",
   "settings.account.signIn": "Inloggen",
   "settings.account.signUp": "Account aanmaken",
   "settings.account.signedInTitle": "Cloudsynchronisatie aan",
@@ -1390,7 +1479,8 @@ const nl: Record<string, string> = {
   "account.title": "Account",
   "account.login": "Inloggen voor Synchronisatie",
   "account.logout": "Uitloggen",
-  "account.description": "Inloggen is optioneel. Je gegevens worden lokaal opgeslagen. Inloggen maakt cloud-backup mogelijk.",
+  "account.description": "Inloggen is optioneel. Je gegevens blijven op dit apparaat tenzij je inlogt voor cloud-backup.",
+  "account.localNote": "Je gegevens blijven lokaal tot je inlogt. Er wordt niets geüpload of gedeeld zonder jouw account.",
   "account.offlineNotice": "Offline modus",
 
   // ── Export / Import ────────────────────────────────────────
@@ -2096,6 +2186,22 @@ const nl: Record<string, string> = {
   "journal.craving_q": "Heb je nu cravings?",
   "journal.craving_sub": "Optioneel — kies het dichtstbijzijnde niveau.",
   "journal.craving.none_short": "Geen",
+  "journal.trigger_q": "Wat heeft dit uitgelokt?",
+  "journal.trigger_sub": "Optioneel — wat heeft dit op gang gebracht, als er iets was?",
+  "journal.trigger_placeholder": "Wat gebeurde er net voordat je je zo begon te voelen?",
+  "journal.coping_q": "Wat hielp je om hiermee om te gaan?",
+  "journal.coping_sub": "Optioneel — wat hielp je, als er iets was?",
+  "journal.coping_placeholder": "Wat deed je dat hielp, of wat zou de volgende keer kunnen helpen?",
+  "journal.favourite": "Markeer als favoriet",
+  "journal.search_placeholder": "Zoek in invoeren…",
+  "journal.filter.all": "Alles",
+  "journal.filter.today": "Vandaag",
+  "journal.filter.week": "Deze week",
+  "journal.filter.month": "Deze maand",
+  "journal.no_results": "Geen invoeren gevonden die overeenkomen.",
+  "journal.trigger_label": "Trigger:",
+  "journal.coping_label": "Coping:",
+  "journal.local_storage": "Je invoeren blijven op dit apparaat tenzij je inlogt. Ze worden nooit geüpload of gedeeld zonder jouw account.",
   "journal.note_q": "Wat houdt je bezig?",
   "journal.note_sub": "Optioneel — schrijf zoveel of zo weinig als je wilt.",
   "journal.note_placeholder": "Wat houdt je nu bezig?",
