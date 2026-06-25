@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { Home, Zap, BookOpen, BarChart2, Settings, ClipboardList } from "lucide-react";
+import { Home, Zap, ClipboardList, BookOpen, BarChart2, Settings } from "lucide-react";
 import { useT } from "@/hooks/useT";
 
 export function BottomNav() {
@@ -12,16 +12,16 @@ export function BottomNav() {
 
   const navItems = [
     { to: "/", icon: Home, label: t("nav.home") },
+    { to: "/registraties", icon: ClipboardList, label: t("nav.registrations") },
     { to: "/help", icon: Zap, label: t("nav.help") },
-    { to: "/journal", icon: BookOpen, label: t("nav.journal") },
-    { to: "/logs", icon: ClipboardList, label: t("nav.logs") },
-    { to: "/progress", icon: BarChart2, label: t("nav.progress") },
+    { to: "/logs", icon: BookOpen, label: t("nav.logs") },
+    { to: "/progress", icon: BarChart2, label: t("nav.insights") },
     { to: "/settings", icon: Settings, label: t("nav.settings") },
   ];
 
   return (
     <nav
-      className="fixed bottom-4 left-1/2 z-50 w-[calc(100%-2rem)] max-w-md -translate-x-1/2 rounded-full border border-white/10 bg-[#151313]/80 px-3 py-2 shadow-2xl shadow-black/50 backdrop-blur-2xl"
+      className="fixed bottom-4 left-1/2 z-50 w-[calc(100%-1.5rem)] max-w-lg -translate-x-1/2 rounded-full border border-white/10 bg-[#151313]/80 px-2 py-2 shadow-2xl shadow-black/50 backdrop-blur-2xl"
       style={{ paddingBottom: "calc(0.5rem + env(safe-area-inset-bottom))" }}
       aria-label={t("nav.aria")}
     >
@@ -32,27 +32,27 @@ export function BottomNav() {
           return (
             <Link key={to} href={to} asChild>
               <a
-                className="group relative flex flex-col items-center justify-center gap-1 rounded-full py-1.5 transition-all duration-300"
+                className="group relative flex flex-col items-center justify-center gap-0.5 rounded-full py-1.5 transition-all duration-300"
                 aria-label={label}
                 aria-current={isActive ? "page" : undefined}
               >
                 {/* Active glow background */}
                 <span
-                  className={`absolute inset-x-1.5 inset-y-0.5 rounded-full transition-all duration-300 ${
+                  className={`absolute inset-x-1 inset-y-0.5 rounded-full transition-all duration-300 ${
                     isActive
                       ? "bg-white/10 shadow-[0_0_24px_rgba(255,255,255,0.08)]"
                       : "bg-white/0"
                   }`}
                 />
                 <Icon
-                  size={18}
+                  size={16}
                   strokeWidth={isActive ? 2.2 : 1.6}
                   className={`relative transition-all duration-300 ${
                     isActive ? "text-white scale-110" : "text-white/40 group-hover:text-white/60"
                   }`}
                 />
                 <span
-                  className={`relative text-[9px] font-medium tracking-tight transition-colors duration-300 ${
+                  className={`relative text-[8px] font-medium tracking-tight transition-colors duration-300 ${
                     isActive ? "text-white" : "text-white/35 group-hover:text-white/50"
                   }`}
                 >

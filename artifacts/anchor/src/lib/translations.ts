@@ -31,7 +31,8 @@ const en: Record<string, string> = {
   "nav.help": "Crisis",
   "nav.journal": "Journal",
   "nav.logs": "Logs",
-  "nav.progress": "Progress",
+  "nav.registrations": "Registraties",
+  "nav.insights": "Insights",
   "nav.settings": "Settings",
   "nav.aria": "Main navigation",
 
@@ -86,6 +87,17 @@ const en: Record<string, string> = {
   "home.status.journal": "Journal",
   "home.status.write": "Write today",
   "home.insight.label": "Today's anchor",
+  "home.quick_actions": "Quick actions",
+  "home.action.emergency": "Emergency",
+  "home.action.tools": "Toolbox",
+  "home.action.journal": "Journal",
+  "home.risk.label": "Check-in status",
+  "home.risk.no_data": "Start logging to see your check-in patterns.",
+  "home.risk.recent": "You checked in today. Good work.",
+  "home.risk.low": "Last check-in {n} days ago. You're doing well.",
+  "home.risk.medium": "No check-in for {n} days. Consider logging how you're feeling.",
+  "home.risk.high": "No check-in for {n} days. Your support tools are here when you need them.",
+  "home.risk.action": "Log a check-in",
 
   // ── Help / CrisisNow ──────────────────────────────────────
   "help.title": "I need help right now.",
@@ -118,6 +130,23 @@ const en: Record<string, string> = {
   "tools.compassion.desc": "Break the shame spiral by speaking to yourself the way you'd speak to a close friend.",
   "tools.distraction.title": "Redirect Attention",
   "tools.distraction.desc": "Pick an activity that buys your mind 15–20 minutes of breathing room.",
+
+  // ── Registrations ─────────────────────────────────────────
+  "registrations.title": "Registrations",
+  "registrations.description": "Log what you are experiencing right now. Choose the type that matches your current situation.",
+  "registrations.trek.title": "Active Desire",
+  "registrations.trek.sub": "I am actively seeking or planning to use",
+  "registrations.craving.title": "Passive Urge",
+  "registrations.craving.sub": "A craving or urge that has come up",
+  "registrations.boredom.title": "Boredom / Restlessness",
+  "registrations.boredom.sub": "Feeling restless, empty, or understimulated",
+  "registrations.anxiety.title": "Anxiety",
+  "registrations.anxiety.sub": "Tension, worry, or nervous energy",
+  "registrations.relapse.title": "Relapse / Return to Use",
+  "registrations.relapse.sub": "I have used or returned to old behavior",
+  "registrations.today": "Today",
+  "registrations.yesterday": "Yesterday",
+  "registrations.days_ago": "{n} days ago",
 
   // ── Progress ──────────────────────────────────────────────
   "progress.title": "Progress",
@@ -1098,7 +1127,7 @@ const nl: Record<string, string> = {
   "nav.help": "Nood",
   "nav.journal": "Dagboek",
   "nav.logs": "Logboek",
-  "nav.progress": "Voortgang",
+  "nav.insights": "Voortgang",
   "nav.settings": "Instellingen",
   "nav.aria": "Hoofdnavigatie",
 
@@ -1153,6 +1182,17 @@ const nl: Record<string, string> = {
   "home.status.journal": "Dagboek",
   "home.status.write": "Schrijf vandaag",
   "home.insight.label": "Anker van vandaag",
+  "home.quick_actions": "Snelle acties",
+  "home.action.emergency": "Noodhulp",
+  "home.action.tools": "Toolbox",
+  "home.action.journal": "Dagboek",
+  "home.risk.label": "Check-in status",
+  "home.risk.no_data": "Begin met loggen om je check-in patronen te zien.",
+  "home.risk.recent": "Je hebt vandaag ingecheckt. Goed bezig.",
+  "home.risk.low": "Laatste check-in {n} dagen geleden. Het gaat goed.",
+  "home.risk.medium": "Geen check-in voor {n} dagen. Overweeg om te loggen hoe je je voelt.",
+  "home.risk.high": "Geen check-in voor {n} dagen. Je ondersteuningshulpmiddelen zijn hier wanneer je ze nodig hebt.",
+  "home.risk.action": "Log een check-in",
 
   // ── Help / CrisisNow ──────────────────────────────────────
   "help.title": "Ik heb nu hulp nodig.",
@@ -1185,6 +1225,23 @@ const nl: Record<string, string> = {
   "tools.compassion.desc": "Doorbreek de schaamtespiraal door tegen jezelf te praten zoals je met een goede vriend zou praten.",
   "tools.distraction.title": "Aandacht Omleiden",
   "tools.distraction.desc": "Kies een activiteit die je geest 15–20 minuten ademruimte geeft.",
+
+  // ── Registrations ─────────────────────────────────────────
+  "registrations.title": "Registraties",
+  "registrations.description": "Log wat je nu ervaart. Kies het type dat het beste bij je huidige situatie past.",
+  "registrations.trek.title": "Actieve Trek",
+  "registrations.trek.sub": "Ik ben actief op zoek of aan het plannen",
+  "registrations.craving.title": "Passief Craving",
+  "registrations.craving.sub": "Een craving of drang die is opgekomen",
+  "registrations.boredom.title": "Verveling / Rusteloosheid",
+  "registrations.boredom.sub": "Rusteloos, leeg, of onderprikkeld voelen",
+  "registrations.anxiety.title": "Angst",
+  "registrations.anxiety.sub": "Spanning, zorgen, of zenuwachtige energie",
+  "registrations.relapse.title": "Terugval / Hergebruik",
+  "registrations.relapse.sub": "Ik heb gebruikt of ben teruggekeerd naar oude gewoonten",
+  "registrations.today": "Vandaag",
+  "registrations.yesterday": "Gisteren",
+  "registrations.days_ago": "{n} dagen geleden",
 
   // ── Progress ──────────────────────────────────────────────
   "progress.title": "Voortgang",

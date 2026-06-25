@@ -28,6 +28,7 @@ import { CrisisNow } from "@/pages/CrisisNow";
 import { Tools } from "@/pages/Tools";
 import { Journal } from "@/pages/Journal";
 import { JournalNewEntry } from "@/pages/JournalNewEntry";
+import { Registraties } from "@/pages/Registraties";
 import { Progress } from "@/pages/Progress";
 import { Settings } from "@/pages/Settings";
 import { Logs } from "@/pages/Logs";
@@ -77,6 +78,7 @@ function AppRoutes() {
       <Route path="/anxiety" component={AnxietyTracker} />
       <Route path="/boredom" component={BoredomTracker} />
       <Route path="/delay" component={DelayScreen} />
+      <Route path="/registraties" component={Registraties} />
       <Route path="/journal" component={Journal} />
       <Route path="/journal/new" component={JournalNewEntry} />
       <Route path="/progress" component={Progress} />
