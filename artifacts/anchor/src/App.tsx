@@ -15,6 +15,7 @@ import { usePWA } from "@/hooks/usePWA";
 import { queryClient } from "@/lib/queryClient";
 import { ClerkAvailableContext } from "@/lib/clerk-safe";
 import { AtmosphericBackground } from "@/components/AtmosphericBackground";
+import { ScrollToTop } from "@/hooks/useScrollToTop";
 import {
   clerkPubKey,
   clerkProxyUrl,
@@ -118,6 +119,7 @@ function AppShell() {
   return (
     <>
       <AtmosphericBackground />
+      <ScrollToTop />
       <OfflineBanner isOffline={isOffline} />
       <div
         className="relative flex flex-col"

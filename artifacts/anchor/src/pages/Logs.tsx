@@ -353,7 +353,7 @@ export function Logs() {
   const { cravingLogs, relapseLogs, anxietyLogs, boredomLogs, removeCraving, removeRelapse, removeAnxiety, removeBoredom, refresh } = useStore();
   const { t, tOpt } = useT();
 
-  const [category, setCategory] = useState<Category>("craving");
+  const [category, setCategory] = useState<Category>("trek");
   const [view, setView] = useState<"list" | "detail" | "edit">("list");
   const [selectedLog, setSelectedLog] = useState<AnyLog | null>(null);
   const [draftLog, setDraftLog] = useState<AnyLog | null>(null);
