@@ -24,7 +24,7 @@ export function useReminders() {
         }
       }
     });
-    getSetting("lastRemindedDate", null).then((val) => {
+    getSetting("lastRemindedDate", "").then((val) => {
       if (val && typeof val === "string") {
         setLastReminded(val);
       }

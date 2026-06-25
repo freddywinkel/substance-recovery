@@ -68,6 +68,8 @@ interface StoreActions {
     userId?: string | null;
   }) => Promise<void>;
   refresh: () => Promise<void>;
+  exportData: () => Promise<Record<string, unknown>>;
+  importData: (payload: Record<string, unknown>) => Promise<{ imported: number; skipped: number; errors: string[] }>;
 }
 
 export function useStore(): StoreState & StoreActions {
