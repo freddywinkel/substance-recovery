@@ -6,11 +6,18 @@ import { useActiveRegistration } from "@/contexts/ActiveRegistrationContext";
 import { useClerkAvailable } from "@/lib/clerk-safe";
 import { getTodaysQuote } from "@/lib/recoveryQuotes";
 import { hapticLight } from "@/lib/haptics";
+import { calculateRiskScore } from "@/lib/riskScore";
 import {
   Zap, AlertTriangle, Brain, Coffee,
   Flame, CalendarCheck, RotateCcw, User, LogIn,
-  BookOpen, TrendingUp, PenLine, Wrench, HeartPulse,
+  BookOpen, TrendingUp, PenLine, Wrench, HeartPulse, Info,
 } from "lucide-react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 const RESUME_LABEL_KEYS: Record<string, string> = {
   craving: "home.craving.title",
@@ -51,7 +58,7 @@ function milestoneLabel(days: number, t: (key: string) => string): string {
 }
 
 export function Home() {
-  const { cravingLogs, relapseLogs, anxietyLogs, boredomLogs, journalEntries, sobrietyStartDate, loading } = useStore();
+  const { cravingLogs, relapseLogs, anxietyLogs, boredomLogs, journal, sobrietyStartDate, loading } = useStore();
   const { t, language } = useT();
   const { session, clearSession } = useActiveRegistration();
   const [, navigate] = useLocation();
@@ -72,16 +79,28 @@ export function Home() {
 
   // Risk assessment
   const riskInfo = useMemo(() => {
-    if (!cravingLogs.length && !anxietyLogs.length && !boredomLogs.length) {
-      return { level: "none", text: t("home.risk.no_data") };
+    const result = calculateRiskScore({
+      cravingLogs,
+      relapseLogs,
+      anxietyLogs,
+      boredomLogs,
+      journalEntries: journal,
+    });
+    if (result.level === "none") {
+      return { ...result, text: t("home.risk.no_data") };
     }
-    const lastLog = [...cravingLogs, ...anxietyLogs, ...boredomLogs].sort((a, b) => b.timestamp - a.timestamp)[0];
-    const daysSince = Math.floor((Date.now() - lastLog.timestamp) / (1000 * 60 * 60 * 24));
-    if (daysSince === 0) return { level: "recent", text: t("home.risk.recent") };
-    if (daysSince <= 2) return { level: "low", text: t("home.risk.low").replace("{n}", String(daysSince)) };
-    if (daysSince <= 5) return { level: "medium", text: t("home.risk.medium").replace("{n}", String(daysSince)) };
-    return { level: "high", text: t("home.risk.high").replace("{n}", String(daysSince)) };
-  }, [cravingLogs, anxietyLogs, boredomLogs, t]);
+    const days = [...cravingLogs, ...anxietyLogs, ...boredomLogs]
+      .sort((a, b) => b.timestamp - a.timestamp)[0];
+    const daysSince = days ? Math.floor((Date.now() - days.timestamp) / (1000 * 60 * 60 * 24)) : 0;
+
+    if (result.level === "low") {
+      return { ...result, text: t("home.risk.low").replace("{n}", String(daysSince)) };
+    }
+    if (result.level === "medium") {
+      return { ...result, text: t("home.risk.medium").replace("{n}", String(daysSince)) };
+    }
+    return { ...result, text: t("home.risk.high").replace("{n}", String(daysSince)) };
+  }, [cravingLogs, relapseLogs, anxietyLogs, boredomLogs, journal, t]);
 
   if (loading) {
     return (
@@ -197,13 +216,53 @@ export function Home() {
         {/* Risk overview */}
         <section aria-label="Risk overview" className="animate-fade-up">
           <div className={`rounded-[1.5rem] border p-4 ${riskInfo.level === "high" ? "border-rose-300/30 bg-rose-400/5" : riskInfo.level === "medium" ? "border-amber-300/30 bg-amber-400/5" : "border-border/50 bg-card/50"}`}>
-            <div className="flex items-center gap-2">
-              <HeartPulse size={16} className={riskInfo.level === "high" ? "text-rose-300" : riskInfo.level === "medium" ? "text-amber-300" : "text-emerald-300"} />
-              <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">{t("home.risk.label")}</p>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <HeartPulse size={16} className={riskInfo.level === "high" ? "text-rose-300" : riskInfo.level === "medium" ? "text-amber-300" : "text-emerald-300"} />
+                <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">{t("home.risk.label")}</p>
+              </div>
+              <TooltipProvider delayDuration={200}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button type="button" className="rounded-full p-1 text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50" aria-label={t("home.risk.tooltip_aria")}>
+                      <Info size={14} strokeWidth={2} />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" className="max-w-[240px] text-center">
+                    {t("home.risk.tooltip")}
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             </div>
-            <p className="mt-2 text-sm text-foreground/80">{riskInfo.text}</p>
+
+            {riskInfo.level === "none" ? (
+              <p className="mt-2 text-sm text-foreground/80">{riskInfo.text}</p>
+            ) : (
+              <div className="mt-3">
+                <div className="flex items-baseline gap-2">
+                  <span className={`text-2xl font-semibold tabular-nums ${riskInfo.level === "high" ? "text-rose-300" : riskInfo.level === "medium" ? "text-amber-300" : "text-emerald-300"}`}>
+                    {riskInfo.label}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {t("home.risk.score")}: {riskInfo.score}/100
+                  </span>
+                </div>
+                {riskInfo.factors.length > 0 && (
+                  <ul className="mt-2 flex flex-col gap-0.5">
+                    {riskInfo.factors.map((f, i) => (
+                      <li key={i} className="text-xs text-muted-foreground flex items-start gap-1.5">
+                        <span className="mt-1.5 h-1 w-1 rounded-full bg-muted-foreground/50 shrink-0" />
+                        {f}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <p className="mt-2 text-sm text-foreground/80">{riskInfo.text}</p>
+              </div>
+            )}
+
             {riskInfo.level !== "none" && (
-              <button onClick={() => navigate("/registraties")} className="mt-3 text-xs font-medium text-primary hover:opacity-80 transition-opacity">
+              <button onClick={() => navigate("/registraties")} className="mt-3 text-xs font-medium text-primary hover:opacity-80 transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 rounded">
                 {t("home.risk.action")} →
               </button>
             )}

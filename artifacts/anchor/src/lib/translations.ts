@@ -100,6 +100,9 @@ const en: Record<string, string> = {
   "home.risk.low": "Last check-in {n} days ago. You're doing well.",
   "home.risk.medium": "No check-in for {n} days. Consider logging how you're feeling.",
   "home.risk.high": "No check-in for {n} days. Your support tools are here when you need them.",
+  "home.risk.score": "Score",
+  "home.risk.tooltip": "This score is for self-reflection only. It is not a medical diagnosis or clinical assessment. If you are in crisis, please reach out to a healthcare professional.",
+  "home.risk.tooltip_aria": "About this risk score",
   "home.risk.action": "Log a check-in",
 
   // ── Help / CrisisNow ──────────────────────────────────────
@@ -1209,6 +1212,9 @@ const nl: Record<string, string> = {
   "home.risk.low": "Laatste check-in {n} dagen geleden. Het gaat goed.",
   "home.risk.medium": "Geen check-in voor {n} dagen. Overweeg om te loggen hoe je je voelt.",
   "home.risk.high": "Geen check-in voor {n} dagen. Je ondersteuningshulpmiddelen zijn hier wanneer je ze nodig hebt.",
+  "home.risk.score": "Score",
+  "home.risk.tooltip": "Deze score is alleen voor zelfreflectie. Het is geen medische diagnose of klinische beoordeling. Als je in crisis bent, neem dan contact op met een zorgprofessional.",
+  "home.risk.tooltip_aria": "Over deze risicoscore",
   "home.risk.action": "Log een check-in",
 
   // ── Help / CrisisNow ──────────────────────────────────────
