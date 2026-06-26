@@ -124,7 +124,7 @@ export function Home() {
   }
 
   return (
-    <div className="flex flex-col" style={{ minHeight: "100dvh" }}>
+    <div className="flex h-full min-h-0 flex-col bg-background">
 
       {/* Header */}
       <header className="px-5 pt-5 pb-2 flex items-start justify-between" style={{ paddingTop: "calc(1.25rem + env(safe-area-inset-top, 0px))" }}>

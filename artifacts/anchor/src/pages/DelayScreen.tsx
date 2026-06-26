@@ -101,7 +101,7 @@ export function DelayScreen() {
       </div>
 
       {done && (
-        <div className="px-6" style={{ paddingBottom: "calc(4rem + env(safe-area-inset-bottom) + var(--return-banner-h, 0px))" }}>
+        <div className="px-6 pb-6">
           <button
             onClick={() => navigate("/")}
             className="w-full bg-primary text-primary-foreground rounded-2xl py-4 font-semibold text-base touch-target hover:opacity-90 active:scale-95 transition-all"
@@ -112,7 +112,7 @@ export function DelayScreen() {
       )}
 
       {!done && (
-        <div className="px-6" style={{ paddingBottom: "calc(4rem + env(safe-area-inset-bottom) + var(--return-banner-h, 0px))" }}>
+        <div className="px-6 pb-6">
           <button
             onClick={handleStop}
             className="w-full border border-border text-muted-foreground rounded-2xl py-4 font-medium text-sm touch-target hover:text-foreground hover:border-border/80 transition-colors"

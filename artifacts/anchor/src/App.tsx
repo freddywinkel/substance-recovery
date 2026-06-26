@@ -122,10 +122,11 @@ function AppShell() {
       <ScrollToTop />
       <OfflineBanner isOffline={isOffline} />
       <div
-        className="relative flex flex-col"
-        style={{ minHeight: "100dvh" }}
+        className="relative flex h-dvh min-h-dvh flex-col overflow-hidden"
       >
-        <AppRoutes />
+        <main className="app-main min-h-0 flex-1 overflow-hidden">
+          <AppRoutes />
+        </main>
         <RegistrationReturnBanner />
         <BottomNav />
       </div>

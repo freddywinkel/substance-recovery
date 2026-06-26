@@ -307,7 +307,7 @@ export function RelapseLog() {
         <PageHeader title={t("relapse.title")} back />
         <div
           className="flex-1 overflow-y-auto scroll-smooth-ios flex flex-col items-center px-6 gap-6 pt-8 text-center animate-fade-up"
-          style={{ paddingBottom: "calc(5rem + env(safe-area-inset-bottom))" }}
+          style={{ paddingBottom: "1.5rem" }}
         >
           <Heart size={48} strokeWidth={1.5} className="text-primary fill-primary/20" />
 
@@ -432,7 +432,7 @@ export function RelapseLog() {
       )}
 
       <div className="flex-1 overflow-y-auto scroll-smooth-ios px-4 pt-4 flex flex-col gap-4"
-        style={{ paddingBottom: "calc(12rem + env(safe-area-inset-bottom))" }}>
+        style={{ paddingBottom: "1.5rem" }}>
 
         {/* ── Label ─────────────────────────────────────────── */}
         {step === "label" && (
@@ -656,8 +656,7 @@ export function RelapseLog() {
 
       {/* Bottom action bar */}
       <div
-        className="fixed left-0 right-0 bg-background/95 backdrop-blur-sm border-t border-border px-4 pt-3 pb-3 z-40"
-        style={{ bottom: "calc(6.25rem + env(safe-area-inset-bottom))" }}
+        className="shrink-0 bg-background/95 backdrop-blur-sm border-t border-border px-4 pt-3 pb-3"
       >
         <div className="flex gap-3 max-w-lg mx-auto">
           {canGoBack && (

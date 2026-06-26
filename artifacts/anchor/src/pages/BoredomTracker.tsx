@@ -405,7 +405,7 @@ export function BoredomTracker() {
       )}
 
       <div className="flex-1 overflow-y-auto scroll-smooth-ios px-4 pt-5 flex flex-col gap-5"
-        style={{ paddingBottom: "calc(12rem + env(safe-area-inset-bottom))" }}>
+        style={{ paddingBottom: "1.5rem" }}>
 
         {/* ── Step 1: Restlessness type + intensity ─────────── */}
         {step === "type" && (
@@ -645,8 +645,7 @@ export function BoredomTracker() {
       {/* ── Bottom action bar ─────────────────────────────────── */}
       {step !== "done" && (
         <div
-          className="fixed left-0 right-0 bg-background/95 backdrop-blur-sm border-t border-border px-4 pt-3 pb-3 z-40"
-          style={{ bottom: "calc(6.25rem + env(safe-area-inset-bottom))" }}
+          className="shrink-0 bg-background/95 backdrop-blur-sm border-t border-border px-4 pt-3 pb-3"
         >
           <div className="flex gap-3 max-w-lg mx-auto">
             {step !== "type" && (

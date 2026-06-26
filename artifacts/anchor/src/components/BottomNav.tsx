@@ -84,48 +84,50 @@ export function BottomNav() {
 
   return (
     <>
-      <nav
-        className="fixed bottom-[calc(0.75rem+env(safe-area-inset-bottom,0px))] left-1/2 z-50 w-[calc(100%-1.5rem)] max-w-lg -translate-x-1/2 rounded-full border border-white/10 bg-[#151313]/85 px-2 py-2 shadow-2xl shadow-black/50 backdrop-blur-2xl"
-        aria-label={t("nav.aria")}
-      >
-        <div className="grid grid-cols-5 items-center gap-1">
-          {leadingItems.map(renderNavLink)}
+      <footer className="relative z-40 shrink-0 border-t border-white/10 bg-[#151313]/92 px-3 pb-[calc(0.5rem+env(safe-area-inset-bottom,0px))] pt-2 shadow-[0_-18px_40px_rgba(0,0,0,0.28)] backdrop-blur-2xl">
+        <nav
+          className="mx-auto w-full max-w-lg rounded-full border border-white/10 bg-[#151313]/85 px-2 py-2 shadow-2xl shadow-black/40"
+          aria-label={t("nav.aria")}
+        >
+          <div className="grid grid-cols-5 items-center gap-1">
+            {leadingItems.map(renderNavLink)}
 
-          <button
-            type="button"
-            onClick={() => setQuickLogOpen(true)}
-            className="group relative flex min-h-[3.25rem] items-center justify-center rounded-full px-1 py-1.5 transition-all duration-150 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
-            aria-label={t("quicklog.title")}
-          >
-            <span className="flex h-11 w-11 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/30 transition-transform duration-150 group-hover:scale-105">
-              <Plus size={22} strokeWidth={2.5} />
-            </span>
-          </button>
-
-          {trailingItems.map(renderNavLink)}
-
-          <MoreMenu isActive={isMoreActive}>
-            <MoreHorizontal
-              size={16}
-              strokeWidth={isMoreActive ? 2.2 : 1.6}
-              className={`relative transition-all duration-300 ${
-                isMoreActive
-                  ? "scale-110 text-white"
-                  : "text-white/40 group-hover:text-white/60"
-              }`}
-            />
-            <span
-              className={`relative max-w-full truncate text-[8px] font-medium tracking-normal transition-colors duration-300 ${
-                isMoreActive
-                  ? "text-white"
-                  : "text-white/35 group-hover:text-white/50"
-              }`}
+            <button
+              type="button"
+              onClick={() => setQuickLogOpen(true)}
+              className="group relative flex min-h-[3.25rem] items-center justify-center rounded-full px-1 py-1.5 transition-all duration-150 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+              aria-label={t("quicklog.title")}
             >
-              {t("nav.more")}
-            </span>
-          </MoreMenu>
-        </div>
-      </nav>
+              <span className="flex h-11 w-11 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/30 transition-transform duration-150 group-hover:scale-105">
+                <Plus size={22} strokeWidth={2.5} />
+              </span>
+            </button>
+
+            {trailingItems.map(renderNavLink)}
+
+            <MoreMenu isActive={isMoreActive}>
+              <MoreHorizontal
+                size={16}
+                strokeWidth={isMoreActive ? 2.2 : 1.6}
+                className={`relative transition-all duration-300 ${
+                  isMoreActive
+                    ? "scale-110 text-white"
+                    : "text-white/40 group-hover:text-white/60"
+                }`}
+              />
+              <span
+                className={`relative max-w-full truncate text-[8px] font-medium tracking-normal transition-colors duration-300 ${
+                  isMoreActive
+                    ? "text-white"
+                    : "text-white/35 group-hover:text-white/50"
+                }`}
+              >
+                {t("nav.more")}
+              </span>
+            </MoreMenu>
+          </div>
+        </nav>
+      </footer>
 
       <QuickLog open={quickLogOpen} onOpenChange={setQuickLogOpen} />
     </>
