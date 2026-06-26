@@ -1,20 +1,19 @@
 import { Link } from "wouter";
 import { useT } from "@/hooks/useT";
 import { useStore } from "@/hooks/useStore";
-import { Wind, Eye, Waves, Rewind, Droplets, Heart, Shuffle, Phone } from "lucide-react";
+import { Wind, Eye, Droplets, Phone } from "lucide-react";
 
 export function CrisisNow() {
   const { t } = useT();
   const { crisisService, emergencyContacts } = useStore();
 
-  const TOOLS = [
+  const FAST_TOOLS = [
     {
       to: "/tools/breathing",
       icon: Wind,
       title: t("crisis.tool.breathing.title"),
       description: t("crisis.tool.breathing.desc"),
       duration: t("crisis.tool.breathing.dur"),
-      urgency: "immediate",
     },
     {
       to: "/tools/grounding",
@@ -22,7 +21,6 @@ export function CrisisNow() {
       title: t("crisis.tool.grounding.title"),
       description: t("crisis.tool.grounding.desc"),
       duration: t("crisis.tool.grounding.dur"),
-      urgency: "immediate",
     },
     {
       to: "/tools/cold-water",
@@ -30,39 +28,6 @@ export function CrisisNow() {
       title: t("crisis.tool.coldwater.title"),
       description: t("crisis.tool.coldwater.desc"),
       duration: t("crisis.tool.coldwater.dur"),
-      urgency: "immediate",
-    },
-    {
-      to: "/tools/urge-surfing",
-      icon: Waves,
-      title: t("crisis.tool.urge.title"),
-      description: t("crisis.tool.urge.desc"),
-      duration: t("crisis.tool.urge.dur"),
-      urgency: "sustained",
-    },
-    {
-      to: "/tools/tape",
-      icon: Rewind,
-      title: t("crisis.tool.tape.title"),
-      description: t("crisis.tool.tape.desc"),
-      duration: t("crisis.tool.tape.dur"),
-      urgency: "sustained",
-    },
-    {
-      to: "/tools/self-compassion",
-      icon: Heart,
-      title: t("crisis.tool.compassion.title"),
-      description: t("crisis.tool.compassion.desc"),
-      duration: t("crisis.tool.compassion.dur"),
-      urgency: "sustained",
-    },
-    {
-      to: "/tools/distraction",
-      icon: Shuffle,
-      title: t("crisis.tool.distraction.title"),
-      description: t("crisis.tool.distraction.desc"),
-      duration: t("crisis.tool.distraction.dur"),
-      urgency: "sustained",
     },
   ];
 
@@ -79,28 +44,7 @@ export function CrisisNow() {
 
         {/* Immediate tools */}
         <p className="text-xs text-muted-foreground uppercase tracking-widest px-1">{t("crisis.fast")}</p>
-        {TOOLS.filter((tool) => tool.urgency === "immediate").map((tool) => (
-          <Link key={tool.to} href={tool.to} asChild>
-            <a className="block animate-fade-up">
-              <div className="bg-card border border-border rounded-2xl p-4 flex items-start gap-4 hover:border-primary/40 active:scale-[0.98] transition-all duration-200">
-                <div className="rounded-xl p-2.5 bg-primary/10 text-primary shrink-0">
-                  <tool.icon size={22} strokeWidth={1.8} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-semibold text-foreground">{tool.title}</span>
-                    <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full shrink-0">{tool.duration}</span>
-                  </div>
-                  <p className="text-sm text-muted-foreground mt-1 leading-snug">{tool.description}</p>
-                </div>
-              </div>
-            </a>
-          </Link>
-        ))}
-
-        {/* Sustained tools */}
-        <p className="text-xs text-muted-foreground uppercase tracking-widest px-1 mt-2">{t("crisis.sustained")}</p>
-        {TOOLS.filter((tool) => tool.urgency === "sustained").map((tool) => (
+        {FAST_TOOLS.map((tool) => (
           <Link key={tool.to} href={tool.to} asChild>
             <a className="block animate-fade-up">
               <div className="bg-card border border-border rounded-2xl p-4 flex items-start gap-4 hover:border-primary/40 active:scale-[0.98] transition-all duration-200">

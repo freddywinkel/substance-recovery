@@ -66,7 +66,6 @@ function AppRoutes() {
       <Route path="/trek" component={TrekTracker} />
       <Route path="/craving" component={CravingTracker} />
       <Route path="/relapse" component={RelapseLog} />
-      <Route path="/tools" component={Tools} />
       <Route path="/tools/breathing" component={BoxBreathing} />
       <Route path="/tools/grounding" component={Grounding54321} />
       <Route path="/tools/urge-surfing" component={UrgeSurfing} />
@@ -74,12 +73,13 @@ function AppRoutes() {
       <Route path="/tools/cold-water" component={ColdWaterReset} />
       <Route path="/tools/self-compassion" component={SelfCompassion} />
       <Route path="/tools/distraction" component={Distraction} />
+      <Route path="/tools" component={Tools} />
       <Route path="/anxiety" component={AnxietyTracker} />
       <Route path="/boredom" component={BoredomTracker} />
       <Route path="/delay" component={DelayScreen} />
       <Route path="/registraties" component={Registraties} />
-      <Route path="/journal" component={Journal} />
       <Route path="/journal/new" component={JournalNewEntry} />
+      <Route path="/journal" component={Journal} />
       <Route path="/insights" component={Insights} />
       <Route path="/settings" component={Settings} />
       <Route path="/sign-in/*?" component={SignInPage} />
