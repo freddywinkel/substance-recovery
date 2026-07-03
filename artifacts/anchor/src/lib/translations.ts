@@ -38,6 +38,7 @@ const en: Record<string, string> = {
   "nav.log": "Log",
   "nav.tools": "Tools",
   "nav.more": "More",
+  "nav.new_registration": "New registration",
 
   // ── Home ─────────────────────────────────────────────────
   "home.greeting.night": "Still going.",
@@ -104,6 +105,9 @@ const en: Record<string, string> = {
   "home.risk.tooltip": "This score is for self-reflection only. It is not a medical diagnosis or clinical assessment. If you are in crisis, please reach out to a healthcare professional.",
   "home.risk.tooltip_aria": "About this risk score",
   "home.risk.action": "Log an entry",
+  "home.top_insight.label": "Most impactful insight",
+  "home.top_insight.sub": "{n} entries in the last 30 days",
+  "home.top_insight.open": "Open Insights",
 
   // ── Insights ──────────────────────────────────────────────
   "insights.entries.title": "Entries",
@@ -167,6 +171,7 @@ const en: Record<string, string> = {
 
   // ── Registrations ─────────────────────────────────────────
   "registrations.title": "Registrations",
+  "registrations.new_title": "New registration",
   "registrations.description": "Log what you are experiencing right now. Choose the type that matches your current situation.",
   "registrations.trek.title": "Active Desire",
   "registrations.trek.sub": "I am actively seeking or planning to use",
@@ -1215,6 +1220,7 @@ const nl: Record<string, string> = {
   "nav.log": "Logboek",
   "nav.tools": "Tools",
   "nav.more": "Meer",
+  "nav.new_registration": "Nieuwe registratie",
 
   // ── Home ─────────────────────────────────────────────────
   "home.greeting.night": "Nog steeds bezig.",
@@ -1281,6 +1287,9 @@ const nl: Record<string, string> = {
   "home.risk.tooltip": "Deze score is alleen voor zelfreflectie. Het is geen medische diagnose of klinische beoordeling. Als je in crisis bent, neem dan contact op met een zorgprofessional.",
   "home.risk.tooltip_aria": "Over deze risicoscore",
   "home.risk.action": "Log een entry",
+  "home.top_insight.label": "Meest impactvolle inzicht",
+  "home.top_insight.sub": "{n} invoeren in de laatste 30 dagen",
+  "home.top_insight.open": "Open Inzicht",
 
   // ── Insights ──────────────────────────────────────────────
   "insights.entries.title": "Invoeren",
@@ -1344,6 +1353,7 @@ const nl: Record<string, string> = {
 
   // ── Registrations ─────────────────────────────────────────
   "registrations.title": "Registraties",
+  "registrations.new_title": "Nieuwe registratie",
   "registrations.description": "Log wat je nu ervaart. Kies het type dat het beste bij je huidige situatie past.",
   "registrations.trek.title": "Actieve Trek",
   "registrations.trek.sub": "Ik ben actief op zoek of aan het plannen",
