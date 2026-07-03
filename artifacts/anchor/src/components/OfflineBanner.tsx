@@ -1,5 +1,5 @@
 import { WifiOff, Wifi } from "lucide-react";
-import { useT } from "@/hooks/useT";
+import { useT } from "@/hooks/useTranslation";
 
 interface OfflineBannerProps {
   isOffline: boolean;

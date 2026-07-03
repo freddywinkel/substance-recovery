@@ -12,8 +12,12 @@ import { useLocation } from "wouter";
 import { useStore } from "@/hooks/useStore";
 import { updateBoredomLog, type BoredomLog } from "@/db";
 import { useActiveRegistration } from "@/contexts/ActiveRegistrationContext";
-import { useT } from "@/hooks/useT";
-import { PageHeader } from "@/components/PageHeader";
+import { useT } from "@/hooks/useTranslation";
+import { IntensitySlider } from "@/components/tracker/IntensitySlider";
+import { ChipCol } from "@/components/tracker/ChipCol";
+import { MultiSelectGrid } from "@/components/tracker/MultiSelectGrid";
+import { StepLayout } from "@/components/tracker/StepLayout";
+import { ActionBar } from "@/components/tracker/ActionBar";
 import { CheckCircle2, Timer, Zap, Wind, ArrowRight } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────────
@@ -98,95 +102,6 @@ const OUTCOMES = [
 // ─────────────────────────────────────────────────────────────
 // Shared UI components
 // ─────────────────────────────────────────────────────────────
-function IntensitySlider({
-  value, onChange, min = 1, max = 10, label, lowLabel, highLabel,
-}: {
-  value: number; onChange: (v: number) => void;
-  min?: number; max?: number;
-  label?: string; lowLabel?: string; highLabel?: string;
-}) {
-  const pct = ((value - min) / (max - min)) * 100;
-  return (
-    <div className="flex flex-col gap-4">
-      <div className="text-center">
-        <span className="text-7xl font-light text-primary tabular-nums">{value}</span>
-        {label && <p className="text-sm text-muted-foreground mt-1">{label}</p>}
-      </div>
-      <input
-        type="range"
-        min={min}
-        max={max}
-        step={1}
-        value={value}
-        onChange={(e) => onChange(Number(e.target.value))}
-        className="intensity-slider w-full"
-        style={{ "--thumb-pct": `${pct}%` } as React.CSSProperties}
-      />
-      {(lowLabel || highLabel) && (
-        <div className="flex justify-between px-1">
-          <span className="text-xs text-muted-foreground">{lowLabel}</span>
-          <span className="text-xs text-muted-foreground">{highLabel}</span>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function ChipCol({
-  options, value, onChange, translate,
-}: {
-  options: string[];
-  value: string;
-  onChange: (v: string) => void;
-  translate?: (s: string) => string;
-}) {
-  return (
-    <div className="flex flex-col gap-2">
-      {options.map((opt) => (
-        <button
-          key={opt}
-          onClick={() => onChange(opt === value ? "" : opt)}
-          className={`w-full text-left px-4 py-3 rounded-2xl border text-sm font-medium transition-all touch-target ${
-            value === opt
-              ? "bg-primary/10 border-primary text-foreground"
-              : "bg-card border-border text-muted-foreground hover:border-primary/30"
-          }`}
-        >
-          {translate ? translate(opt) : opt}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-function GridMultiChip({
-  options, value, onToggle, cols = 2, translate,
-}: {
-  options: string[];
-  value: string[];
-  onToggle: (v: string) => void;
-  cols?: number;
-  translate?: (s: string) => string;
-}) {
-  return (
-    <div className={`grid gap-2 ${cols === 3 ? "grid-cols-3" : "grid-cols-2"}`}>
-      {options.map((opt) => (
-        <button
-          key={opt}
-          onClick={() => onToggle(opt)}
-          className={`py-3 px-3 rounded-2xl border text-sm font-medium text-left leading-tight transition-all touch-target ${
-            value.includes(opt)
-              ? "bg-primary/10 border-primary text-foreground"
-              : "bg-card border-border text-muted-foreground hover:border-primary/30"
-          }`}
-        >
-          {translate ? translate(opt) : opt}
-        </button>
-      ))}
-    </div>
-  );
-}
-
 function RescueSection({
   title, items, value, onToggle, translate,
 }: {
@@ -204,6 +119,7 @@ function RescueSection({
           <button
             key={item}
             onClick={() => onToggle(item)}
+            aria-pressed={value.includes(item)}
             className={`w-full text-left px-4 py-2.5 rounded-xl border text-sm font-medium transition-all touch-target ${
               value.includes(item)
                 ? "bg-primary/10 border-primary text-foreground"
@@ -388,24 +304,28 @@ export function BoredomTracker() {
   const completionMsg = MESSAGES[action] ?? t("boredom.msg.default");
 
   return (
-    <div className="flex flex-col min-h-dvh bg-background">
-      <PageHeader
-        title={t("boredom.title")}
-        subtitle={step !== "done" ? t("common.step_of").replace("{n}", String(stepIdx + 1)).replace("{total}", String(totalSteps)) : undefined}
-        back
-      />
-
-      {step !== "done" && (
-        <div className="h-0.5 bg-muted mx-4 shrink-0">
-          <div
-            className="h-full bg-primary transition-all duration-300 rounded-full"
-            style={{ width: `${((stepIdx + 1) / totalSteps) * 100}%` }}
+    <StepLayout
+      title={t("boredom.title")}
+      subtitle={step !== "done" ? t("common.step_of").replace("{n}", String(stepIdx + 1)).replace("{total}", String(totalSteps)) : undefined}
+      back
+      step={step !== "done" ? { current: stepIdx + 1, total: totalSteps } : undefined}
+      actionBar={
+        step !== "done" ? (
+          <ActionBar
+            showBack={step !== "type"}
+            onBack={goBack}
+            onNext={goNext}
+            nextIsSubmit={step === "action"}
+            saving={saving}
+            canProceed={canProceed}
+            backLabel={t("common.back")}
+            nextLabel={t("common.next")}
+            saveLabel={t("common.save")}
+            savingLabel={t("common.saving")}
           />
-        </div>
-      )}
-
-      <div className="flex-1 overflow-y-auto scroll-smooth-ios px-4 pt-5 flex flex-col gap-5"
-        style={{ paddingBottom: "calc(9rem + env(safe-area-inset-bottom))" }}>
+        ) : undefined
+      }
+    >
 
         {/* ── Step 1: Restlessness type + intensity ─────────── */}
         {step === "type" && (
@@ -414,7 +334,7 @@ export function BoredomTracker() {
               <h2 className="text-xl font-semibold text-foreground mb-1">{t("boredom.q.type")}</h2>
               <p className="text-sm text-muted-foreground">{t("boredom.q.type_sub")}</p>
             </div>
-            <GridMultiChip
+            <MultiSelectGrid
               options={RESTLESSNESS_TYPES}
               value={restlessnessTypes}
               onToggle={(v) => toggle(setRestlessnessTypes, v)}
@@ -450,6 +370,7 @@ export function BoredomTracker() {
                 <button
                   key={val}
                   onClick={() => toggle(setStimulationNeeds, val)}
+                  aria-pressed={stimulationNeeds.includes(val)}
                   className={`flex flex-col p-4 rounded-2xl border text-left transition-all touch-target ${
                     stimulationNeeds.includes(val)
                       ? "bg-primary/10 border-primary text-foreground"
@@ -605,6 +526,7 @@ export function BoredomTracker() {
                       setOutcome(next);
                       applyOutcome(next);
                     }}
+                    aria-pressed={outcome === value}
                     className={`py-3 px-3 rounded-2xl border text-sm font-medium transition-all touch-target ${
                       outcome === value
                         ? "bg-primary/10 border-primary text-foreground"
@@ -640,35 +562,6 @@ export function BoredomTracker() {
             </div>
           </div>
         )}
-      </div>
-
-      {/* ── Bottom action bar ─────────────────────────────────── */}
-      {step !== "done" && (
-        <div
-          className="fixed left-0 right-0 bg-background/95 backdrop-blur-sm border-t border-border px-4 pt-3 pb-3 z-40"
-          style={{ bottom: "calc(3.5rem + env(safe-area-inset-bottom))" }}
-        >
-          <div className="flex gap-3 max-w-lg mx-auto">
-            {step !== "type" && (
-              <button
-                onClick={goBack}
-                className="touch-target px-5 py-3.5 border border-border rounded-2xl font-medium text-muted-foreground hover:text-foreground transition-colors"
-              >
-                {t("common.back")}
-              </button>
-            )}
-            <button
-              onClick={goNext}
-              disabled={saving || !canProceed}
-              className="flex-1 flex items-center justify-center gap-2 bg-primary text-primary-foreground rounded-2xl py-3.5 font-semibold touch-target hover:opacity-90 active:scale-95 transition-all disabled:opacity-60"
-            >
-              {step === "action"
-                ? (saving ? t("common.saving") : t("common.save"))
-                : <><span>{t("common.next")}</span><ArrowRight size={16} /></>}
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
+    </StepLayout>
   );
 }

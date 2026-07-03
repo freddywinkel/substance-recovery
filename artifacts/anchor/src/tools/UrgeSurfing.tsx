@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { PageHeader } from "@/components/PageHeader";
 import { useLocation } from "wouter";
-import { useT } from "@/hooks/useT";
+import { useT } from "@/hooks/useTranslation";
 import { Play, Pause, CheckCircle2 } from "lucide-react";
 
 const TOTAL_SECONDS = 900;

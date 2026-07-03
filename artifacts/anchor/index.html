@@ -12,7 +12,7 @@
     -->
     <meta
       name="viewport"
-      content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1, user-scalable=no"
+      content="width=device-width, initial-scale=1"
     />
 
     <!-- ── Theme color ─────────────────────────────────────── -->
@@ -32,6 +32,17 @@
     <meta name="description" content="A private, offline-capable companion for addiction recovery support." />
     <meta name="application-name" content="Anchor - Substance Recovery" />
     <meta name="mobile-web-app-capable" content="yes" />
+
+    <!-- ── Open Graph ──────────────────────────────────────── -->
+    <meta property="og:title" content="Anchor — Substance Recovery" />
+    <meta property="og:description" content="A private, offline-first companion for substance recovery." />
+    <meta property="og:image" content="/opengraph.jpg" />
+
+    <!-- ── Content Security Policy ───────────────────────── -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://*.clerk.accounts.dev; frame-ancestors 'none'; base-uri 'self'; form-action 'self';"
+    />
 
     <!-- ── Page title ──────────────────────────────────────── -->
     <title>Anchor - Substance Recovery</title>

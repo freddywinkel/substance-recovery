@@ -3,7 +3,7 @@
  */
 import { useState, useEffect, useCallback } from "react";
 import { useLocation } from "wouter";
-import { useT } from "@/hooks/useT";
+import { useT } from "@/hooks/useTranslation";
 import { X } from "lucide-react";
 
 function formatTime(s: number): string {

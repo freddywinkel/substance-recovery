@@ -97,6 +97,27 @@ function chunk<T>(arr: T[], size: number): T[][] {
   return out;
 }
 
+const RETRY_DELAYS = [1000, 3000, 9000];
+
+async function withRetry<T>(operation: () => Promise<T>): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= RETRY_DELAYS.length; attempt++) {
+    try {
+      return await operation();
+    } catch (err) {
+      lastError = err;
+      const delay = RETRY_DELAYS[attempt];
+      if (delay === undefined) break;
+      console.warn(
+        `Sync network call failed (attempt ${attempt + 1}/${RETRY_DELAYS.length + 1}), retrying in ${delay}ms...`,
+        err,
+      );
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+  }
+  throw lastError;
+}
+
 export interface SyncOutcome {
   pushed: number;
   applied: number;
@@ -122,7 +143,7 @@ export function runSync(userId: string): Promise<SyncOutcome> {
   if (running && runningUserId === userId) return running;
   const prev = running ?? Promise.resolve();
   const next = prev
-    .catch(() => {})
+    .catch((err) => { console.error('Sync failed:', err); return { status: 'error' }; })
     .then(() => doRunSync(userId));
   running = next;
   runningUserId = userId;
@@ -188,10 +209,10 @@ async function doRunSync(userId: string): Promise<SyncOutcome> {
   // cursor as we go.
   let lastHasMore = true;
   for (const group of chunk(prepared, PUSH_CHUNK)) {
-    const result = await syncRecords(
+    const result = await withRetry(() => syncRecords(
       { changes: group.map((g) => g.change), cursor, limit: PULL_LIMIT },
       { credentials: "include" },
-    );
+    ));
     await apply(result.records);
     cursor = result.cursor;
     await setSyncCursor(userId, cursor);
@@ -205,10 +226,10 @@ async function doRunSync(userId: string): Promise<SyncOutcome> {
   // dirty changes to push, so a fresh device still pulls its account data.
   if (prepared.length === 0) lastHasMore = true;
   while (lastHasMore) {
-    const result = await syncRecords(
+    const result = await withRetry(() => syncRecords(
       { changes: [], cursor, limit: PULL_LIMIT },
       { credentials: "include" },
-    );
+    ));
     await apply(result.records);
     cursor = result.cursor;
     await setSyncCursor(userId, cursor);

@@ -1,7 +1,7 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { AlertCircle, Home } from "lucide-react";
 import { Link } from "wouter";
-import { useT } from "@/hooks/useT";
+import { useT } from "@/hooks/useTranslation";
 
 export default function NotFound() {
   const { t } = useT();

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { PageHeader } from "@/components/PageHeader";
 import { useLocation } from "wouter";
-import { useT } from "@/hooks/useT";
+import { useT } from "@/hooks/useTranslation";
 import { Heart, CheckCircle2 } from "lucide-react";
 
 export function SelfCompassion() {

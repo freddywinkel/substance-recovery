@@ -37,6 +37,11 @@ yarn-error.log
 testem.log
 /typings
 
+# Environment Files
+.env
+.env.*
+!.env.example
+
 # System Files
 .DS_Store
 Thumbs.db
@@ -47,3 +52,9 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+
+# Audit artifacts & temp files
+artifacts/screenshots/
+artifacts/APP_CONSISTENCY_AUDIT*.md
+artifacts/anchor/serve-cors.cjs
+artifacts/anchor/dist/

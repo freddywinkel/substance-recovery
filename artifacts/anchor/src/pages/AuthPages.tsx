@@ -1,7 +1,7 @@
 import { SignIn, SignUp } from "@clerk/react";
 import { basePath } from "@/lib/clerk";
 import { useClerkAvailable } from "@/lib/clerk-safe";
-import { useT } from "@/hooks/useT";
+import { useT } from "@/hooks/useTranslation";
 import { CloudOff, ArrowLeft } from "lucide-react";
 import { useLocation } from "wouter";
 

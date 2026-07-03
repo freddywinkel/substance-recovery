@@ -81,13 +81,13 @@ export function calculateRiskScore(inputs: RiskInputs): RiskResult {
       score += 5;
     } else if (dsll <= 5) {
       score += 15;
-      factors.push("No check-in for several days");
+      factors.push("No log entry for several days");
     } else if (dsll <= 10) {
       score += 25;
-      factors.push("No check-in for over a week");
+      factors.push("No log entry for over a week");
     } else {
       score += 35;
-      factors.push("No check-in for more than 10 days");
+      factors.push("No log entry for more than 10 days");
     }
   } else {
     score += 20;

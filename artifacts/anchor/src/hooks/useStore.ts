@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useCallback } from "react";
 import {
   JournalEntry,
   CravingLog,
@@ -7,33 +7,15 @@ import {
   BoredomLog,
   CrisisService,
   EmergencyContact,
-  addJournalEntry,
-  getJournalEntries,
-  deleteJournalEntry,
-  getSetting,
-  setSetting,
   clearAllData,
-  addCravingLog,
-  getCravingLogs,
-  deleteCravingLog,
-  addRelapseLog,
-  getRelapseLogs,
-  deleteRelapseLog,
-  addAnxietyLog,
-  getAnxietyLogs,
-  deleteAnxietyLog,
-  addBoredomLog,
-  getBoredomLogs,
-  deleteBoredomLog,
-  getCrisisService,
-  saveCrisisService,
-  getEmergencyContacts,
-  saveEmergencyContacts,
-  SYNC_APPLIED_EVENT,
 } from "@/db";
 import { eraseAccountAndLocalData } from "@/lib/sync-engine";
+import { useJournal } from "./useJournal";
+import { useLogs } from "./useLogs";
+import { useSettings } from "./useSettings";
+import { useUI } from "./useUI";
 
-export type Theme = "dark" | "light";
+export type { Theme } from "./useUI";
 
 interface StoreState {
   journal: JournalEntry[];
@@ -41,7 +23,7 @@ interface StoreState {
   relapseLogs: RelapseLog[];
   anxietyLogs: AnxietyLog[];
   boredomLogs: BoredomLog[];
-  theme: Theme;
+  theme: import("./useUI").Theme;
   sobrietyStartDate: string | null;
   crisisService: CrisisService | null;
   emergencyContacts: EmergencyContact[];
@@ -59,7 +41,7 @@ interface StoreActions {
   removeAnxiety: (id: string) => Promise<void>;
   logBoredom: (entry: Omit<BoredomLog, "id">) => Promise<BoredomLog>;
   removeBoredom: (id: string) => Promise<void>;
-  setTheme: (t: Theme) => Promise<void>;
+  setTheme: (t: import("./useUI").Theme) => Promise<void>;
   setSobrietyStartDate: (date: string | null) => Promise<void>;
   setCrisisService: (service: CrisisService | null) => Promise<void>;
   setEmergencyContacts: (contacts: EmergencyContact[]) => Promise<void>;
@@ -69,178 +51,98 @@ interface StoreActions {
   }) => Promise<void>;
   refresh: () => Promise<void>;
   exportData: () => Promise<Record<string, unknown>>;
-  importData: (payload: Record<string, unknown>) => Promise<{ imported: number; skipped: number; errors: string[] }>;
+  importData: (
+    payload: Record<string, unknown>
+  ) => Promise<{ imported: number; skipped: number; errors: string[] }>;
 }
 
 export function useStore(): StoreState & StoreActions {
-  const [journal, setJournal] = useState<JournalEntry[]>([]);
-  const [cravingLogs, setCravingLogs] = useState<CravingLog[]>([]);
-  const [relapseLogs, setRelapseLogs] = useState<RelapseLog[]>([]);
-  const [anxietyLogs, setAnxietyLogs] = useState<AnxietyLog[]>([]);
-  const [boredomLogs, setBoredomLogs] = useState<BoredomLog[]>([]);
-  const [theme, setThemeState] = useState<Theme>("dark");
-  const [sobrietyStartDate, setSobrietyStartDateState] = useState<string | null>(null);
-  const [crisisService, setCrisisServiceState] = useState<CrisisService | null>(null);
-  const [emergencyContacts, setEmergencyContactsState] = useState<EmergencyContact[]>([]);
-  const [loading, setLoading] = useState(true);
+  const journalHook = useJournal();
+  const logsHook = useLogs();
+  const settingsHook = useSettings();
+  const uiHook = useUI();
 
-  const load = useCallback(async () => {
-    const [entries, cravings, relapses, anxieties, boredoms, savedTheme, savedSobrietyDate, svc, contacts] = await Promise.all([
-      getJournalEntries(),
-      getCravingLogs(),
-      getRelapseLogs(),
-      getAnxietyLogs(),
-      getBoredomLogs(),
-      getSetting("theme", "dark"),
-      getSetting("sobrietyStartDate", ""),
-      getCrisisService(),
-      getEmergencyContacts(),
+  const loading =
+    journalHook.loading ||
+    logsHook.loading ||
+    settingsHook.loading ||
+    uiHook.loading;
+
+  const refresh = useCallback(async () => {
+    await Promise.all([
+      journalHook.reload(),
+      logsHook.reload(),
+      settingsHook.reload(),
+      uiHook.reload(),
     ]);
-    setJournal(entries);
-    setCravingLogs(cravings);
-    setRelapseLogs(relapses);
-    setAnxietyLogs(anxieties);
-    setBoredomLogs(boredoms);
-    setThemeState((savedTheme as Theme) ?? "dark");
-    const raw = savedSobrietyDate as string;
-    setSobrietyStartDateState(raw && raw.length > 0 ? raw : null);
-    setCrisisServiceState(svc);
-    setEmergencyContactsState(contacts);
-    setLoading(false);
-  }, []);
+  }, [journalHook.reload, logsHook.reload, settingsHook.reload, uiHook.reload]);
 
-  useEffect(() => { load(); }, [load]);
-
-  // Refresh when a cloud sync pulls in remote changes (cross-device updates).
-  useEffect(() => {
-    const onApplied = () => { void load(); };
-    window.addEventListener(SYNC_APPLIED_EVENT, onApplied);
-    return () => window.removeEventListener(SYNC_APPLIED_EVENT, onApplied);
-  }, [load]);
-
-  useEffect(() => {
-    document.documentElement.setAttribute("data-theme", theme);
-  }, [theme]);
-
-  const logEntry = useCallback(async (entry: Omit<JournalEntry, "id">) => {
-    await addJournalEntry(entry);
-    setJournal(await getJournalEntries());
-  }, []);
-
-  const removeEntry = useCallback(async (id: string) => {
-    await deleteJournalEntry(id);
-    setJournal(await getJournalEntries());
-  }, []);
-
-  const logCraving = useCallback(async (entry: Omit<CravingLog, "id">) => {
-    const result = await addCravingLog(entry);
-    setCravingLogs(await getCravingLogs());
-    return result;
-  }, []);
-
-  const removeCraving = useCallback(async (id: string) => {
-    await deleteCravingLog(id);
-    setCravingLogs(await getCravingLogs());
-  }, []);
-
-  const logRelapse = useCallback(async (entry: Omit<RelapseLog, "id">) => {
-    const result = await addRelapseLog(entry);
-    setRelapseLogs(await getRelapseLogs());
-    return result;
-  }, []);
-
-  const removeRelapse = useCallback(async (id: string) => {
-    await deleteRelapseLog(id);
-    setRelapseLogs(await getRelapseLogs());
-  }, []);
-
-  const logAnxiety = useCallback(async (entry: Omit<AnxietyLog, "id">) => {
-    const result = await addAnxietyLog(entry);
-    setAnxietyLogs(await getAnxietyLogs());
-    return result;
-  }, []);
-
-  const removeAnxiety = useCallback(async (id: string) => {
-    await deleteAnxietyLog(id);
-    setAnxietyLogs(await getAnxietyLogs());
-  }, []);
-
-  const logBoredom = useCallback(async (entry: Omit<BoredomLog, "id">) => {
-    const result = await addBoredomLog(entry);
-    setBoredomLogs(await getBoredomLogs());
-    return result;
-  }, []);
-
-  const removeBoredom = useCallback(async (id: string) => {
-    await deleteBoredomLog(id);
-    setBoredomLogs(await getBoredomLogs());
-  }, []);
-
-  const setTheme = useCallback(async (t: Theme) => {
-    await setSetting("theme", t);
-    setThemeState(t);
-  }, []);
-
-  const setSobrietyStartDate = useCallback(async (date: string | null) => {
-    await setSetting("sobrietyStartDate", date ?? "");
-    setSobrietyStartDateState(date);
-  }, []);
-
-  const setCrisisService = useCallback(async (service: CrisisService | null) => {
-    await saveCrisisService(service);
-    setCrisisServiceState(service);
-  }, []);
-
-  const setEmergencyContacts = useCallback(async (contacts: EmergencyContact[]) => {
-    await saveEmergencyContacts(contacts);
-    setEmergencyContactsState(contacts);
-  }, []);
-
-  const resetAllData = useCallback(async (opts?: {
-    signedIn?: boolean;
-    userId?: string | null;
-  }) => {
-    if (opts?.signedIn && opts.userId) {
-      // Signed in: also wipe the cloud copy (tombstones pushed) so erased data
-      // does not survive on the account and re-sync back to this or other devices.
-      await eraseAccountAndLocalData(opts.userId);
-    } else {
-      await clearAllData();
-    }
-    setJournal([]);
-    setCravingLogs([]);
-    setRelapseLogs([]);
-    setAnxietyLogs([]);
-    setBoredomLogs([]);
-    setSobrietyStartDateState(null);
-    setCrisisServiceState(null);
-    setEmergencyContactsState([]);
-    setThemeState("dark");
-    document.documentElement.setAttribute("data-theme", "dark");
-  }, []);
-
-  const refresh = useCallback(async () => { await load(); }, [load]);
+  const resetAllData = useCallback(
+    async (opts?: { signedIn?: boolean; userId?: string | null }) => {
+      if (opts?.signedIn && opts.userId) {
+        await eraseAccountAndLocalData(opts.userId);
+      } else {
+        await clearAllData();
+      }
+      await Promise.all([
+        journalHook.reload(),
+        logsHook.reload(),
+        settingsHook.reload(),
+        uiHook.reload(),
+      ]);
+    },
+    [journalHook.reload, logsHook.reload, settingsHook.reload, uiHook.reload]
+  );
 
   const exportData = useCallback(async () => {
     return import("@/db").then((mod) => mod.exportAllData());
   }, []);
 
-  const importData = useCallback(async (payload: Record<string, unknown>) => {
-    const result = await import("@/db").then((mod) => mod.importAllData(payload));
-    await load();
-    return result;
-  }, [load]);
+  const importData = useCallback(
+    async (payload: Record<string, unknown>) => {
+      const result = await import("@/db").then((mod) =>
+        mod.importAllData(payload)
+      );
+      await refresh();
+      return result;
+    },
+    [refresh]
+  );
 
   return {
-    journal, cravingLogs, relapseLogs, anxietyLogs, boredomLogs,
-    theme, sobrietyStartDate, crisisService, emergencyContacts, loading,
-    logEntry, removeEntry,
-    logCraving, removeCraving,
-    logRelapse, removeRelapse,
-    logAnxiety, removeAnxiety,
-    logBoredom, removeBoredom,
-    setTheme, setSobrietyStartDate,
-    setCrisisService, setEmergencyContacts,
-    resetAllData, refresh, exportData, importData,
+    journal: journalHook.journal,
+    cravingLogs: logsHook.cravingLogs,
+    relapseLogs: logsHook.relapseLogs,
+    anxietyLogs: logsHook.anxietyLogs,
+    boredomLogs: logsHook.boredomLogs,
+    theme: uiHook.theme,
+    sobrietyStartDate: settingsHook.sobrietyStartDate,
+    crisisService: settingsHook.crisisService,
+    emergencyContacts: settingsHook.emergencyContacts,
+    loading,
+    logEntry: journalHook.logEntry,
+    removeEntry: journalHook.removeEntry,
+    logCraving: logsHook.logCraving,
+    removeCraving: logsHook.removeCraving,
+    logRelapse: logsHook.logRelapse,
+    removeRelapse: logsHook.removeRelapse,
+    logAnxiety: logsHook.logAnxiety,
+    removeAnxiety: logsHook.removeAnxiety,
+    logBoredom: logsHook.logBoredom,
+    removeBoredom: logsHook.removeBoredom,
+    setTheme: uiHook.setTheme,
+    setSobrietyStartDate: settingsHook.setSobrietyStartDate,
+    setCrisisService: settingsHook.setCrisisService,
+    setEmergencyContacts: settingsHook.setEmergencyContacts,
+    resetAllData,
+    refresh,
+    exportData,
+    importData,
   };
 }
+
+// Barrel re-exports for gradual adoption
+export { useJournal } from "./useJournal";
+export { useLogs } from "./useLogs";
+export { useSettings } from "./useSettings";
+export { useUI } from "./useUI";

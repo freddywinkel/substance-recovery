@@ -1,6 +1,6 @@
 import { Show, useUser, useClerk } from "@clerk/react";
 import { useSync } from "@/contexts/SyncContext";
-import { useT } from "@/hooks/useT";
+import { useT } from "@/hooks/useTranslation";
 import { useLocation } from "wouter";
 import { Cloud, LogOut, RefreshCw, Check, CloudOff, AlertCircle } from "lucide-react";
 

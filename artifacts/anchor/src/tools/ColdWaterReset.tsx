@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { PageHeader } from "@/components/PageHeader";
 import { useLocation } from "wouter";
-import { useT } from "@/hooks/useT";
+import { useT } from "@/hooks/useTranslation";
 import { Droplets, CheckCircle2, ArrowRight } from "lucide-react";
 
 export function ColdWaterReset() {

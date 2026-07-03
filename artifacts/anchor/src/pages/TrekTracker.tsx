@@ -1,10 +1,15 @@
 import { useState, useCallback, useEffect, useMemo } from "react";
 import { useLocation } from "wouter";
 import { useStore } from "@/hooks/useStore";
-import { useT } from "@/hooks/useT";
+import { useT } from "@/hooks/useTranslation";
 import { PageHeader } from "@/components/PageHeader";
 import { useResumableDraft } from "@/contexts/ActiveRegistrationContext";
-import { CheckCircle2, ArrowRight, Flame, Info } from "lucide-react";
+import { IntensitySlider } from "@/components/tracker/IntensitySlider";
+import { ChipCol } from "@/components/tracker/ChipCol";
+import { MultiSelectGrid } from "@/components/tracker/MultiSelectGrid";
+import { StepLayout } from "@/components/tracker/StepLayout";
+import { ActionBar } from "@/components/tracker/ActionBar";
+import { Flame, Info } from "lucide-react";
 
 // ── Step type ────────────────────────────────────────────────
 type Step = "type" | "planning" | "inner" | "need" | "substance" | "action" | "outcome" | "done";
@@ -82,92 +87,6 @@ const USE_OUTCOMES: { value: "not_used" | "used" | "unsure"; labelKey: string }[
   { value: "used", labelKey: "tracker.outcome.used" },
   { value: "unsure", labelKey: "tracker.outcome.unsure" },
 ];
-
-// ── Helpers ──────────────────────────────────────────────────
-function IntensitySlider({
-  value, onChange, min = 0, max = 10, label, lowLabel, highLabel,
-}: {
-  value: number; onChange: (v: number) => void;
-  min?: number; max?: number;
-  label?: string; lowLabel?: string; highLabel?: string;
-}) {
-  const pct = ((value - min) / (max - min)) * 100;
-  return (
-    <div className="flex flex-col gap-4">
-      <div className="text-center">
-        <span className="text-7xl font-light text-primary tabular-nums">{value}</span>
-        {label && <p className="text-sm text-muted-foreground mt-1">{label}</p>}
-      </div>
-      <input
-        type="range" min={min} max={max} step={1} value={value}
-        onChange={(e) => onChange(Number(e.target.value))}
-        className="intensity-slider w-full"
-        style={{ "--thumb-pct": `${pct}%` } as React.CSSProperties}
-      />
-      {(lowLabel || highLabel) && (
-        <div className="flex justify-between px-1">
-          <span className="text-xs text-muted-foreground">{lowLabel}</span>
-          <span className="text-xs text-muted-foreground">{highLabel}</span>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function ChipGrid({
-  options, selected, onToggle, multi = true, translate,
-}: {
-  options: string[];
-  selected: string[];
-  onToggle: (v: string) => void;
-  multi?: boolean;
-  translate?: (s: string) => string;
-}) {
-  return (
-    <div className="grid grid-cols-2 gap-2">
-      {options.map((opt) => (
-        <button
-          key={opt}
-          onClick={() => onToggle(opt)}
-          className={`py-3 px-3 rounded-2xl border text-sm font-medium text-left leading-tight transition-all touch-target ${
-            selected.includes(opt)
-              ? "bg-primary/10 border-primary text-foreground"
-              : "bg-card border-border text-muted-foreground hover:border-primary/30"
-          }`}
-        >
-          {translate ? translate(opt) : opt}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-function ChipCol({
-  options, value, onChange, translate,
-}: {
-  options: string[];
-  value: string;
-  onChange: (v: string) => void;
-  translate?: (s: string) => string;
-}) {
-  return (
-    <div className="flex flex-col gap-2">
-      {options.map((opt) => (
-        <button
-          key={opt}
-          onClick={() => onChange(value === opt ? "" : opt)}
-          className={`w-full text-left px-4 py-3.5 rounded-2xl border text-sm font-medium transition-all touch-target ${
-            value === opt
-              ? "bg-primary/10 border-primary text-foreground"
-              : "bg-card border-border text-muted-foreground hover:border-primary/30"
-          }`}
-        >
-          {translate ? translate(opt) : opt}
-        </button>
-      ))}
-    </div>
-  );
-}
 
 // ── Draft state ───────────────────────────────────────────────
 interface TrekDraft {
@@ -428,31 +347,36 @@ export function TrekTracker() {
 
   // ── Step content ──────────────────────────────────────────
   return (
-    <div className="flex flex-col min-h-dvh bg-background">
-      <PageHeader title={t("trek.title")} back subtitle={STEP_LABELS[step]} />
-
-      {/* Progress bar */}
-      <div className="h-0.5 bg-muted shrink-0">
-        <div className="h-full bg-primary transition-all duration-400" style={{ width: `${progressPct}%` }} />
-      </div>
-
-      {/* Step counter */}
-      <div className="flex items-center justify-between px-4 pt-3 pb-0 shrink-0">
-        <p className="text-xs text-muted-foreground">
-          {t("common.step_of").replace("{n}", String(stepIdx + 1)).replace("{total}", String(STEP_ORDER.length))}
-        </p>
-      </div>
-
-      <div className="flex-1 overflow-y-auto scroll-smooth-ios px-4 pt-4 flex flex-col gap-4"
-        style={{ paddingBottom: "calc(9rem + env(safe-area-inset-bottom))" }}>
+    <StepLayout
+      title={t("trek.title")}
+      back
+      subtitle={STEP_LABELS[step]}
+      step={{ current: stepIdx + 1, total: STEP_ORDER.length }}
+      showStepCounter
+      contentClassName="pt-4 flex flex-col gap-4"
+      actionBar={
+        <ActionBar
+          showBack={canGoBack}
+          onBack={goBack}
+          onNext={goNext}
+          nextIsSubmit={stepIdx === STEP_ORDER.length - 1}
+          saving={saving}
+          canProceed={canProceed}
+          backLabel={t("common.back")}
+          nextLabel={t("common.next")}
+          saveLabel={t("common.save")}
+          savingLabel={t("common.saving")}
+        />
+      }
+    >
 
         {/* ── Type & Intensity ───────────────────────────────── */}
         {step === "type" && (
           <>
             <p className="text-base font-medium text-foreground">{t("trek.q.type")}</p>
-            <ChipGrid
+            <MultiSelectGrid
               options={TREK_TYPES}
-              selected={draft.trekTypes}
+              value={draft.trekTypes}
               onToggle={toggleType}
               translate={tOpt}
             />
@@ -501,15 +425,14 @@ export function TrekTracker() {
                 onChange={(e) => update("locationOther", e.target.value)}
                 placeholder={t("trek.location.placeholder")}
                 rows={2}
-                autoFocus
                 className="w-full px-4 py-3 rounded-xl border border-border bg-card text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 resize-none"
               />
             )}
             <div className="h-px bg-border my-1" />
             <p className="text-base font-medium text-foreground">{t("trek.q.trigger")}</p>
-            <ChipGrid
+            <MultiSelectGrid
               options={TREK_TRIGGERS}
-              selected={draft.triggers}
+              value={draft.triggers}
               onToggle={toggleTrigger}
               translate={tOpt}
             />
@@ -519,7 +442,6 @@ export function TrekTracker() {
                 onChange={(e) => update("triggerNote", e.target.value)}
                 placeholder={t("trek.triggerNote.placeholder")}
                 rows={3}
-                autoFocus
                 className="w-full px-4 py-3 rounded-xl border border-border bg-card text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 resize-none"
               />
             )}
@@ -535,9 +457,9 @@ export function TrekTracker() {
             </div>
             <p className="text-base font-medium text-foreground">{t("craving.q.emotions")}</p>
             <p className="text-sm text-muted-foreground -mt-2">{t("craving.q.emotions_sub")}</p>
-            <ChipGrid
+            <MultiSelectGrid
               options={EMOTIONS}
-              selected={draft.emotions}
+              value={draft.emotions}
               onToggle={toggleEmotion}
               translate={tOpt}
             />
@@ -551,18 +473,18 @@ export function TrekTracker() {
             <div className="h-px bg-border my-1" />
             <p className="text-base font-medium text-foreground">{t("craving.q.physical")}</p>
             <p className="text-sm text-muted-foreground -mt-2">{t("craving.q.physical_sub")}</p>
-            <ChipGrid
+            <MultiSelectGrid
               options={PHYSICAL}
-              selected={draft.physicalSensations}
+              value={draft.physicalSensations}
               onToggle={togglePhysical}
               translate={tOpt}
             />
             <div className="h-px bg-border my-1" />
             <p className="text-base font-medium text-foreground">{t("craving.q.thoughts")}</p>
             <p className="text-sm text-muted-foreground -mt-2">{t("craving.q.thoughts_sub")}</p>
-            <ChipGrid
+            <MultiSelectGrid
               options={THOUGHTS}
-              selected={draft.thoughtPresets}
+              value={draft.thoughtPresets}
               onToggle={toggleThought}
               translate={tOpt}
             />
@@ -580,9 +502,9 @@ export function TrekTracker() {
         {step === "need" && (
           <>
             <p className="text-base font-medium text-foreground">{t("trek.q.need")}</p>
-            <ChipGrid
+            <MultiSelectGrid
               options={TREK_NEEDS}
-              selected={draft.needTypes}
+              value={draft.needTypes}
               onToggle={toggleNeed}
               translate={tOpt}
             />
@@ -592,7 +514,6 @@ export function TrekTracker() {
                 onChange={(e) => update("needOther", e.target.value)}
                 placeholder={t("trek.needOther.placeholder")}
                 rows={2}
-                autoFocus
                 className="w-full px-4 py-3 rounded-xl border border-border bg-card text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 resize-none"
               />
             )}
@@ -604,9 +525,9 @@ export function TrekTracker() {
           <>
             <p className="text-base font-medium text-foreground">{t("craving.q.substance")}</p>
             <p className="text-sm text-muted-foreground -mt-2">{t("craving.q.substance_sub")}</p>
-            <ChipGrid
+            <MultiSelectGrid
               options={SUBSTANCES}
-              selected={draft.substances}
+              value={draft.substances}
               onToggle={toggleSubstance}
               translate={tOpt}
             />
@@ -622,6 +543,7 @@ export function TrekTracker() {
                 <button
                   key={value}
                   onClick={() => update("chosenAction", draft.chosenAction === value ? "" : value)}
+                  aria-pressed={draft.chosenAction === value}
                   className={`w-full text-left px-4 py-3.5 rounded-2xl border text-sm font-medium transition-all touch-target flex items-center justify-between ${
                     draft.chosenAction === value
                       ? "bg-primary/10 border-primary text-foreground"
@@ -657,6 +579,7 @@ export function TrekTracker() {
                 <button
                   key={value}
                   onClick={() => update("useOutcome", draft.useOutcome === value ? "" : value)}
+                  aria-pressed={draft.useOutcome === value}
                   className={`w-full text-left px-4 py-3.5 rounded-2xl border text-sm font-medium transition-all touch-target flex items-center justify-between ${
                     draft.useOutcome === value
                       ? "bg-primary/10 border-primary text-foreground"
@@ -672,34 +595,6 @@ export function TrekTracker() {
             </div>
           </>
         )}
-      </div>
-
-      {/* Sticky bottom bar */}
-      <div
-        className="fixed left-0 right-0 bg-background/95 backdrop-blur-sm border-t border-border px-4 pt-3 pb-3 z-40"
-        style={{ bottom: "calc(3.5rem + env(safe-area-inset-bottom))" }}
-      >
-        <div className="flex gap-3 max-w-lg mx-auto">
-          {canGoBack && (
-            <button
-              onClick={goBack}
-              className="touch-target px-5 py-3.5 border border-border rounded-2xl font-medium text-muted-foreground hover:text-foreground transition-colors"
-            >
-              {t("common.back")}
-            </button>
-          )}
-          <button
-            disabled={saving || !canProceed}
-            onClick={goNext}
-            className="flex-1 flex items-center justify-center gap-2 bg-primary text-primary-foreground rounded-2xl py-3.5 font-semibold touch-target hover:opacity-90 active:scale-95 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
-          >
-            {stepIdx === STEP_ORDER.length - 1
-              ? (saving ? t("common.saving") : t("common.save"))
-              : <><span>{t("common.next")}</span><ArrowRight size={16} /></>
-            }
-          </button>
-        </div>
-      </div>
-    </div>
+    </StepLayout>
   );
 }

@@ -27,7 +27,8 @@ export default defineConfig({
   base: basePath,
   plugins: [
     react(),
-    tailwindcss({ optimize: false }),
+    tailwindcss(),
+
     runtimeErrorOverlay(),
     VitePWA({
       registerType: "autoUpdate",
@@ -43,7 +44,7 @@ export default defineConfig({
         short_name: "Substance Recovery",
         description: "A private, offline-capable companion for addiction recovery support.",
         lang: "en",
-        theme_color: "#131820",
+        theme_color: "#0D0C0B",
         background_color: "#131820",
         display: "standalone",
         orientation: "portrait",
@@ -72,16 +73,6 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ["**/*.{js,css,html,ico,png,svg,woff,woff2}"],
-        runtimeCaching: [
-          {
-            urlPattern: /^https:\/\/fonts\.(googleapis|gstatic)\.com\/.*/i,
-            handler: "CacheFirst",
-            options: {
-              cacheName: "google-fonts-cache",
-              expiration: { maxEntries: 10, maxAgeSeconds: 60 * 60 * 24 * 365 },
-            },
-          },
-        ],
       },
       devOptions: {
         enabled: false,

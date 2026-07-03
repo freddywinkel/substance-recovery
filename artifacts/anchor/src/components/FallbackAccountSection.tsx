@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useT } from "@/hooks/useT";
+import { useT } from "@/hooks/useTranslation";
 import { Cloud, CloudOff, LogIn, X } from "lucide-react";
 
 export function FallbackAccountSection() {

@@ -8,7 +8,7 @@ import {
   Plus,
 } from "lucide-react";
 import { useState } from "react";
-import { useT } from "@/hooks/useT";
+import { useT } from "@/hooks/useTranslation";
 import { MoreMenu } from "./MoreMenu";
 import { QuickLog } from "./QuickLog";
 
@@ -36,7 +36,7 @@ export function BottomNav() {
   return (
     <>
       <nav
-        className="fixed bottom-4 left-1/2 z-50 w-[calc(100%-1.5rem)] max-w-lg -translate-x-1/2 rounded-full border border-white/10 bg-[#151313]/80 px-2 py-2 shadow-2xl shadow-black/50 backdrop-blur-2xl pb-[calc(env(safe-area-inset-bottom)+0.5rem)]"
+        className="fixed bottom-4 left-1/2 z-50 w-[calc(100%-1.5rem)] max-w-lg -translate-x-1/2 rounded-full border border-white/10 bg-background/80 px-2 py-2 shadow-2xl shadow-black/50 backdrop-blur-2xl pb-[calc(env(safe-area-inset-bottom)+0.5rem)]"
         aria-label={t("nav.aria")}
       >
         <div className="grid grid-cols-5 items-center">
@@ -46,7 +46,7 @@ export function BottomNav() {
             return (
               <Link key={to} href={to} asChild>
                 <a
-                  className="group relative flex flex-col items-center justify-center gap-0.5 rounded-full py-1.5 transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                  className="group relative flex flex-col items-center justify-center gap-0.5 rounded-full py-1.5 transition-colors duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
                   aria-label={label}
                   aria-current={isActive ? "page" : undefined}
                 >
@@ -67,7 +67,7 @@ export function BottomNav() {
                     }`}
                   />
                   <span
-                    className={`relative text-[8px] font-medium tracking-tight transition-colors duration-300 ${
+                    className={`relative text-[10px] font-medium tracking-tight transition-colors duration-300 ${
                       isActive
                         ? "text-white"
                         : "text-white/35 group-hover:text-white/50"
@@ -91,7 +91,7 @@ export function BottomNav() {
               }`}
             />
             <span
-              className={`relative text-[8px] font-medium tracking-tight transition-colors duration-300 ${
+              className={`relative text-[10px] font-medium tracking-tight transition-colors duration-300 ${
                 isMoreActive
                   ? "text-white"
                   : "text-white/35 group-hover:text-white/50"

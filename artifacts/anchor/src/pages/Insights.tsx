@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { useStore } from "@/hooks/useStore";
-import { useT } from "@/hooks/useT";
+import { useT } from "@/hooks/useTranslation";
 import { PageHeader } from "@/components/PageHeader";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
@@ -15,16 +15,17 @@ import {
   type FreqItem,
 } from "@/lib/analytics";
 import {
-  Zap, Flame, AlertTriangle, Brain, Coffee, Trash2, ChevronDown, ChevronUp,
+  Trash2, ChevronDown, ChevronUp,
   BookOpen, BarChart3, TrendingUp,
 } from "lucide-react";
+import { CATEGORY_META } from "@/lib/constants";
 
-const CATEGORY_META: Record<string, { icon: typeof Zap; color: string; labelKey: string }> = {
-  trek: { icon: Flame, color: "text-amber-300", labelKey: "registrations.trek.title" },
-  craving: { icon: Zap, color: "text-teal-300", labelKey: "registrations.craving.title" },
-  anxiety: { icon: Brain, color: "text-violet-300", labelKey: "registrations.anxiety.title" },
-  boredom: { icon: Coffee, color: "text-emerald-300", labelKey: "registrations.boredom.title" },
-  relapse: { icon: AlertTriangle, color: "text-rose-300", labelKey: "registrations.relapse.title" },
+const LABEL_KEYS: Record<string, string> = {
+  trek: "registrations.trek.title",
+  craving: "registrations.craving.title",
+  anxiety: "registrations.anxiety.title",
+  boredom: "registrations.boredom.title",
+  relapse: "registrations.relapse.title",
 };
 
 function fmtDate(ts: number) {
@@ -199,6 +200,7 @@ export function Insights() {
                   const Icon = meta.icon;
                   const isExpanded = expandedId === entry.id;
                   const isConfirm = deleteConfirm === entry.id;
+                  const contentId = `entry-details-${entry.id}`;
                   return (
                     <div
                       key={entry.id}
@@ -209,7 +211,7 @@ export function Insights() {
                           <Icon size={18} strokeWidth={1.8} />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold text-foreground">{t(meta.labelKey)}</p>
+                          <p className="text-sm font-semibold text-foreground">{t(LABEL_KEYS[entry._type] || LABEL_KEYS.craving)}</p>
                           <p className="text-[10px] text-muted-foreground">{fmtDate(entry.timestamp)}</p>
                         </div>
                         {(entry as any).intensity != null && (
@@ -220,13 +222,15 @@ export function Insights() {
                           onClick={() => setExpandedId(isExpanded ? null : entry.id)}
                           className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
                           aria-label={isExpanded ? "Collapse" : "Expand"}
+                          aria-expanded={isExpanded}
+                          aria-controls={contentId}
                         >
                           {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                         </button>
                       </div>
 
                       {isExpanded && (
-                        <div className="mt-3 pt-3 border-t border-border/50 flex flex-col gap-2">
+                        <div id={contentId} className="mt-3 pt-3 border-t border-border/50 flex flex-col gap-2">
                           <p className="text-xs text-muted-foreground">
                             <span className="font-medium text-foreground">Note:</span> {(entry as any).note || "—"}
                           </p>
@@ -288,7 +292,7 @@ export function Insights() {
             {/* Weekly activity chart */}
             <div className="rounded-[1.5rem] border border-border/50 bg-card/50 p-4">
               <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground mb-3">{t("progress.section.checkins")}</p>
-              <div className="flex items-end gap-1.5" style={{ height: 60 }}>
+              <div className="flex items-end gap-1.5 h-[60px]">
                 {weekly.map((p, i) => {
                   const hPct = p.count === 0 ? 4 : (p.count / maxCount) * 100;
                   const opacity = p.avgIntensity != null ? 0.25 + (p.avgIntensity / 10) * 0.75 : 0.15;
@@ -308,7 +312,7 @@ export function Insights() {
             <div className="rounded-[1.5rem] border border-border/50 bg-card/50 p-4">
               <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground mb-3">{t("insights.timeOfDay.title")}</p>
               {timeOfDayData.some((d) => d.count > 0) ? (
-                <div style={{ height: 180 }}>
+                <div className="h-[180px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={timeOfDayData}>
                       <XAxis dataKey="name" tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} />
@@ -335,7 +339,7 @@ export function Insights() {
             <div className="rounded-[1.5rem] border border-border/50 bg-card/50 p-4">
               <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground mb-3">{t("insights.byTrigger.title")}</p>
               {triggerData.length > 0 ? (
-                <div style={{ height: 200 }}>
+                <div className="h-[200px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={triggerData} layout="vertical">
                       <XAxis type="number" tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} width={20} />

@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useStore } from "@/hooks/useStore";
 import { usePWA } from "@/hooks/usePWA";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { useT } from "@/hooks/useT";
+import { useT } from "@/hooks/useTranslation";
 import { useSync } from "@/contexts/SyncContext";
 import { PageHeader } from "@/components/PageHeader";
 import { useReminders } from "@/hooks/useReminders";
@@ -410,6 +410,7 @@ export function Settings() {
                   <input
                     type="text"
                     placeholder={t("settings.crisisService.customName")}
+                    aria-label="Crisis service name"
                     value={customName}
                     onChange={(e) => setCustomName(e.target.value)}
                     className={`w-full bg-background border rounded-xl px-4 py-3 text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-ring ${
@@ -422,6 +423,7 @@ export function Settings() {
                   <input
                     type="tel"
                     placeholder={t("settings.crisisService.customNumber")}
+                    aria-label="Crisis service phone"
                     value={customNumber}
                     onChange={(e) => setCustomNumber(e.target.value)}
                     className={`w-full bg-background border rounded-xl px-4 py-3 text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-ring ${
@@ -489,6 +491,7 @@ export function Settings() {
                   <input
                     type="text"
                     placeholder={t("settings.emergencyContacts.name")}
+                    aria-label="Emergency contact name"
                     value={contactName}
                     onChange={(e) => setContactName(e.target.value)}
                     className={`w-full bg-background border rounded-xl px-4 py-3 text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-ring ${
@@ -501,6 +504,7 @@ export function Settings() {
                   <input
                     type="text"
                     placeholder={t("settings.emergencyContacts.relationship")}
+                    aria-label="Emergency contact relationship"
                     value={contactRelation}
                     onChange={(e) => setContactRelation(e.target.value)}
                     className={`w-full bg-background border rounded-xl px-4 py-3 text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-ring ${
@@ -513,6 +517,7 @@ export function Settings() {
                   <input
                     type="tel"
                     placeholder={t("settings.emergencyContacts.phone")}
+                    aria-label="Emergency contact phone"
                     value={contactPhone}
                     onChange={(e) => setContactPhone(e.target.value)}
                     className={`w-full bg-background border rounded-xl px-4 py-3 text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-ring ${
@@ -572,6 +577,13 @@ export function Settings() {
               </p>
             </div>
           </div>
+          <button
+            onClick={() => navigate('/privacy')}
+            className="mt-2 w-full flex items-center justify-between px-4 py-3 bg-card border border-border rounded-2xl text-sm text-foreground hover:bg-muted/40 transition-colors touch-target"
+          >
+            <span>{t('settings.privacy.viewPolicy')}</span>
+            <span className="text-muted-foreground">→</span>
+          </button>
         </section>
 
         {/* Export / Import — redesigned with cards */}

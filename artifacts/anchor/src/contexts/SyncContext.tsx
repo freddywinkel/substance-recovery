@@ -86,7 +86,8 @@ function RealSyncProvider({ children }: { children: ReactNode }) {
       if (!signedInRef.current || userIdRef.current !== uid) return;
       setStatus("synced");
       setLastSyncedAt(Date.now());
-    } catch {
+    } catch (err) {
+      console.error('SyncContext sync error:', err);
       // Ignore a failure from a sync that is no longer current (signed out or
       // switched accounts mid-flight) — don't surface a stale error/offline.
       if (!signedInRef.current || userIdRef.current !== uid) return;

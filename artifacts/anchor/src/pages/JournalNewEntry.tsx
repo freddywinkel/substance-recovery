@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { useStore } from "@/hooks/useStore";
-import { useT } from "@/hooks/useT";
+import { useT } from "@/hooks/useTranslation";
 import { PageHeader } from "@/components/PageHeader";
 import { Star } from "lucide-react";
 

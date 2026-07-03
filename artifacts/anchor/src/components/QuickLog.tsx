@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useActiveRegistration } from "@/contexts/ActiveRegistrationContext";
 import { useStore } from "@/hooks/useStore";
-import { useT } from "@/hooks/useT";
+import { useT } from "@/hooks/useTranslation";
 import {
   Sheet,
   SheetContent,
@@ -12,16 +12,17 @@ import {
 import { Slider } from "@/components/ui/slider";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { Flame, Zap, Brain, Coffee, AlertTriangle, X } from "lucide-react";
+import { X } from "lucide-react";
 import type { RegistrationType } from "@/contexts/ActiveRegistrationContext";
 import { useToast } from "@/hooks/use-toast";
+import { CATEGORY_META } from "@/lib/constants";
 
-const LOG_TYPES: { type: RegistrationType; icon: typeof Flame; labelKey: string; color: string; bg: string }[] = [
-  { type: "trek", icon: Flame, labelKey: "quicklog.types.trek", color: "text-amber-300", bg: "bg-amber-400/10" },
-  { type: "craving", icon: Zap, labelKey: "quicklog.types.craving", color: "text-teal-300", bg: "bg-teal-400/10" },
-  { type: "anxiety", icon: Brain, labelKey: "quicklog.types.anxiety", color: "text-violet-300", bg: "bg-violet-400/10" },
-  { type: "boredom", icon: Coffee, labelKey: "quicklog.types.boredom", color: "text-emerald-300", bg: "bg-emerald-400/10" },
-  { type: "relapse", icon: AlertTriangle, labelKey: "quicklog.types.relapse", color: "text-rose-300", bg: "bg-rose-400/10" },
+const LOG_TYPES: { type: RegistrationType; labelKey: string }[] = [
+  { type: "trek", labelKey: "quicklog.types.trek" },
+  { type: "craving", labelKey: "quicklog.types.craving" },
+  { type: "anxiety", labelKey: "quicklog.types.anxiety" },
+  { type: "boredom", labelKey: "quicklog.types.boredom" },
+  { type: "relapse", labelKey: "quicklog.types.relapse" },
 ];
 
 interface QuickLogDraft {
@@ -210,7 +211,7 @@ export function QuickLog({
     }
   };
 
-  const selectedConfig = LOG_TYPES.find((lt) => lt.type === selectedType)!;
+  const selectedMeta = CATEGORY_META[selectedType];
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -230,6 +231,7 @@ export function QuickLog({
           <div className="grid grid-cols-5 gap-2">
             {LOG_TYPES.map((lt) => {
               const isActive = lt.type === selectedType;
+              const meta = CATEGORY_META[lt.type];
               return (
                 <button
                   key={lt.type}
@@ -243,10 +245,10 @@ export function QuickLog({
                   aria-pressed={isActive}
                   aria-label={t(lt.labelKey)}
                 >
-                  <lt.icon
+                  <meta.icon
                     size={18}
                     strokeWidth={1.8}
-                    className={isActive ? lt.color : "text-muted-foreground"}
+                    className={isActive ? meta.color : "text-muted-foreground"}
                   />
                   <span
                     className={`text-[10px] font-medium leading-tight ${
@@ -303,7 +305,7 @@ export function QuickLog({
           <Button
             onClick={handleSave}
             disabled={saving}
-            className={`w-full rounded-xl font-semibold transition-all duration-150 active:scale-[0.98] ${selectedConfig.bg} ${selectedConfig.color} border border-primary/20 hover:bg-primary/15`}
+            className={`w-full rounded-xl font-semibold transition-all duration-150 active:scale-[0.98] ${selectedMeta.bg} ${selectedMeta.color} border border-primary/20 hover:bg-primary/15`}
           >
             {saving ? t("common.saving") : t("common.save")}
           </Button>

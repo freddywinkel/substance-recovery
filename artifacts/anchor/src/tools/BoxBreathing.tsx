@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useLocation } from "wouter";
 import { PageHeader } from "@/components/PageHeader";
-import { useT } from "@/hooks/useT";
+import { useT } from "@/hooks/useTranslation";
 import { Play, Pause, RotateCcw } from "lucide-react";
 
 type Phase = "inhale" | "hold1" | "exhale" | "hold2";

@@ -15,11 +15,6 @@ export function hapticLight() {
   navigator.vibrate(8);
 }
 
-export function hapticMedium() {
-  if (!shouldVibrate()) return;
-  navigator.vibrate(12);
-}
-
 export function hapticSuccess() {
   if (!shouldVibrate()) return;
   navigator.vibrate([8, 40, 8]);

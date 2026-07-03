@@ -31,7 +31,7 @@ export function stripBase(path: string): string {
     : path;
 }
 
-if (!clerkPubKey) {
+if (!clerkPubKey && import.meta.env.DEV) {
   console.warn(
     "Missing VITE_CLERK_PUBLISHABLE_KEY — auth features will be disabled. The app works fully in offline/signed-out mode.",
   );

@@ -1,7 +1,7 @@
 import { Link } from "wouter";
 import { PageHeader } from "@/components/PageHeader";
 import { ToolCard } from "@/components/ToolCard";
-import { useT } from "@/hooks/useT";
+import { useT } from "@/hooks/useTranslation";
 import { useStore } from "@/hooks/useStore";
 import { usePinnedTools } from "@/hooks/usePinnedTools";
 import {

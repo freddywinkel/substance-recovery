@@ -1,5 +1,5 @@
 import { Link } from "wouter";
-import { useT } from "@/hooks/useT";
+import { useT } from "@/hooks/useTranslation";
 import { useStore } from "@/hooks/useStore";
 import { Wind, Eye, Waves, Rewind, Droplets, Heart, Shuffle, Phone } from "lucide-react";
 
@@ -77,67 +77,29 @@ export function CrisisNow() {
 
       <div className="flex-1 overflow-y-auto scroll-smooth-ios px-4 py-4 pb-safe flex flex-col gap-3">
 
-        {/* Immediate tools */}
-        <p className="text-xs text-muted-foreground uppercase tracking-widest px-1">{t("crisis.fast")}</p>
-        {TOOLS.filter((tool) => tool.urgency === "immediate").map((tool) => (
-          <Link key={tool.to} href={tool.to} asChild>
-            <a className="block animate-fade-up">
-              <div className="bg-card border border-border rounded-2xl p-4 flex items-start gap-4 hover:border-primary/40 active:scale-[0.98] transition-all duration-200">
-                <div className="rounded-xl p-2.5 bg-primary/10 text-primary shrink-0">
-                  <tool.icon size={22} strokeWidth={1.8} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-semibold text-foreground">{tool.title}</span>
-                    <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full shrink-0">{tool.duration}</span>
-                  </div>
-                  <p className="text-sm text-muted-foreground mt-1 leading-snug">{tool.description}</p>
-                </div>
-              </div>
-            </a>
-          </Link>
-        ))}
-
-        {/* Sustained tools */}
-        <p className="text-xs text-muted-foreground uppercase tracking-widest px-1 mt-2">{t("crisis.sustained")}</p>
-        {TOOLS.filter((tool) => tool.urgency === "sustained").map((tool) => (
-          <Link key={tool.to} href={tool.to} asChild>
-            <a className="block animate-fade-up">
-              <div className="bg-card border border-border rounded-2xl p-4 flex items-start gap-4 hover:border-primary/40 active:scale-[0.98] transition-all duration-200">
-                <div className="rounded-xl p-2.5 bg-primary/10 text-primary shrink-0">
-                  <tool.icon size={22} strokeWidth={1.8} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-semibold text-foreground">{tool.title}</span>
-                    <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full shrink-0">{tool.duration}</span>
-                  </div>
-                  <p className="text-sm text-muted-foreground mt-1 leading-snug">{tool.description}</p>
-                </div>
-              </div>
-            </a>
-          </Link>
-        ))}
-
-        {/* ── Crisis Service card ────────────────────────── */}
+        {/* ── Crisis Service (prominent) ─────────────────── */}
         {crisisService && crisisService.name && crisisService.number && (
-          <div className="mt-2 bg-red-950/20 border border-red-800/30 rounded-2xl p-4 flex flex-col gap-3">
+          <div className="bg-red-950/20 border border-red-800/30 rounded-2xl p-5 flex flex-col gap-3">
             <div className="flex items-center gap-2">
-              <Phone size={16} strokeWidth={2} className="text-red-400 shrink-0" />
-              <p className="text-sm font-semibold text-foreground">{t("help.crisisService.title")}</p>
+              <div className="rounded-xl p-2.5 bg-red-600/20 text-red-400 shrink-0">
+                <Phone size={22} strokeWidth={1.8} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-foreground">{t("help.crisisService.title")}</p>
+                <p className="text-xs text-muted-foreground truncate">{crisisService.name}</p>
+              </div>
             </div>
-            <p className="text-xs text-muted-foreground -mt-1">{crisisService.name}</p>
             <a
               href={`tel:${crisisService.number.replace(/\s/g, "")}`}
-              className="flex items-center justify-center gap-2 w-full bg-red-600 hover:bg-red-700 text-white rounded-xl py-3.5 font-semibold text-sm active:scale-[0.98] transition-all touch-target"
+              className="flex items-center justify-center gap-2 w-full bg-red-600 hover:bg-red-700 text-white rounded-xl py-4 font-semibold text-base active:scale-[0.98] transition-all touch-target"
             >
-              <Phone size={18} strokeWidth={2} />
+              <Phone size={20} strokeWidth={2} />
               {t("help.crisisService.call")} — {crisisService.number}
             </a>
           </div>
         )}
 
-        {/* ── Emergency Contacts ─────────────────────────── */}
+        {/* ── Emergency Contacts ───────────────────────── */}
         {emergencyContacts.length > 0 && (
           <div className="bg-card border border-border rounded-2xl p-4 flex flex-col gap-3">
             <div className="flex items-center gap-2">
@@ -166,6 +128,49 @@ export function CrisisNow() {
             </div>
           </div>
         )}
+
+        {/* ── Self-help tools ──────────────────────────── */}
+        <p className="text-xs text-muted-foreground uppercase tracking-widest px-1 mt-1">{t("crisis.selfhelp")}</p>
+
+        <p className="text-xs text-muted-foreground uppercase tracking-widest px-1">{t("crisis.fast")}</p>
+        {TOOLS.filter((tool) => tool.urgency === "immediate").map((tool) => (
+          <Link key={tool.to} href={tool.to} asChild>
+            <a className="block animate-fade-up">
+              <div className="bg-card border border-border rounded-2xl p-4 flex items-start gap-4 hover:border-primary/40 active:scale-[0.98] transition-all duration-200">
+                <div className="rounded-xl p-2.5 bg-primary/10 text-primary shrink-0">
+                  <tool.icon size={22} strokeWidth={1.8} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-semibold text-foreground">{tool.title}</span>
+                    <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full shrink-0">{tool.duration}</span>
+                  </div>
+                  <p className="text-sm text-muted-foreground mt-1 leading-snug">{tool.description}</p>
+                </div>
+              </div>
+            </a>
+          </Link>
+        ))}
+
+        <p className="text-xs text-muted-foreground uppercase tracking-widest px-1 mt-2">{t("crisis.sustained")}</p>
+        {TOOLS.filter((tool) => tool.urgency === "sustained").map((tool) => (
+          <Link key={tool.to} href={tool.to} asChild>
+            <a className="block animate-fade-up">
+              <div className="bg-card border border-border rounded-2xl p-4 flex items-start gap-4 hover:border-primary/40 active:scale-[0.98] transition-all duration-200">
+                <div className="rounded-xl p-2.5 bg-primary/10 text-primary shrink-0">
+                  <tool.icon size={22} strokeWidth={1.8} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-semibold text-foreground">{tool.title}</span>
+                    <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full shrink-0">{tool.duration}</span>
+                  </div>
+                  <p className="text-sm text-muted-foreground mt-1 leading-snug">{tool.description}</p>
+                </div>
+              </div>
+            </a>
+          </Link>
+        ))}
 
         <div className="h-4" />
       </div>

@@ -7,7 +7,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { LanguageProvider, useLanguage } from "@/contexts/LanguageContext";
 import { ActiveRegistrationProvider } from "@/contexts/ActiveRegistrationContext";
 import { SyncProvider } from "@/contexts/SyncContext";
-import { useT } from "@/hooks/useT";
+import { useT } from "@/hooks/useTranslation";
 import { BottomNav } from "@/components/BottomNav";
 import { OfflineBanner } from "@/components/OfflineBanner";
 import { RegistrationReturnBanner } from "@/components/RegistrationReturnBanner";
@@ -15,7 +15,7 @@ import { usePWA } from "@/hooks/usePWA";
 import { queryClient } from "@/lib/queryClient";
 import { ClerkAvailableContext } from "@/lib/clerk-safe";
 import { AtmosphericBackground } from "@/components/AtmosphericBackground";
-import { ScrollToTop } from "@/hooks/useScrollToTop";
+import { ScrollToTop } from "@/components/ScrollToTop";
 import {
   clerkPubKey,
   clerkProxyUrl,
@@ -38,6 +38,7 @@ import { BoredomTracker } from "@/pages/BoredomTracker";
 import { TrekTracker } from "@/pages/TrekTracker";
 import { DelayScreen } from "@/pages/DelayScreen";
 import { SignInPage, SignUpPage } from "@/pages/AuthPages";
+import { PrivacyPolicy } from "@/pages/PrivacyPolicy";
 import { BoxBreathing } from "@/tools/BoxBreathing";
 import { Grounding54321 } from "@/tools/Grounding54321";
 import { UrgeSurfing } from "@/tools/UrgeSurfing";
@@ -82,6 +83,7 @@ function AppRoutes() {
       <Route path="/journal/new" component={JournalNewEntry} />
       <Route path="/insights" component={Insights} />
       <Route path="/settings" component={Settings} />
+      <Route path="/privacy" component={PrivacyPolicy} />
       <Route path="/sign-in/*?" component={SignInPage} />
       <Route path="/sign-up/*?" component={SignUpPage} />
       <Route component={NotFound} />

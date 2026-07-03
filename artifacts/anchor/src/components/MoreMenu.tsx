@@ -1,5 +1,5 @@
 import { Link } from "wouter";
-import { useT } from "@/hooks/useT";
+import { useT } from "@/hooks/useTranslation";
 import {
   Sheet,
   SheetContent,

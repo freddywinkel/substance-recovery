@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import { ArrowLeft } from "lucide-react";
-import { useT } from "@/hooks/useT";
+import { useT } from "@/hooks/useTranslation";
 
 interface PageHeaderProps {
   title: string;

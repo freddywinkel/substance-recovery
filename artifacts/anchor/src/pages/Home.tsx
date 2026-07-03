@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { Link, useLocation } from "wouter";
 import { useStore } from "@/hooks/useStore";
-import { useT } from "@/hooks/useT";
+import { useT } from "@/hooks/useTranslation";
 import { useActiveRegistration } from "@/contexts/ActiveRegistrationContext";
 import { useClerkAvailable } from "@/lib/clerk-safe";
 import { getTodaysQuote } from "@/lib/recoveryQuotes";
@@ -140,9 +140,9 @@ export function Home() {
 
       <div className="flex-1 overflow-y-auto scroll-smooth-ios px-4 flex flex-col gap-4 pb-safe">
 
-        {/* Resume in-progress check-in */}
+        {/* Resume in-progress log entry */}
         {session && !session.pendingReturn && (
-          <section aria-label="Resume check-in" className="animate-fade-up">
+          <section aria-label="Resume log entry" className="animate-fade-up">
             <div className="bg-primary/10 border border-primary/30 rounded-[1.5rem] p-4 flex flex-col gap-3">
               <div className="flex items-start gap-3">
                 <div className="rounded-xl bg-primary/20 w-10 h-10 flex items-center justify-center text-primary shrink-0">

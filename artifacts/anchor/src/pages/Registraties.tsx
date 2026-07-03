@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { useStore } from "@/hooks/useStore";
-import { useT } from "@/hooks/useT";
+import { useT } from "@/hooks/useTranslation";
 import { PageHeader } from "@/components/PageHeader";
 import { Link } from "wouter";
 import { QuickLog } from "@/components/QuickLog";
-import { Flame, Zap, Coffee, Brain, AlertTriangle, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
+import { CATEGORY_META } from "@/lib/constants";
 
 export function Registraties() {
   const { cravingLogs, relapseLogs, anxietyLogs, boredomLogs, loading } = useStore();
@@ -27,53 +28,40 @@ export function Registraties() {
   const registrations = [
     {
       to: "/trek",
-      icon: Flame,
+      type: "trek" as const,
       label: t("registrations.trek.title"),
       sub: t("registrations.trek.sub"),
-      color: "amber",
       lastLog: lastCraving?.cravingType === "active" ? lastCraving.timestamp : undefined,
     },
     {
       to: "/craving",
-      icon: Zap,
+      type: "craving" as const,
       label: t("registrations.craving.title"),
       sub: t("registrations.craving.sub"),
-      color: "teal",
       lastLog: lastCraving?.cravingType !== "active" ? lastCraving.timestamp : undefined,
     },
     {
       to: "/boredom",
-      icon: Coffee,
+      type: "boredom" as const,
       label: t("registrations.boredom.title"),
       sub: t("registrations.boredom.sub"),
-      color: "emerald",
       lastLog: lastBoredom?.timestamp,
     },
     {
       to: "/anxiety",
-      icon: Brain,
+      type: "anxiety" as const,
       label: t("registrations.anxiety.title"),
       sub: t("registrations.anxiety.sub"),
-      color: "violet",
       lastLog: lastAnxiety?.timestamp,
     },
     {
       to: "/relapse",
-      icon: AlertTriangle,
+      type: "relapse" as const,
       label: t("registrations.relapse.title"),
       sub: t("registrations.relapse.sub"),
-      color: "rose",
       lastLog: lastRelapse?.timestamp,
     },
   ];
-
-  const colorMap: Record<string, { icon: string; ring: string; hover: string }> = {
-    amber: { icon: "text-amber-300", ring: "ring-amber-300/20", hover: "hover:ring-amber-300/30" },
-    teal: { icon: "text-teal-300", ring: "ring-teal-300/20", hover: "hover:ring-teal-300/30" },
-    emerald: { icon: "text-emerald-300", ring: "ring-emerald-300/20", hover: "hover:ring-emerald-300/30" },
-    violet: { icon: "text-violet-300", ring: "ring-violet-300/20", hover: "hover:ring-violet-300/30" },
-    rose: { icon: "text-rose-300", ring: "ring-rose-300/20", hover: "hover:ring-rose-300/30" },
-  };
 
   const formatLastLog = (ts: number | undefined) => {
     if (!ts) return undefined;
@@ -110,14 +98,14 @@ export function Registraties() {
         </p>
 
         {registrations.map((reg, i) => {
-          const colors = colorMap[reg.color];
+          const meta = CATEGORY_META[reg.type];
           const lastText = formatLastLog(reg.lastLog);
           return (
             <Link key={reg.to} href={reg.to} asChild>
               <a className="block animate-fade-up" style={{ animationDelay: `${i * 0.03}s` }}>
                 <div className="group h-[120px] rounded-[1.5rem] border border-border/50 bg-card/50 backdrop-blur-xl p-4 shadow-lg shadow-black/10 transition-all duration-300 hover:bg-card/70 hover:-translate-y-0.5 active:scale-[0.98] flex items-center gap-4">
-                  <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-${reg.color}-400/10 ${colors.icon} ring-1 ${colors.ring} ${colors.hover} transition-all`}>
-                    <reg.icon size={22} strokeWidth={2} />
+                  <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ${meta.bg} ${meta.color} ring-1 ${meta.ring} ${meta.ringHover} transition-all`}>
+                    <meta.icon size={22} strokeWidth={2} />
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="font-semibold text-foreground text-sm leading-tight tracking-tight">

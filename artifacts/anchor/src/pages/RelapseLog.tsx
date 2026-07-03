@@ -1,7 +1,7 @@
 import { useState, useCallback } from "react";
 import { useLocation } from "wouter";
 import { useStore } from "@/hooks/useStore";
-import { useT } from "@/hooks/useT";
+import { useT } from "@/hooks/useTranslation";
 import { RelapseLog as RelapseLogType, RelapseLabel, EpisodeDuration, AmountCategory, AcuteRisk } from "@/db";
 import { PageHeader } from "@/components/PageHeader";
 import { Heart, ArrowRight, AlertTriangle, Phone } from "lucide-react";
@@ -292,7 +292,8 @@ export function RelapseLog() {
   // Gate "Next": every required question on the current step must be answered.
   const canProceed = (() => {
     switch (step) {
-      case "when":    return draft.substances.length > 0;
+      case "label":   return draft.label !== "";
+      case "when":    return draft.substances.length > 0 && draft.episodeDuration !== "" && draft.amountCategory !== "";
       case "trigger": return draft.firstTriggerType !== "";
       case "next":    return (draft.supportContact !== "" || draft.supportContactOther.trim() !== "")
         && (draft.nextStep !== "" || draft.nextStepOther.trim() !== "");

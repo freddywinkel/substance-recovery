@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import { useLocation } from "wouter";
 import { RotateCcw } from "lucide-react";
 import { useActiveRegistration } from "@/contexts/ActiveRegistrationContext";
-import { useT } from "@/hooks/useT";
+import { useT } from "@/hooks/useTranslation";
 
 // Shown while the user is off using a help tool launched mid-registration
 // (session.pendingReturn is set). Fixed just above the BottomNav so it never
