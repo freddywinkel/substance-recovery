@@ -79,7 +79,7 @@
   --destructive-foreground: 0 0% 98%;
 
   --app-font-sans: 'Inter', system-ui, -apple-system, sans-serif;
-  --bottom-nav-h: calc(4.5rem + env(safe-area-inset-bottom, 0px));
+  --bottom-nav-h: calc(5.25rem + env(safe-area-inset-bottom, 0px));
   --radius: 1rem;
   /* 8-pt spacing scale (multiples of 8px) */
   --space-8: 0.5rem;

@@ -22,6 +22,7 @@ import {
   type FreqItem,
   type TimeRange,
 } from "@/lib/analytics";
+import { buildImpactInsights } from "@/lib/impactInsights";
 import { BarChart3, TrendingUp } from "lucide-react";
 
 function StatCard({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
@@ -72,13 +73,6 @@ function RangeFilter({ value, onChange, opts }: { value: TimeRange; onChange: (r
     </div>
   );
 }
-
-type ImpactItem = {
-  label: string;
-  score: number;
-  count: number;
-  tone: string;
-};
 
 export function Insights() {
   const {
@@ -141,39 +135,10 @@ export function Insights() {
     return cStats.topSituations.slice(0, 6).map((item) => ({ name: item.label, count: item.count }));
   }, [cStats.topSituations]);
 
-  const impactItems = useMemo<ImpactItem[]>(() => {
-    const items: Array<ImpactItem | null> = [
-      cStats.activeTotal > 0 && cStats.avgIntensityActive != null
-        ? { label: t("logs.tab.trek"), score: cStats.avgIntensityActive, count: cStats.activeTotal, tone: "text-amber-300" }
-        : null,
-      cStats.passiveTotal > 0 && cStats.avgIntensityPassive != null
-        ? { label: t("logs.tab.craving"), score: cStats.avgIntensityPassive, count: cStats.passiveTotal, tone: "text-teal-300" }
-        : null,
-      aStats.total > 0 && aStats.avgIntensity != null
-        ? { label: t("logs.tab.anxiety"), score: aStats.avgIntensity, count: aStats.total, tone: "text-violet-300" }
-        : null,
-      bStats.total > 0 && bStats.avgIntensity != null
-        ? { label: t("logs.tab.boredom"), score: bStats.avgIntensity, count: bStats.total, tone: "text-emerald-300" }
-        : null,
-      rStats.total > 0
-        ? { label: t("logs.tab.relapse"), score: 10, count: rStats.total, tone: "text-rose-300" }
-        : null,
-    ];
-    return items
-      .filter((item): item is ImpactItem => Boolean(item))
-      .sort((a, b) => b.score - a.score || b.count - a.count);
-  }, [
-    aStats.avgIntensity,
-    aStats.total,
-    bStats.avgIntensity,
-    bStats.total,
-    cStats.activeTotal,
-    cStats.avgIntensityActive,
-    cStats.avgIntensityPassive,
-    cStats.passiveTotal,
-    rStats.total,
-    t,
-  ]);
+  const impactItems = useMemo(
+    () => buildImpactInsights({ cravingLogs, relapseLogs, anxietyLogs, boredomLogs }, range),
+    [anxietyLogs, boredomLogs, cravingLogs, relapseLogs, range],
+  );
 
   if (loading) {
     return (
@@ -219,12 +184,12 @@ export function Insights() {
                 <p className="text-sm text-muted-foreground">{t("insights.impact.empty")}</p>
               </div>
             ) : (
-              impactItems.map((item, index) => (
-                <div key={item.label} className="rounded-[1.5rem] border border-border/50 bg-card/50 p-4">
+                impactItems.map((item, index) => (
+                <div key={item.kind} className="rounded-[1.5rem] border border-border/50 bg-card/50 p-4">
                   <div className="flex items-center justify-between gap-3">
                     <div className="min-w-0">
                       <p className="text-sm font-semibold text-foreground">
-                        {index + 1}. {item.label}
+                        {index + 1}. {t(item.labelKey)}
                       </p>
                       <p className="mt-1 text-xs text-muted-foreground">
                         {t("insights.impact.count").replace("{n}", String(item.count))}

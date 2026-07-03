@@ -6,6 +6,7 @@ import { QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { LanguageProvider, useLanguage } from "@/contexts/LanguageContext";
 import { ActiveRegistrationProvider } from "@/contexts/ActiveRegistrationContext";
+import { RegistrationLauncherProvider } from "@/contexts/RegistrationLauncherContext";
 import { SyncProvider } from "@/contexts/SyncContext";
 import { useT } from "@/hooks/useTranslation";
 import { BottomNav } from "@/components/BottomNav";
@@ -123,15 +124,17 @@ function AppShell() {
       <AtmosphericBackground />
       <ScrollToTop />
       <OfflineBanner isOffline={isOffline} />
-      <div
-        className="relative flex h-dvh min-h-dvh flex-col overflow-hidden"
-      >
-        <main className="app-main min-h-0 flex-1 overflow-hidden">
-          <AppRoutes />
-        </main>
-        <RegistrationReturnBanner />
-        <BottomNav />
-      </div>
+      <RegistrationLauncherProvider>
+        <div
+          className="relative flex h-dvh min-h-dvh flex-col overflow-hidden"
+        >
+          <main className="app-main min-h-0 flex-1 overflow-hidden">
+            <AppRoutes />
+          </main>
+          <RegistrationReturnBanner />
+          <BottomNav />
+        </div>
+      </RegistrationLauncherProvider>
       <Toaster />
     </>
   );

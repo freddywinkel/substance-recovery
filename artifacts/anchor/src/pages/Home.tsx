@@ -8,6 +8,8 @@ import { getTodaysQuote } from "@/lib/recoveryQuotes";
 import { hapticLight } from "@/lib/haptics";
 import { calculateRiskScore } from "@/lib/riskScore";
 import { usePinnedTools } from "@/hooks/usePinnedTools";
+import { useRegistrationLauncher } from "@/contexts/RegistrationLauncherContext";
+import { buildImpactInsights } from "@/lib/impactInsights";
 import {
   Wind, Eye, Droplets, Waves, Rewind, Heart, Shuffle,
   CalendarCheck, RotateCcw, User, LogIn,
@@ -75,7 +77,7 @@ export function Home() {
   const [, navigate] = useLocation();
   const clerkAvailable = useClerkAvailable();
   const { pinned } = usePinnedTools();
-  const lastCraving = cravingLogs[0];
+  const { openRegistrationLauncher } = useRegistrationLauncher();
   const todaysQuote = useMemo(() => getTodaysQuote(), []);
 
   const sobriety = useMemo(() => computeSobrietyStats(sobrietyStartDate, relapseLogs), [sobrietyStartDate, relapseLogs]);
@@ -113,6 +115,15 @@ export function Home() {
     }
     return { ...result, text: t("home.risk.high").replace("{n}", String(daysSince)) };
   }, [cravingLogs, relapseLogs, anxietyLogs, boredomLogs, journal, t]);
+
+  const topImpactInsight = useMemo(
+    () =>
+      buildImpactInsights(
+        { cravingLogs, relapseLogs, anxietyLogs, boredomLogs },
+        "30d",
+      )[0] ?? null,
+    [anxietyLogs, boredomLogs, cravingLogs, relapseLogs],
+  );
 
   if (loading) {
     return (
@@ -177,7 +188,7 @@ export function Home() {
               </div>
               <p className="relative mt-4 max-w-[260px] text-sm leading-6 text-muted-foreground">{milestoneLabel(sobriety.currentStreakDays, t)}</p>
 
-              <button onClick={() => { hapticLight(); navigate("/registraties"); }} className="relative mt-6 rounded-full bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary/20 active:scale-[0.98] transition-transform touch-target">
+              <button onClick={() => { hapticLight(); openRegistrationLauncher(); }} className="relative mt-6 rounded-full bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary/20 active:scale-[0.98] transition-transform touch-target">
                 {t("home.log_today")}
               </button>
 
@@ -274,12 +285,45 @@ export function Home() {
             )}
 
             {riskInfo.level !== "none" && (
-              <button onClick={() => navigate("/registraties")} className="mt-3 text-xs font-medium text-primary hover:opacity-80 transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 rounded">
+              <button onClick={openRegistrationLauncher} className="mt-3 text-xs font-medium text-primary hover:opacity-80 transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 rounded">
                 {t("home.risk.action")} →
               </button>
             )}
           </div>
         </section>
+
+        {topImpactInsight && (
+          <section aria-label="Most impactful insight" className="animate-fade-up">
+            <Link href="/insights" asChild>
+              <a className="block rounded-[1.5rem] border border-border/50 bg-card/50 p-4 transition-all duration-300 hover:bg-card/70 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                      {t("home.top_insight.label")}
+                    </p>
+                    <p className="mt-2 text-sm font-semibold text-foreground">
+                      {t(topImpactInsight.labelKey)}
+                    </p>
+                    <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                      {t("home.top_insight.sub").replace("{n}", String(topImpactInsight.count))}
+                    </p>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <p className={`text-2xl font-semibold tabular-nums ${topImpactInsight.tone}`}>
+                      {topImpactInsight.score.toFixed(1)}
+                    </p>
+                    <p className="text-[10px] text-muted-foreground">
+                      {t("insights.impact.score")}
+                    </p>
+                  </div>
+                </div>
+                <p className="mt-3 text-xs font-medium text-primary">
+                  {t("home.top_insight.open")} →
+                </p>
+              </a>
+            </Link>
+          </section>
+        )}
 
         {/* Daily recovery insight */}
         <section aria-label="Daily insight" className="animate-fade-up">
