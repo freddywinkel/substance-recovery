@@ -4,6 +4,15 @@
 // record *what* changed and *when*, so the sync engine (only when signed in)
 // can push it and resolve conflicts last-write-wins.
 
+import {
+  getDB,
+  type AnxietyLog,
+  type BoredomLog,
+  type CravingLog,
+  type JournalEntry,
+  type RelapseLog,
+} from "./schema";
+
 export interface SyncMetaRecord {
   key: string;
   value: string | number;
@@ -28,7 +37,7 @@ const SYNC_META_LAST_USER = "lastSyncedUserId";
 // sync stamp lives in `syncMeta` (settings values can't carry an updatedAt).
 export const SOBRIETY_SETTING_KIND = "setting:sobrietyStartDate";
 export const SOBRIETY_RECORD_ID = "sobrietyStartDate";
-const SOBRIETY_UPDATED_AT_KEY = "setting:sobrietyStartDate:updatedAt";
+export const SOBRIETY_UPDATED_AT_KEY = "setting:sobrietyStartDate:updatedAt";
 
 async function getSyncMetaValue(
   key: string,

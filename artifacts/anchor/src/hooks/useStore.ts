@@ -34,12 +34,16 @@ interface StoreActions {
   logEntry: (entry: Omit<JournalEntry, "id">) => Promise<void>;
   removeEntry: (id: string) => Promise<void>;
   logCraving: (entry: Omit<CravingLog, "id">) => Promise<CravingLog>;
+  updateCraving: (entry: CravingLog) => Promise<void>;
   removeCraving: (id: string) => Promise<void>;
   logRelapse: (entry: Omit<RelapseLog, "id">) => Promise<RelapseLog>;
+  updateRelapse: (entry: RelapseLog) => Promise<void>;
   removeRelapse: (id: string) => Promise<void>;
   logAnxiety: (entry: Omit<AnxietyLog, "id">) => Promise<AnxietyLog>;
+  updateAnxiety: (entry: AnxietyLog) => Promise<void>;
   removeAnxiety: (id: string) => Promise<void>;
   logBoredom: (entry: Omit<BoredomLog, "id">) => Promise<BoredomLog>;
+  updateBoredom: (entry: BoredomLog) => Promise<void>;
   removeBoredom: (id: string) => Promise<void>;
   setTheme: (t: import("./useUI").Theme) => Promise<void>;
   setSobrietyStartDate: (date: string | null) => Promise<void>;
@@ -123,12 +127,16 @@ export function useStore(): StoreState & StoreActions {
     logEntry: journalHook.logEntry,
     removeEntry: journalHook.removeEntry,
     logCraving: logsHook.logCraving,
+    updateCraving: logsHook.updateCraving,
     removeCraving: logsHook.removeCraving,
     logRelapse: logsHook.logRelapse,
+    updateRelapse: logsHook.updateRelapse,
     removeRelapse: logsHook.removeRelapse,
     logAnxiety: logsHook.logAnxiety,
+    updateAnxiety: logsHook.updateAnxiety,
     removeAnxiety: logsHook.removeAnxiety,
     logBoredom: logsHook.logBoredom,
+    updateBoredom: logsHook.updateBoredom,
     removeBoredom: logsHook.removeBoredom,
     setTheme: uiHook.setTheme,
     setSobrietyStartDate: settingsHook.setSobrietyStartDate,

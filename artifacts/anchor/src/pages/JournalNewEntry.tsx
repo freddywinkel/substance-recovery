@@ -174,7 +174,7 @@ export function JournalNewEntry() {
 
       <div
         className="fixed left-0 right-0 bg-background/95 backdrop-blur-sm border-t border-border px-4 pt-3 pb-3 z-40"
-        style={{ bottom: "calc(3.5rem + env(safe-area-inset-bottom))" }}
+        style={{ bottom: "var(--bottom-nav-h)" }}
       >
         {error && (
           <p className="text-sm text-red-500 mb-2 text-center">{error}</p>

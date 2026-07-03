@@ -1,119 +1,118 @@
 import { Link, useLocation } from "wouter";
 import {
-  Home,
-  ClipboardList,
-  Zap,
   BarChart2,
-  MoreHorizontal,
-  Plus,
+  BookOpen,
+  ClipboardList,
+  Home,
+  Settings,
+  Zap,
+  type LucideIcon,
 } from "lucide-react";
-import { useState } from "react";
 import { useT } from "@/hooks/useTranslation";
-import { MoreMenu } from "./MoreMenu";
-import { QuickLog } from "./QuickLog";
+
+type NavItem = {
+  to: string;
+  icon: LucideIcon;
+  label: string;
+  match: (path: string) => boolean;
+};
 
 export function BottomNav() {
   const [location] = useLocation();
   const { t } = useT();
-  const [quickLogOpen, setQuickLogOpen] = useState(false);
 
   if (location.startsWith("/sign-in") || location.startsWith("/sign-up")) {
     return null;
   }
 
-  const mainItems = [
-    { to: "/", icon: Home, label: t("nav.home") },
-    { to: "/registraties", icon: ClipboardList, label: t("nav.log") },
-    { to: "/tools", icon: Zap, label: t("nav.tools") },
-    { to: "/insights", icon: BarChart2, label: t("nav.insights") },
+  const items: NavItem[] = [
+    {
+      to: "/",
+      icon: Home,
+      label: t("nav.home"),
+      match: (path) => path === "/",
+    },
+    {
+      to: "/registraties",
+      icon: ClipboardList,
+      label: t("nav.log"),
+      match: (path) =>
+        path.startsWith("/registraties") ||
+        path.startsWith("/trek") ||
+        path.startsWith("/craving") ||
+        path.startsWith("/anxiety") ||
+        path.startsWith("/boredom") ||
+        path.startsWith("/relapse"),
+    },
+    {
+      to: "/tools",
+      icon: Zap,
+      label: t("nav.tools"),
+      match: (path) => path.startsWith("/tools") || path.startsWith("/delay"),
+    },
+    {
+      to: "/insights",
+      icon: BarChart2,
+      label: t("nav.insights"),
+      match: (path) => path.startsWith("/insights"),
+    },
+    {
+      to: "/journal",
+      icon: BookOpen,
+      label: t("nav.journal"),
+      match: (path) => path.startsWith("/journal"),
+    },
+    {
+      to: "/settings",
+      icon: Settings,
+      label: t("nav.settings"),
+      match: (path) => path.startsWith("/settings"),
+    },
   ];
 
-  const isMoreActive =
-    location.startsWith("/settings") ||
-    location.startsWith("/journal") ||
-    location.startsWith("/help");
-
   return (
-    <>
+    <footer className="fixed inset-x-0 bottom-0 z-50 border-t border-border bg-background shadow-[0_-12px_28px_rgba(0,0,0,0.38)]">
       <nav
-        className="fixed bottom-4 left-1/2 z-50 w-[calc(100%-1.5rem)] max-w-lg -translate-x-1/2 rounded-full border border-white/10 bg-background/80 px-2 py-2 shadow-2xl shadow-black/50 backdrop-blur-2xl pb-[calc(env(safe-area-inset-bottom)+0.5rem)]"
+        className="mx-auto grid w-full max-w-lg grid-cols-6 gap-0.5 px-2 pb-[calc(0.5rem+env(safe-area-inset-bottom,0px))] pt-2"
         aria-label={t("nav.aria")}
       >
-        <div className="grid grid-cols-5 items-center">
-          {mainItems.map(({ to, icon: Icon, label }) => {
-            const isActive =
-              to === "/" ? location === "/" : location.startsWith(to);
-            return (
-              <Link key={to} href={to} asChild>
-                <a
-                  className="group relative flex flex-col items-center justify-center gap-0.5 rounded-full py-1.5 transition-colors duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
-                  aria-label={label}
-                  aria-current={isActive ? "page" : undefined}
+        {items.map(({ to, icon: Icon, label, match }) => {
+          const isActive = match(location);
+          return (
+            <Link key={to} href={to} asChild>
+              <a
+                className="group relative flex min-h-12 flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-1.5 transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                aria-label={label}
+                aria-current={isActive ? "page" : undefined}
+              >
+                <span
+                  className={`absolute inset-x-0.5 inset-y-0.5 rounded-xl transition-colors duration-200 ${
+                    isActive ? "bg-primary/10" : "bg-transparent"
+                  }`}
+                />
+                <Icon
+                  size={17}
+                  strokeWidth={isActive ? 2.25 : 1.75}
+                  className={`relative transition-colors duration-200 ${
+                    isActive
+                      ? "text-primary"
+                      : "text-muted-foreground group-hover:text-foreground"
+                  }`}
+                />
+                <span
+                  className={`relative max-w-full truncate text-[9px] font-semibold leading-tight tracking-normal transition-colors duration-200 ${
+                    isActive
+                      ? "text-primary"
+                      : "text-muted-foreground group-hover:text-foreground"
+                  }`}
                 >
-                  <span
-                    className={`absolute inset-x-1 inset-y-0.5 rounded-full transition-all duration-300 ${
-                      isActive
-                        ? "bg-white/10 shadow-[0_0_24px_rgba(255,255,255,0.08)]"
-                        : "bg-white/0"
-                    }`}
-                  />
-                  <Icon
-                    size={16}
-                    strokeWidth={isActive ? 2.2 : 1.6}
-                    className={`relative transition-all duration-300 ${
-                      isActive
-                        ? "text-white scale-110"
-                        : "text-white/40 group-hover:text-white/60"
-                    }`}
-                  />
-                  <span
-                    className={`relative text-[10px] font-medium tracking-tight transition-colors duration-300 ${
-                      isActive
-                        ? "text-white"
-                        : "text-white/35 group-hover:text-white/50"
-                    }`}
-                  >
-                    {label}
-                  </span>
-                </a>
-              </Link>
-            );
-          })}
-
-          <MoreMenu isActive={isMoreActive}>
-            <MoreHorizontal
-              size={16}
-              strokeWidth={isMoreActive ? 2.2 : 1.6}
-              className={`relative transition-all duration-300 ${
-                isMoreActive
-                  ? "text-white scale-110"
-                  : "text-white/40 group-hover:text-white/60"
-              }`}
-            />
-            <span
-              className={`relative text-[10px] font-medium tracking-tight transition-colors duration-300 ${
-                isMoreActive
-                  ? "text-white"
-                  : "text-white/35 group-hover:text-white/50"
-              }`}
-            >
-              {t("nav.more")}
-            </span>
-          </MoreMenu>
-        </div>
+                  {label}
+                </span>
+              </a>
+            </Link>
+          );
+        })}
       </nav>
-
-      {/* Floating Plus button — centered above the nav bar */}
-      <button
-        type="button"
-        onClick={() => setQuickLogOpen(true)}
-        className="fixed bottom-[calc(1.25rem+env(safe-area-inset-bottom)+0.5rem)] left-1/2 z-[60] -translate-x-1/2 -translate-y-1/2 flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/30 transition-all duration-150 hover:scale-105 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
-        aria-label={t("quicklog.title")}
-      >
-        <Plus size={22} strokeWidth={2.5} />
-      </button>
-
-      <QuickLog open={quickLogOpen} onOpenChange={setQuickLogOpen} />
-    </>
+    </footer>
   );
 }

@@ -1,5 +1,22 @@
-import { getDB } from "./schema";
-import { markDirty, SYNC_DIRTY_EVENT } from "./sync";
+import {
+  getDB,
+  type AnxietyLog,
+  type BoredomLog,
+  type CravingLog,
+  type CrisisService,
+  type EmergencyContact,
+  type JournalEntry,
+  type RelapseLog,
+} from "./schema";
+import {
+  markDirty,
+  nextUpdatedAt,
+  setSobrietyUpdatedAt,
+  SOBRIETY_RECORD_ID,
+  SOBRIETY_SETTING_KIND,
+  SOBRIETY_UPDATED_AT_KEY,
+  SYNCABLE_RECORD_KINDS,
+} from "./sync";
 
 export async function getCrisisService(): Promise<CrisisService | null> {
   const db = await getDB();

@@ -10,9 +10,8 @@ import { calculateRiskScore } from "@/lib/riskScore";
 import { usePinnedTools } from "@/hooks/usePinnedTools";
 import {
   Wind, Eye, Droplets, Waves, Rewind, Heart, Shuffle,
-  Zap, AlertTriangle, Brain, Coffee,
-  Flame, CalendarCheck, RotateCcw, User, LogIn,
-  BookOpen, TrendingUp, PenLine, Wrench, HeartPulse, Info,
+  CalendarCheck, RotateCcw, User, LogIn,
+  TrendingUp, HeartPulse, Info,
 } from "lucide-react";
 
 const TOOL_META: Record<string, { icon: typeof Wind; labelKey: string; to: string }> = {
@@ -124,7 +123,7 @@ export function Home() {
   }
 
   return (
-    <div className="flex flex-col" style={{ minHeight: "100dvh" }}>
+    <div className="flex h-full min-h-0 flex-col bg-background">
 
       {/* Header */}
       <header className="px-5 pt-5 pb-2 flex items-start justify-between" style={{ paddingTop: "calc(1.25rem + env(safe-area-inset-top, 0px))" }}>
@@ -313,37 +312,6 @@ export function Home() {
             </div>
           </section>
         )}
-
-        {/* Quick actions */}
-        <section aria-label="Quick actions">
-          <p className="text-xs text-muted-foreground uppercase tracking-widest px-1 mb-3">{t("home.quick_actions")}</p>
-          <div className="grid grid-cols-3 gap-3">
-            <Link href="/help" asChild>
-              <a className="block animate-fade-up">
-                <div className="rounded-[1.5rem] border border-border/50 bg-card/50 p-4 text-center transition-all duration-300 hover:bg-card/70 hover:-translate-y-0.5 active:scale-[0.98]">
-                  <Zap size={20} className="text-rose-300 mx-auto mb-2" />
-                  <p className="text-xs font-medium text-foreground">{t("home.action.emergency")}</p>
-                </div>
-              </a>
-            </Link>
-            <Link href="/tools" asChild>
-              <a className="block animate-fade-up" style={{ animationDelay: "0.02s" }}>
-                <div className="rounded-[1.5rem] border border-border/50 bg-card/50 p-4 text-center transition-all duration-300 hover:bg-card/70 hover:-translate-y-0.5 active:scale-[0.98]">
-                  <Wrench size={20} className="text-primary mx-auto mb-2" />
-                  <p className="text-xs font-medium text-foreground">{t("home.action.tools")}</p>
-                </div>
-              </a>
-            </Link>
-            <Link href="/journal" asChild>
-              <a className="block animate-fade-up" style={{ animationDelay: "0.04s" }}>
-                <div className="rounded-[1.5rem] border border-border/50 bg-card/50 p-4 text-center transition-all duration-300 hover:bg-card/70 hover:-translate-y-0.5 active:scale-[0.98]">
-                  <PenLine size={20} className="text-emerald-300 mx-auto mb-2" />
-                  <p className="text-xs font-medium text-foreground">{t("home.action.journal")}</p>
-                </div>
-              </a>
-            </Link>
-          </div>
-        </section>
 
       </div>
     </div>

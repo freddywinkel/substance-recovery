@@ -1,16 +1,13 @@
-import { useState } from "react";
 import { useStore } from "@/hooks/useStore";
 import { useT } from "@/hooks/useTranslation";
 import { PageHeader } from "@/components/PageHeader";
 import { Link } from "wouter";
-import { QuickLog } from "@/components/QuickLog";
-import { Plus } from "lucide-react";
+import { RegistrationHistory } from "@/components/RegistrationHistory";
 import { CATEGORY_META } from "@/lib/constants";
 
 export function Registraties() {
   const { cravingLogs, relapseLogs, anxietyLogs, boredomLogs, loading } = useStore();
   const { t } = useT();
-  const [quickLogOpen, setQuickLogOpen] = useState(false);
 
   if (loading) {
     return (
@@ -38,7 +35,7 @@ export function Registraties() {
       type: "craving" as const,
       label: t("registrations.craving.title"),
       sub: t("registrations.craving.sub"),
-      lastLog: lastCraving?.cravingType !== "active" ? lastCraving.timestamp : undefined,
+      lastLog: lastCraving && lastCraving.cravingType !== "active" ? lastCraving.timestamp : undefined,
     },
     {
       to: "/boredom",
@@ -72,26 +69,10 @@ export function Registraties() {
   };
 
   return (
-    <div className="flex flex-col min-h-dvh">
+    <div className="flex h-full min-h-0 flex-col">
       <PageHeader title={t("registrations.title")} />
 
       <div className="flex-1 overflow-y-auto scroll-smooth-ios px-4 flex flex-col gap-3 pb-safe">
-
-        {/* Quick log button */}
-        <button
-          type="button"
-          onClick={() => setQuickLogOpen(true)}
-          className="flex items-center gap-3 rounded-2xl border border-primary/20 bg-primary/5 px-4 py-3.5 transition-all duration-150 hover:bg-primary/10 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
-          aria-label={t("quicklog.title")}
-        >
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-            <Plus size={18} strokeWidth={2} />
-          </div>
-          <div className="text-left">
-            <p className="text-sm font-semibold text-foreground">{t("quicklog.title")}</p>
-            <p className="text-xs text-muted-foreground">{t("quicklog.type")}</p>
-          </div>
-        </button>
 
         <p className="text-sm text-muted-foreground leading-relaxed">
           {t("registrations.description")}
@@ -126,9 +107,18 @@ export function Registraties() {
           );
         })}
 
+        <section className="mt-4 flex flex-col gap-3" aria-labelledby="registration-history-heading">
+          <div className="px-1">
+            <h2 id="registration-history-heading" className="text-sm font-semibold text-foreground">
+              {t("logs.title")}
+            </h2>
+            <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
+              {t("logs.subtitle")}
+            </p>
+          </div>
+          <RegistrationHistory />
+        </section>
       </div>
-
-      <QuickLog open={quickLogOpen} onOpenChange={setQuickLogOpen} />
     </div>
   );
 }

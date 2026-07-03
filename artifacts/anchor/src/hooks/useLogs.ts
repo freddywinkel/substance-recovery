@@ -6,15 +6,19 @@ import {
   BoredomLog,
   addCravingLog,
   getCravingLogs,
+  updateCravingLog,
   deleteCravingLog,
   addRelapseLog,
   getRelapseLogs,
+  updateRelapseLog,
   deleteRelapseLog,
   addAnxietyLog,
   getAnxietyLogs,
+  updateAnxietyLog,
   deleteAnxietyLog,
   addBoredomLog,
   getBoredomLogs,
+  updateBoredomLog,
   deleteBoredomLog,
   SYNC_APPLIED_EVENT,
 } from "@/db";
@@ -66,6 +70,11 @@ export function useLogs() {
     setCravingLogs(await getCravingLogs());
   }, []);
 
+  const updateCraving = useCallback(async (log: CravingLog) => {
+    await updateCravingLog(log);
+    setCravingLogs(await getCravingLogs());
+  }, []);
+
   const logRelapse = useCallback(
     async (entry: Omit<RelapseLog, "id">) => {
       const result = await addRelapseLog(entry);
@@ -77,6 +86,11 @@ export function useLogs() {
 
   const removeRelapse = useCallback(async (id: string) => {
     await deleteRelapseLog(id);
+    setRelapseLogs(await getRelapseLogs());
+  }, []);
+
+  const updateRelapse = useCallback(async (log: RelapseLog) => {
+    await updateRelapseLog(log);
     setRelapseLogs(await getRelapseLogs());
   }, []);
 
@@ -94,6 +108,11 @@ export function useLogs() {
     setAnxietyLogs(await getAnxietyLogs());
   }, []);
 
+  const updateAnxiety = useCallback(async (log: AnxietyLog) => {
+    await updateAnxietyLog(log);
+    setAnxietyLogs(await getAnxietyLogs());
+  }, []);
+
   const logBoredom = useCallback(
     async (entry: Omit<BoredomLog, "id">) => {
       const result = await addBoredomLog(entry);
@@ -108,6 +127,11 @@ export function useLogs() {
     setBoredomLogs(await getBoredomLogs());
   }, []);
 
+  const updateBoredom = useCallback(async (log: BoredomLog) => {
+    await updateBoredomLog(log);
+    setBoredomLogs(await getBoredomLogs());
+  }, []);
+
   const reload = useCallback(async () => {
     await load();
   }, [load]);
@@ -119,12 +143,16 @@ export function useLogs() {
     boredomLogs,
     loading,
     logCraving,
+    updateCraving,
     removeCraving,
     logRelapse,
+    updateRelapse,
     removeRelapse,
     logAnxiety,
+    updateAnxiety,
     removeAnxiety,
     logBoredom,
+    updateBoredom,
     removeBoredom,
     reload,
   };

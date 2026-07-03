@@ -292,8 +292,8 @@ export function RelapseLog() {
   // Gate "Next": every required question on the current step must be answered.
   const canProceed = (() => {
     switch (step) {
-      case "label":   return draft.label !== "";
-      case "when":    return draft.substances.length > 0 && draft.episodeDuration !== "" && draft.amountCategory !== "";
+      case "label":   return true;
+      case "when":    return draft.substances.length > 0;
       case "trigger": return draft.firstTriggerType !== "";
       case "next":    return (draft.supportContact !== "" || draft.supportContactOther.trim() !== "")
         && (draft.nextStep !== "" || draft.nextStepOther.trim() !== "");
@@ -658,7 +658,7 @@ export function RelapseLog() {
       {/* Bottom action bar */}
       <div
         className="fixed left-0 right-0 bg-background/95 backdrop-blur-sm border-t border-border px-4 pt-3 pb-3 z-40"
-        style={{ bottom: "calc(3.5rem + env(safe-area-inset-bottom))" }}
+        style={{ bottom: "var(--bottom-nav-h)" }}
       >
         <div className="flex gap-3 max-w-lg mx-auto">
           {canGoBack && (

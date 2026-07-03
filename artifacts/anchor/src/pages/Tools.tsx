@@ -1,20 +1,21 @@
-import { Link } from "wouter";
 import { PageHeader } from "@/components/PageHeader";
 import { ToolCard } from "@/components/ToolCard";
 import { useT } from "@/hooks/useTranslation";
 import { useStore } from "@/hooks/useStore";
 import { usePinnedTools } from "@/hooks/usePinnedTools";
+import { Link } from "wouter";
 import {
-  Wind,
-  Eye,
-  Waves,
-  Rewind,
   Droplets,
+  Eye,
   Heart,
-  Shuffle,
   Phone,
   Pin,
   PinOff,
+  Rewind,
+  Settings,
+  Shuffle,
+  Waves,
+  Wind,
 } from "lucide-react";
 
 function PinButton({ toolId }: { toolId: string }) {
@@ -29,10 +30,10 @@ function PinButton({ toolId }: { toolId: string }) {
         e.stopPropagation();
         togglePin(toolId);
       }}
-      className={`p-2 rounded-xl transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 ${
+      className={`rounded-xl p-2 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 ${
         pinned
-          ? "text-amber-300 bg-amber-400/10"
-          : "text-muted-foreground hover:text-foreground hover:bg-muted/40"
+          ? "bg-amber-400/10 text-amber-300"
+          : "text-muted-foreground hover:bg-muted/40 hover:text-foreground"
       }`}
       aria-label={pinned ? t("tools.unpin") : t("tools.pin")}
       title={pinned ? t("tools.unpin") : t("tools.pin")}
@@ -46,66 +47,7 @@ export function Tools() {
   const { t } = useT();
   const { crisisService, emergencyContacts } = useStore();
 
-  const CRISIS_TOOLS = [
-    {
-      to: "/tools/breathing",
-      icon: Wind,
-      title: t("crisis.tool.breathing.title"),
-      description: t("crisis.tool.breathing.desc"),
-      duration: t("crisis.tool.breathing.dur"),
-      urgency: "immediate" as const,
-    },
-    {
-      to: "/tools/grounding",
-      icon: Eye,
-      title: t("crisis.tool.grounding.title"),
-      description: t("crisis.tool.grounding.desc"),
-      duration: t("crisis.tool.grounding.dur"),
-      urgency: "immediate" as const,
-    },
-    {
-      to: "/tools/cold-water",
-      icon: Droplets,
-      title: t("crisis.tool.coldwater.title"),
-      description: t("crisis.tool.coldwater.desc"),
-      duration: t("crisis.tool.coldwater.dur"),
-      urgency: "immediate" as const,
-    },
-    {
-      to: "/tools/urge-surfing",
-      icon: Waves,
-      title: t("crisis.tool.urge.title"),
-      description: t("crisis.tool.urge.desc"),
-      duration: t("crisis.tool.urge.dur"),
-      urgency: "sustained" as const,
-    },
-    {
-      to: "/tools/tape",
-      icon: Rewind,
-      title: t("crisis.tool.tape.title"),
-      description: t("crisis.tool.tape.desc"),
-      duration: t("crisis.tool.tape.dur"),
-      urgency: "sustained" as const,
-    },
-    {
-      to: "/tools/self-compassion",
-      icon: Heart,
-      title: t("crisis.tool.compassion.title"),
-      description: t("crisis.tool.compassion.desc"),
-      duration: t("crisis.tool.compassion.dur"),
-      urgency: "sustained" as const,
-    },
-    {
-      to: "/tools/distraction",
-      icon: Shuffle,
-      title: t("crisis.tool.distraction.title"),
-      description: t("crisis.tool.distraction.desc"),
-      duration: t("crisis.tool.distraction.dur"),
-      urgency: "sustained" as const,
-    },
-  ];
-
-  const COPING_TOOLS = [
+  const tools = [
     {
       to: "/tools/breathing",
       icon: Wind,
@@ -164,115 +106,89 @@ export function Tools() {
     },
   ];
 
+  const showSupport =
+    (crisisService && crisisService.name && crisisService.number) ||
+    emergencyContacts.length > 0;
+
   return (
-    <div className="flex flex-col min-h-dvh bg-background">
+    <div className="flex h-full min-h-0 flex-col bg-background">
       <PageHeader title={t("tools.title")} subtitle={t("tools.subtitle")} />
 
       <div className="flex-1 overflow-y-auto scroll-smooth-ios px-4 py-4 pb-safe flex flex-col gap-4">
-        {/* ── Crisis Section ─────────────────────────── */}
-        <section aria-labelledby="crisis-heading">
-          <h2
-            id="crisis-heading"
-            className="text-sm font-semibold text-foreground px-1 mb-2"
-          >
-            {t("crisis.title")}
+        <section aria-labelledby="tools-heading">
+          <h2 id="tools-heading" className="text-sm font-semibold text-foreground px-1 mb-2">
+            {t("tools.title")}
           </h2>
           <p className="text-sm text-muted-foreground px-1 leading-relaxed mb-3">
-            {t("crisis.subtitle")}
+            {t("tools.intro")}
           </p>
 
-          <div className="flex flex-col gap-2 mt-1">
-            {CRISIS_TOOLS.filter((t) => t.urgency === "immediate").map(
-              (tool) => (
-                <Link key={tool.to} href={tool.to} asChild>
-                  <a className="block animate-fade-up focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 rounded-2xl">
-                    <div className="bg-card border border-border rounded-2xl p-4 flex items-start gap-4 hover:border-primary/40 active:scale-[0.98] transition-all duration-200">
-                      <div className="rounded-xl p-2.5 bg-red-500/10 text-red-400 shrink-0">
-                        <tool.icon size={22} strokeWidth={1.8} />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="font-semibold text-foreground">
-                            {tool.title}
-                          </span>
-                          <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full shrink-0">
-                            {tool.duration}
-                          </span>
-                        </div>
-                        <p className="text-sm text-muted-foreground mt-1 leading-snug">
-                          {tool.description}
-                        </p>
-                      </div>
-                      <div className="shrink-0 self-center">
-                        <PinButton toolId={tool.to} />
-                      </div>
-                    </div>
-                  </a>
-                </Link>
-              )
-            )}
+          <div className="flex flex-col gap-2">
+            {tools.map((tool) => (
+              <ToolCard
+                key={tool.to}
+                {...tool}
+                pinButton={<PinButton toolId={tool.to} />}
+              />
+            ))}
           </div>
+        </section>
 
-          <p className="text-xs text-muted-foreground uppercase tracking-widest px-1 mt-3">
-            {t("crisis.sustained")}
+        <div className="bg-muted/30 border border-border/40 rounded-2xl p-4 text-center">
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            {t("tools.disclaimer")}
           </p>
-          <div className="flex flex-col gap-2 mt-1">
-            {CRISIS_TOOLS.filter((t) => t.urgency === "sustained").map(
-              (tool) => (
-                <Link key={tool.to} href={tool.to} asChild>
-                  <a className="block animate-fade-up focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 rounded-2xl">
-                    <div className="bg-card border border-border rounded-2xl p-4 flex items-start gap-4 hover:border-primary/40 active:scale-[0.98] transition-all duration-200">
-                      <div className="rounded-xl p-2.5 bg-primary/10 text-primary shrink-0">
-                        <tool.icon size={22} strokeWidth={1.8} />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="font-semibold text-foreground">
-                            {tool.title}
-                          </span>
-                          <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full shrink-0">
-                            {tool.duration}
-                          </span>
-                        </div>
-                        <p className="text-sm text-muted-foreground mt-1 leading-snug">
-                          {tool.description}
-                        </p>
-                      </div>
-                      <div className="shrink-0 self-center">
-                        <PinButton toolId={tool.to} />
-                      </div>
-                    </div>
-                  </a>
-                </Link>
-              )
-            )}
+        </div>
+
+        <section aria-labelledby="support-heading" className="flex flex-col gap-3">
+          <div className="px-1">
+            <h2 id="support-heading" className="text-sm font-semibold text-foreground">
+              {t("tools.support.title")}
+            </h2>
+            <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
+              {t("tools.support.subtitle")}
+            </p>
           </div>
 
-          {/* ── Crisis Service card ────────────────────── */}
+          {!showSupport && (
+            <div className="rounded-2xl border border-border bg-card/60 p-4">
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                {t("tools.support.empty")}
+              </p>
+              <Link href="/settings" asChild>
+                <a className="mt-3 inline-flex items-center gap-2 rounded-xl border border-border px-3 py-2 text-xs font-semibold text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50">
+                  <Settings size={14} strokeWidth={2} />
+                  {t("tools.support.settings")}
+                </a>
+              </Link>
+            </div>
+          )}
+
           {crisisService && crisisService.name && crisisService.number && (
-            <div className="mt-3 bg-red-950/20 border border-red-800/30 rounded-2xl p-4 flex flex-col gap-3">
+            <div className="bg-red-950/20 border border-red-800/30 rounded-2xl p-4 flex flex-col gap-3">
               <div className="flex items-center gap-2">
                 <Phone size={16} strokeWidth={2} className="text-red-400 shrink-0" />
-                <p className="text-sm font-semibold text-foreground">
-                  {t("help.crisisService.title")}
-                </p>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-foreground">
+                    {t("help.crisisService.title")}
+                  </p>
+                  <p className="text-xs text-muted-foreground truncate">
+                    {crisisService.name}
+                  </p>
+                </div>
               </div>
-              <p className="text-xs text-muted-foreground -mt-1">
-                {crisisService.name}
-              </p>
               <a
                 href={`tel:${crisisService.number.replace(/\s/g, "")}`}
                 className="flex items-center justify-center gap-2 w-full bg-red-600 hover:bg-red-700 text-white rounded-xl py-3.5 font-semibold text-sm active:scale-[0.98] transition-all touch-target focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/50"
               >
                 <Phone size={18} strokeWidth={2} />
-                {t("help.crisisService.call")} — {crisisService.number}
+                {t("help.crisisService.call")} - {crisisService.number}
               </a>
             </div>
           )}
 
-          {/* ── Emergency Contacts ─────────────────────── */}
           {emergencyContacts.length > 0 && (
-            <div className="mt-3 bg-card border border-border rounded-2xl p-4 flex flex-col gap-3">
+            <div className="bg-card border border-border rounded-2xl p-4 flex flex-col gap-3">
               <div className="flex items-center gap-2">
                 <Phone size={16} strokeWidth={1.8} className="text-primary shrink-0" />
                 <p className="text-sm font-semibold text-foreground">
@@ -290,7 +206,7 @@ export function Tools() {
                         {contact.name}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {contact.relationship} · {contact.phone}
+                        {contact.relationship} - {contact.phone}
                       </p>
                     </div>
                     <a
@@ -306,31 +222,6 @@ export function Tools() {
             </div>
           )}
         </section>
-
-        {/* ── Coping Section ─────────────────────────── */}
-        <section aria-labelledby="coping-heading" className="mt-2">
-          <h2
-            id="coping-heading"
-            className="text-sm font-semibold text-foreground px-1 mb-2"
-          >
-            {t("tools.title")}
-          </h2>
-          <p className="text-sm text-muted-foreground px-1 leading-relaxed mb-3">
-            {t("tools.intro")}
-          </p>
-
-          {COPING_TOOLS.map((tool) => (
-            <ToolCard key={tool.to} {...tool} pinButton={<PinButton toolId={tool.to} />} />
-          ))}
-
-          <div className="mt-2 bg-muted/30 border border-border/40 rounded-2xl p-4 text-center">
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              {t("tools.disclaimer")}
-            </p>
-          </div>
-        </section>
-
-        <div className="h-4" />
       </div>
     </div>
   );
