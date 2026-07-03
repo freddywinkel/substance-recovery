@@ -1,3 +1,4 @@
+import { openDB, type DBSchema, type IDBPDatabase } from "idb";
 import { migrateCravingTo0to10 } from "./migrations";
 import type { SyncMetaRecord, DirtyRecord } from "./sync";
 

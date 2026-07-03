@@ -79,6 +79,7 @@
   --destructive-foreground: 0 0% 98%;
 
   --app-font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --bottom-nav-h: calc(4.5rem + env(safe-area-inset-bottom, 0px));
   --radius: 1rem;
   /* 8-pt spacing scale (multiples of 8px) */
   --space-8: 0.5rem;
@@ -164,9 +165,9 @@
       header with the same pattern.  Adding it on body would
       double-count the safe area.
 
-      Do NOT add padding-bottom either — the fixed <BottomNav>
-      handles its own env(safe-area-inset-bottom), and each page's
-      scrollable area uses pb-28 to clear it.
+      Do NOT add padding-bottom either. The app shell reserves space
+      for the fixed <BottomNav>, and individual route bodies own their
+      scrolling.
     */
   }
 
@@ -178,6 +179,15 @@
 }
 
 @layer utilities {
+  .app-main {
+    padding-bottom: calc(var(--bottom-nav-h) + var(--return-banner-h, 0px));
+  }
+
+  .app-main > * {
+    height: 100%;
+    min-height: 100%;
+  }
+
   /* ── Design tokens: micro-interactions ─────────────────────── */
   .transition-interactive {
     transition-property: all;
@@ -230,10 +240,7 @@
 
   /* Safe area helpers */
   .pb-safe {
-    /* 6rem clears the floating BottomNav pill. --return-banner-h is set by
-       RegistrationReturnBanner only while the "Continue your check-in"
-       banner is on screen, so in-flow page buttons never sit under it. */
-    padding-bottom: calc(env(safe-area-inset-bottom) + 6rem + var(--return-banner-h, 0px));
+    padding-bottom: calc(env(safe-area-inset-bottom) + 1rem);
   }
 
   .pt-safe {

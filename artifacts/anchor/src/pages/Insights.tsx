@@ -1,38 +1,28 @@
-import { useState, useMemo } from "react";
-import { useStore } from "@/hooks/useStore";
-import { useT } from "@/hooks/useTranslation";
+import { useMemo, useState } from "react";
 import { PageHeader } from "@/components/PageHeader";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
+import { useStore } from "@/hooks/useStore";
+import { useT } from "@/hooks/useTranslation";
 import {
-  filterByRange,
-  computeCravingStats,
-  computeRelapseStats,
+  Bar,
+  BarChart,
+  Cell,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+import {
   computeAnxietyStats,
   computeBoredomStats,
+  computeCravingStats,
+  computeRelapseStats,
   computeWeeklyTrend,
-  type TimeRange,
+  filterByRange,
   type FreqItem,
+  type TimeRange,
 } from "@/lib/analytics";
-import {
-  Trash2, ChevronDown, ChevronUp,
-  BookOpen, BarChart3, TrendingUp,
-} from "lucide-react";
-import { CATEGORY_META } from "@/lib/constants";
-
-const LABEL_KEYS: Record<string, string> = {
-  trek: "registrations.trek.title",
-  craving: "registrations.craving.title",
-  anxiety: "registrations.anxiety.title",
-  boredom: "registrations.boredom.title",
-  relapse: "registrations.relapse.title",
-};
-
-function fmtDate(ts: number) {
-  return new Date(ts).toLocaleString(undefined, { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
-}
-
-function join(arr: string[] | undefined, fallback = "—") { return arr && arr.length > 0 ? arr.join(", ") : fallback; }
+import { BarChart3, TrendingUp } from "lucide-react";
 
 function StatCard({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
   return (
@@ -83,16 +73,24 @@ function RangeFilter({ value, onChange, opts }: { value: TimeRange; onChange: (r
   );
 }
 
+type ImpactItem = {
+  label: string;
+  score: number;
+  count: number;
+  tone: string;
+};
+
 export function Insights() {
   const {
-    cravingLogs, relapseLogs, anxietyLogs, boredomLogs,
-    sobrietyStartDate, loading,
-    removeCraving, removeRelapse, removeAnxiety, removeBoredom,
+    cravingLogs,
+    relapseLogs,
+    anxietyLogs,
+    boredomLogs,
+    sobrietyStartDate,
+    loading,
   } = useStore();
   const { t, tOpt } = useT();
   const [range, setRange] = useState<TimeRange>("30d");
-  const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
   const rangeOpts: { v: TimeRange; label: string }[] = [
     { v: "7d", label: t("progress.range.7d") },
@@ -110,20 +108,17 @@ export function Insights() {
   const rStats = useMemo(() => computeRelapseStats(filteredRelapses), [filteredRelapses]);
   const aStats = useMemo(() => computeAnxietyStats(filteredAnxiety), [filteredAnxiety]);
   const bStats = useMemo(() => computeBoredomStats(filteredBoredom), [filteredBoredom]);
-  const weekly = useMemo(() => computeWeeklyTrend(cravingLogs, 10), [cravingLogs]);
+  const weekly = useMemo(() => computeWeeklyTrend(filteredCravings, 10), [filteredCravings]);
 
-  // All entries merged and sorted
-  const allEntries = useMemo(() => {
-    const entries = [
-      ...cravingLogs.map((l) => ({ ...l, _type: l.cravingType === "active" ? "trek" : "craving" as string })),
-      ...relapseLogs.map((l) => ({ ...l, _type: "relapse" as string })),
-      ...anxietyLogs.map((l) => ({ ...l, _type: "anxiety" as string })),
-      ...boredomLogs.map((l) => ({ ...l, _type: "boredom" as string })),
+  const allPatternEntries = useMemo(() => {
+    return [
+      ...filteredCravings,
+      ...filteredRelapses,
+      ...filteredAnxiety,
+      ...filteredBoredom,
     ];
-    return entries.sort((a, b) => b.timestamp - a.timestamp);
-  }, [cravingLogs, relapseLogs, anxietyLogs, boredomLogs]);
+  }, [filteredAnxiety, filteredBoredom, filteredCravings, filteredRelapses]);
 
-  // Time-of-day data for Recharts
   const timeOfDayData = useMemo(() => {
     const buckets = { morning: 0, afternoon: 0, evening: 0, night: 0 };
     const labels: Record<string, string> = {
@@ -132,35 +127,53 @@ export function Insights() {
       evening: t("insights.evening"),
       night: t("insights.night"),
     };
-    for (const e of allEntries) {
-      const h = new Date(e.timestamp).getHours();
+    for (const entry of allPatternEntries) {
+      const h = new Date(entry.timestamp).getHours();
       if (h >= 6 && h < 12) buckets.morning++;
       else if (h >= 12 && h < 18) buckets.afternoon++;
       else if (h >= 18 && h < 22) buckets.evening++;
       else buckets.night++;
     }
     return Object.entries(buckets).map(([key, count]) => ({ name: labels[key], count }));
-  }, [allEntries, t]);
+  }, [allPatternEntries, t]);
 
-  // Trigger data for Recharts (top situations from cravings)
   const triggerData = useMemo(() => {
     return cStats.topSituations.slice(0, 6).map((item) => ({ name: item.label, count: item.count }));
   }, [cStats.topSituations]);
 
-  const handleDelete = async (entry: typeof allEntries[0]) => {
-    if (deleteConfirm !== entry.id) {
-      setDeleteConfirm(entry.id);
-      return;
-    }
-    try {
-      if (entry._type === "trek" || entry._type === "craving") await removeCraving(entry.id);
-      else if (entry._type === "relapse") await removeRelapse(entry.id);
-      else if (entry._type === "anxiety") await removeAnxiety(entry.id);
-      else if (entry._type === "boredom") await removeBoredom(entry.id);
-    } finally {
-      setDeleteConfirm(null);
-    }
-  };
+  const impactItems = useMemo<ImpactItem[]>(() => {
+    const items: Array<ImpactItem | null> = [
+      cStats.activeTotal > 0 && cStats.avgIntensityActive != null
+        ? { label: t("logs.tab.trek"), score: cStats.avgIntensityActive, count: cStats.activeTotal, tone: "text-amber-300" }
+        : null,
+      cStats.passiveTotal > 0 && cStats.avgIntensityPassive != null
+        ? { label: t("logs.tab.craving"), score: cStats.avgIntensityPassive, count: cStats.passiveTotal, tone: "text-teal-300" }
+        : null,
+      aStats.total > 0 && aStats.avgIntensity != null
+        ? { label: t("logs.tab.anxiety"), score: aStats.avgIntensity, count: aStats.total, tone: "text-violet-300" }
+        : null,
+      bStats.total > 0 && bStats.avgIntensity != null
+        ? { label: t("logs.tab.boredom"), score: bStats.avgIntensity, count: bStats.total, tone: "text-emerald-300" }
+        : null,
+      rStats.total > 0
+        ? { label: t("logs.tab.relapse"), score: 10, count: rStats.total, tone: "text-rose-300" }
+        : null,
+    ];
+    return items
+      .filter((item): item is ImpactItem => Boolean(item))
+      .sort((a, b) => b.score - a.score || b.count - a.count);
+  }, [
+    aStats.avgIntensity,
+    aStats.total,
+    bStats.avgIntensity,
+    bStats.total,
+    cStats.activeTotal,
+    cStats.avgIntensityActive,
+    cStats.avgIntensityPassive,
+    cStats.passiveTotal,
+    rStats.total,
+    t,
+  ]);
 
   if (loading) {
     return (
@@ -176,12 +189,14 @@ export function Insights() {
     <div className="flex flex-col min-h-dvh bg-background">
       <PageHeader title={t("nav.insights")} subtitle={t("progress.subtitle")} />
 
-      <div className="px-4 pt-2">
-        <Tabs defaultValue="entries" className="w-full">
+      <div className="flex-1 overflow-y-auto scroll-smooth-ios px-4 pt-2 pb-safe">
+        <RangeFilter value={range} onChange={setRange} opts={rangeOpts} />
+
+        <Tabs defaultValue="impact" className="mt-3 w-full">
           <TabsList className="w-full">
-            <TabsTrigger value="entries" className="flex-1 gap-1.5">
-              <BookOpen size={14} strokeWidth={1.8} />
-              {t("insights.entries.title")}
+            <TabsTrigger value="impact" className="flex-1 gap-1.5">
+              <TrendingUp size={14} strokeWidth={1.8} />
+              {t("insights.impact.title")}
             </TabsTrigger>
             <TabsTrigger value="patterns" className="flex-1 gap-1.5">
               <BarChart3 size={14} strokeWidth={1.8} />
@@ -189,107 +204,54 @@ export function Insights() {
             </TabsTrigger>
           </TabsList>
 
-          {/* ── Entries Tab ───────────────────────────── */}
-          <TabsContent value="entries" className="pb-safe mt-3">
-            {allEntries.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-8">{t("insights.entries.empty")}</p>
-            ) : (
-              <div className="flex flex-col gap-2">
-                {allEntries.map((entry) => {
-                  const meta = CATEGORY_META[entry._type] || CATEGORY_META.craving;
-                  const Icon = meta.icon;
-                  const isExpanded = expandedId === entry.id;
-                  const isConfirm = deleteConfirm === entry.id;
-                  const contentId = `entry-details-${entry.id}`;
-                  return (
-                    <div
-                      key={entry.id}
-                      className="rounded-[1.5rem] border border-border/50 bg-card/50 p-4 transition-all"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-card ring-1 ring-border/50 ${meta.color}`}>
-                          <Icon size={18} strokeWidth={1.8} />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold text-foreground">{t(LABEL_KEYS[entry._type] || LABEL_KEYS.craving)}</p>
-                          <p className="text-[10px] text-muted-foreground">{fmtDate(entry.timestamp)}</p>
-                        </div>
-                        {(entry as any).intensity != null && (
-                          <span className="text-sm font-semibold tabular-nums text-primary">{(entry as any).intensity}/10</span>
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => setExpandedId(isExpanded ? null : entry.id)}
-                          className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
-                          aria-label={isExpanded ? "Collapse" : "Expand"}
-                          aria-expanded={isExpanded}
-                          aria-controls={contentId}
-                        >
-                          {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                        </button>
-                      </div>
+          <TabsContent value="impact" className="mt-3 flex flex-col gap-3">
+            <div className="rounded-[1.5rem] border border-border/50 bg-card/50 p-4">
+              <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                {t("insights.impact.summary")}
+              </p>
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                {t("insights.impact.subtitle")}
+              </p>
+            </div>
 
-                      {isExpanded && (
-                        <div id={contentId} className="mt-3 pt-3 border-t border-border/50 flex flex-col gap-2">
-                          <p className="text-xs text-muted-foreground">
-                            <span className="font-medium text-foreground">Note:</span> {(entry as any).note || "—"}
-                          </p>
-                          {(entry as any).emotions && (entry as any).emotions.length > 0 && (
-                            <p className="text-xs text-muted-foreground">
-                              <span className="font-medium text-foreground">Emotions:</span> {join((entry as any).emotions)}
-                            </p>
-                          )}
-                          {(entry as any).substances && (entry as any).substances.length > 0 && (
-                            <p className="text-xs text-muted-foreground">
-                              <span className="font-medium text-foreground">Substances:</span> {join((entry as any).substances)}
-                            </p>
-                          )}
-                          {(entry as any).chosenAction && (
-                            <p className="text-xs text-muted-foreground">
-                              <span className="font-medium text-foreground">Action:</span> {(entry as any).chosenAction}
-                            </p>
-                          )}
-                          {(entry as any).cravingOutcome && (
-                            <p className="text-xs text-muted-foreground">
-                              <span className="font-medium text-foreground">Outcome:</span> {(entry as any).cravingOutcome}
-                            </p>
-                          )}
-                          <div className="flex justify-end mt-1">
-                            <button
-                              type="button"
-                              onClick={() => handleDelete(entry)}
-                              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 ${
-                                isConfirm
-                                  ? "bg-red-500/20 text-red-300 border border-red-500/30"
-                                  : "text-muted-foreground hover:text-red-300 hover:bg-red-500/10"
-                              }`}
-                            >
-                              <Trash2 size={13} strokeWidth={2} />
-                              {isConfirm ? "Confirm delete" : "Delete"}
-                            </button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
+            {impactItems.length === 0 ? (
+              <div className="rounded-[1.5rem] border border-border/50 bg-card/50 p-5 text-center">
+                <p className="text-sm text-muted-foreground">{t("insights.impact.empty")}</p>
               </div>
+            ) : (
+              impactItems.map((item, index) => (
+                <div key={item.label} className="rounded-[1.5rem] border border-border/50 bg-card/50 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-foreground">
+                        {index + 1}. {item.label}
+                      </p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {t("insights.impact.count").replace("{n}", String(item.count))}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className={`text-2xl font-semibold tabular-nums ${item.tone}`}>
+                        {item.score.toFixed(1)}
+                      </p>
+                      <p className="text-[10px] text-muted-foreground">
+                        {t("insights.impact.score")}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ))
             )}
           </TabsContent>
 
-          {/* ── Patterns Tab ──────────────────────────── */}
-          <TabsContent value="patterns" className="pb-safe mt-3 flex flex-col gap-4">
-            <RangeFilter value={range} onChange={setRange} opts={rangeOpts} />
-
-            {/* Overview stats */}
+          <TabsContent value="patterns" className="mt-3 flex flex-col gap-4">
             <div className="grid grid-cols-2 gap-3">
-              <StatCard label={t("progress.stat.streak")} value={sobrietyStartDate ? "—" : "—"} sub={t("progress.stat.streak_sub")} />
+              <StatCard label={t("progress.stat.streak")} value={sobrietyStartDate ? "-" : "-"} sub={t("progress.stat.streak_sub")} />
               <StatCard label={t("progress.stat.cravings")} value={cStats.total} />
               <StatCard label={t("progress.stat.lapses")} value={rStats.total} sub={t("progress.stat.in_period")} />
-              <StatCard label={t("progress.stat.avg_intensity")} value={cStats.avgIntensity?.toFixed(1) ?? "—"} sub={t("progress.stat.avg_intensity_sub")} />
+              <StatCard label={t("progress.stat.avg_intensity")} value={cStats.avgIntensity?.toFixed(1) ?? "-"} sub={t("progress.stat.avg_intensity_sub")} />
             </div>
 
-            {/* Weekly activity chart */}
             <div className="rounded-[1.5rem] border border-border/50 bg-card/50 p-4">
               <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground mb-3">{t("progress.section.checkins")}</p>
               <div className="flex items-end gap-1.5 h-[60px]">
@@ -308,7 +270,6 @@ export function Insights() {
               </div>
             </div>
 
-            {/* Recharts: By time of day */}
             <div className="rounded-[1.5rem] border border-border/50 bg-card/50 p-4">
               <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground mb-3">{t("insights.timeOfDay.title")}</p>
               {timeOfDayData.some((d) => d.count > 0) ? (
@@ -335,7 +296,6 @@ export function Insights() {
               )}
             </div>
 
-            {/* Recharts: By trigger */}
             <div className="rounded-[1.5rem] border border-border/50 bg-card/50 p-4">
               <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground mb-3">{t("insights.byTrigger.title")}</p>
               {triggerData.length > 0 ? (
@@ -358,7 +318,6 @@ export function Insights() {
               )}
             </div>
 
-            {/* Frequency bars */}
             {cStats.topEmotions.length > 0 && (
               <div className="rounded-[1.5rem] border border-border/50 bg-card/50 p-4">
                 <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground mb-3">{t("progress.patterns.emotions")}</p>
