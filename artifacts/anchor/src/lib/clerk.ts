@@ -9,10 +9,14 @@ function isReplitInternalProxy(url: string | undefined): boolean {
 // REQUIRED — copy verbatim. Resolves the key from window.location.hostname so the
 // same build serves multiple Clerk custom domains. Do not inline the env var,
 // leave publishableKey undefined, or replace publishableKeyFromHost.
-export const clerkPubKey = publishableKeyFromHost(
-  window.location.hostname,
-  import.meta.env.VITE_CLERK_PUBLISHABLE_KEY,
-);
+const configuredClerkPublishableKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
+
+export const clerkPubKey = configuredClerkPublishableKey
+  ? publishableKeyFromHost(
+      window.location.hostname,
+      configuredClerkPublishableKey,
+    )
+  : undefined;
 
 // REQUIRED — copy verbatim. Empty in dev (Clerk hits dev FAPI directly), auto-set
 // in prod. Do NOT gate on import.meta.env.PROD / NODE_ENV.

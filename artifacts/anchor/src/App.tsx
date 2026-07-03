@@ -142,6 +142,7 @@ function AppShell() {
 function ClerkProviderWithRoutes() {
   const [, setLocation] = useLocation();
   const { language } = useLanguage();
+  if (!clerkPubKey) return null;
 
   return (
     <ClerkProvider

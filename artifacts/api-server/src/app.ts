@@ -3,6 +3,8 @@ import cors from "cors";
 import pinoHttp from "pino-http";
 import { clerkMiddleware } from "@clerk/express";
 import { publishableKeyFromHost } from "@clerk/shared/keys";
+import fs from "node:fs";
+import path from "node:path";
 import {
   CLERK_PROXY_PATH,
   clerkProxyMiddleware,
@@ -43,18 +45,42 @@ app.use(cors({ credentials: true, origin: true }));
 app.use(express.json({ limit: "5mb" }));
 app.use(express.urlencoded({ extended: true }));
 
-// Resolve the publishable key from the incoming request host so the same server
-// can serve multiple Clerk custom domains. getClerkProxyHost is shared with
-// clerkProxyMiddleware so both halves agree on the canonical hostname.
-app.use(
-  clerkMiddleware((req) => ({
-    publishableKey: publishableKeyFromHost(
-      getClerkProxyHost(req) ?? "",
-      process.env.CLERK_PUBLISHABLE_KEY,
-    ),
-  })),
-);
+// Clerk is optional so the app can boot and serve health/static checks without
+// auth secrets. Sync routes stay protected by requireAuth and return 401 when
+// Clerk is not configured.
+if (process.env.CLERK_SECRET_KEY) {
+  // Resolve the publishable key from the incoming request host so the same
+  // server can serve multiple Clerk custom domains. getClerkProxyHost is shared
+  // with clerkProxyMiddleware so both halves agree on the canonical hostname.
+  app.use(
+    clerkMiddleware((req) => ({
+      publishableKey: publishableKeyFromHost(
+        getClerkProxyHost(req) ?? "",
+        process.env.CLERK_PUBLISHABLE_KEY,
+      ),
+    })),
+  );
+} else {
+  logger.warn(
+    "CLERK_SECRET_KEY is not set; auth middleware is disabled and sync routes will return 401.",
+  );
+}
 
 app.use("/api", router);
+
+const frontendDist = path.resolve(process.cwd(), "../anchor/dist/public");
+const frontendIndex = path.join(frontendDist, "index.html");
+
+if (fs.existsSync(frontendIndex)) {
+  app.use(express.static(frontendDist));
+  app.get("/{*splat}", (_req, res) => {
+    res.sendFile(frontendIndex);
+  });
+} else {
+  logger.warn(
+    { frontendDist },
+    "Frontend build output not found; API-only mode is active.",
+  );
+}
 
 export default app;

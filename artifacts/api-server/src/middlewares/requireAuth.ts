@@ -7,6 +7,11 @@ import { getAuth } from "@clerk/express";
  * token handling is needed here.
  */
 export const requireAuth: RequestHandler = (req, res, next) => {
+  if (!process.env.CLERK_SECRET_KEY) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
   const { userId } = getAuth(req);
   if (!userId) {
     res.status(401).json({ error: "Unauthorized" });
