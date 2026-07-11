@@ -3,16 +3,12 @@ import { useStore } from "@/hooks/useStore";
 import { usePWA } from "@/hooks/usePWA";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useT } from "@/hooks/useTranslation";
-import { useSync } from "@/contexts/SyncContext";
 import { PageHeader } from "@/components/PageHeader";
 import { useReminders } from "@/hooks/useReminders";
 import { useToast } from "@/hooks/use-toast";
-import { useClerkAvailable } from "@/lib/clerk-safe";
-import { AccountSection } from "@/components/AccountSection";
-import { FallbackAccountSection } from "@/components/FallbackAccountSection";
 import {
   Moon, Sun, Download, Trash2, Phone, Shield, Calendar,
-  Languages, UserPlus, X, Cloud, Upload, Bell, FileDown,
+  Languages, UserPlus, X, Upload, Bell, FileDown,
   FileUp, CheckCircle2, AlertCircle, Clock,
 } from "lucide-react";
 import { EmergencyContact } from "@/db";
@@ -30,10 +26,8 @@ export function Settings() {
   const { installPrompt, isInstalled, install } = usePWA();
   const { language, setLanguage } = useLanguage();
   const { t } = useT();
-  const { isSignedIn: syncSignedIn } = useSync();
   const [, navigate] = useLocation();
   const { toast } = useToast();
-  const clerkAvailable = useClerkAvailable();
 
   const [confirmReset, setConfirmReset] = useState(false);
   const [resetDone, setResetDone] = useState(false);
@@ -78,7 +72,7 @@ export function Settings() {
   }, [crisisService]);
 
   const handleReset = async () => {
-    await resetAllData({ signedIn: syncSignedIn, userId: null });
+    await resetAllData({ signedIn: false, userId: null });
     setConfirmReset(false);
     setResetDone(true);
     setDateInput("");
@@ -555,9 +549,6 @@ export function Settings() {
           </div>
         </section>
 
-        {/* Account / Cloud sync */}
-        {clerkAvailable ? <AccountSection /> : <FallbackAccountSection />}
-
         {/* Privacy */}
         <section>
           <p className="text-xs text-muted-foreground uppercase tracking-widest px-1 mb-3">{t("settings.section.privacy")}</p>
@@ -565,9 +556,9 @@ export function Settings() {
             <div className="flex items-start gap-3">
               <Shield size={18} className="text-primary mt-0.5 shrink-0" />
               <div>
-                <p className="text-sm font-medium text-foreground">{syncSignedIn ? t("settings.privacy.titleSignedIn") : t("settings.privacy.title")}</p>
+                <p className="text-sm font-medium text-foreground">{t("settings.privacy.title")}</p>
                 <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
-                  {syncSignedIn ? t("settings.privacy.bodySignedIn") : t("settings.privacy.body")}
+                  {t("settings.privacy.body")}
                 </p>
               </div>
             </div>

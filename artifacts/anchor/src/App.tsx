@@ -1,10 +1,7 @@
-import { Switch, Route, useLocation, Router as WouterRouter } from "wouter";
-import { useEffect, useRef } from "react";
-import { ClerkProvider, useClerk } from "@clerk/react";
-import { nlNL, enUS } from "@clerk/localizations";
-import { QueryClientProvider, useQueryClient } from "@tanstack/react-query";
+import { Switch, Route, Router as WouterRouter } from "wouter";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
-import { LanguageProvider, useLanguage } from "@/contexts/LanguageContext";
+import { LanguageProvider } from "@/contexts/LanguageContext";
 import { ActiveRegistrationProvider } from "@/contexts/ActiveRegistrationContext";
 import { RegistrationLauncherProvider } from "@/contexts/RegistrationLauncherContext";
 import { SyncProvider } from "@/contexts/SyncContext";
@@ -14,16 +11,9 @@ import { OfflineBanner } from "@/components/OfflineBanner";
 import { RegistrationReturnBanner } from "@/components/RegistrationReturnBanner";
 import { usePWA } from "@/hooks/usePWA";
 import { queryClient } from "@/lib/queryClient";
-import { ClerkAvailableContext } from "@/lib/clerk-safe";
 import { AtmosphericBackground } from "@/components/AtmosphericBackground";
 import { ScrollToTop } from "@/components/ScrollToTop";
-import {
-  clerkPubKey,
-  clerkProxyUrl,
-  clerkAppearance,
-  basePath,
-  stripBase,
-} from "@/lib/clerk";
+import { basePath } from "@/lib/clerk";
 import { Home } from "@/pages/Home";
 import { CrisisNow } from "@/pages/CrisisNow";
 import { Tools } from "@/pages/Tools";
@@ -38,7 +28,6 @@ import { AnxietyTracker } from "@/pages/AnxietyTracker";
 import { BoredomTracker } from "@/pages/BoredomTracker";
 import { TrekTracker } from "@/pages/TrekTracker";
 import { DelayScreen } from "@/pages/DelayScreen";
-import { SignInPage, SignUpPage } from "@/pages/AuthPages";
 import { PrivacyPolicy } from "@/pages/PrivacyPolicy";
 import { BoxBreathing } from "@/tools/BoxBreathing";
 import { Grounding54321 } from "@/tools/Grounding54321";
@@ -55,7 +44,7 @@ function NotFound() {
       <p className="text-4xl mb-4">🌊</p>
       <h1 className="text-xl font-semibold text-foreground mb-2">{t("notfound.title")}</h1>
       <p className="text-muted-foreground text-sm">{t("notfound.body")}</p>
-      <a href="/" className="mt-6 text-primary text-sm font-medium">{t("notfound.home")}</a>
+      <a href={`${basePath}/`} className="mt-6 text-primary text-sm font-medium">{t("notfound.home")}</a>
     </div>
   );
 }
@@ -85,35 +74,9 @@ function AppRoutes() {
       <Route path="/insights" component={Insights} />
       <Route path="/settings" component={Settings} />
       <Route path="/privacy" component={PrivacyPolicy} />
-      <Route path="/sign-in/*?" component={SignInPage} />
-      <Route path="/sign-up/*?" component={SignUpPage} />
       <Route component={NotFound} />
     </Switch>
   );
-}
-
-// Invalidate the react-query cache when the signed-in user changes so one
-// account's cached data never leaks into another session.
-function ClerkQueryClientCacheInvalidator() {
-  const { addListener } = useClerk();
-  const qc = useQueryClient();
-  const prevUserIdRef = useRef<string | null | undefined>(undefined);
-
-  useEffect(() => {
-    const unsubscribe = addListener(({ user }) => {
-      const userId = user?.id ?? null;
-      if (
-        prevUserIdRef.current !== undefined &&
-        prevUserIdRef.current !== userId
-      ) {
-        qc.clear();
-      }
-      prevUserIdRef.current = userId;
-    });
-    return unsubscribe;
-  }, [addListener, qc]);
-
-  return null;
 }
 
 function AppShell() {
@@ -140,35 +103,7 @@ function AppShell() {
   );
 }
 
-function ClerkProviderWithRoutes() {
-  const [, setLocation] = useLocation();
-  const { language } = useLanguage();
-  if (!clerkPubKey) return null;
-
-  return (
-    <ClerkProvider
-      publishableKey={clerkPubKey}
-      proxyUrl={clerkProxyUrl}
-      appearance={clerkAppearance}
-      signInUrl={`${basePath}/sign-in`}
-      signUpUrl={`${basePath}/sign-up`}
-      localization={language === "nl" ? nlNL : enUS}
-      routerPush={(to) => setLocation(stripBase(to))}
-      routerReplace={(to) => setLocation(stripBase(to), { replace: true })}
-    >
-      <QueryClientProvider client={queryClient}>
-        <ClerkQueryClientCacheInvalidator />
-        <SyncProvider>
-          <ActiveRegistrationProvider>
-            <AppShell />
-          </ActiveRegistrationProvider>
-        </SyncProvider>
-      </QueryClientProvider>
-    </ClerkProvider>
-  );
-}
-
-function NonClerkAppShell() {
+function OfflineAppShell() {
   return (
     <QueryClientProvider client={queryClient}>
       <SyncProvider>
@@ -184,15 +119,7 @@ export default function App() {
   return (
     <LanguageProvider>
       <WouterRouter base={basePath}>
-        {clerkPubKey ? (
-          <ClerkAvailableContext.Provider value={true}>
-            <ClerkProviderWithRoutes />
-          </ClerkAvailableContext.Provider>
-        ) : (
-          <ClerkAvailableContext.Provider value={false}>
-            <NonClerkAppShell />
-          </ClerkAvailableContext.Provider>
-        )}
+        <OfflineAppShell />
       </WouterRouter>
     </LanguageProvider>
   );

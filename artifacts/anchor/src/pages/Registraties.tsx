@@ -20,15 +20,7 @@ export function Registraties() {
       <PageHeader title={t("logs.title")} subtitle={t("logs.subtitle")} />
 
       <div className="flex-1 overflow-y-auto scroll-smooth-ios px-4 pt-2 flex flex-col gap-3 pb-safe">
-        <section className="flex flex-col gap-3" aria-labelledby="registration-history-heading">
-          <div className="px-1">
-            <h2 id="registration-history-heading" className="text-sm font-semibold text-foreground">
-              {t("logs.title")}
-            </h2>
-            <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
-              {t("logs.subtitle")}
-            </p>
-          </div>
+        <section className="flex flex-col gap-3" aria-label={t("logs.title")}>
           <RegistrationHistory />
         </section>
       </div>
