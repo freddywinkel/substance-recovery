@@ -115,10 +115,7 @@ export function Tools() {
       <PageHeader title={t("tools.title")} subtitle={t("tools.subtitle")} />
 
       <div className="flex-1 overflow-y-auto scroll-smooth-ios px-4 py-4 pb-safe flex flex-col gap-4">
-        <section aria-labelledby="tools-heading">
-          <h2 id="tools-heading" className="text-sm font-semibold text-foreground px-1 mb-2">
-            {t("tools.title")}
-          </h2>
+        <section aria-label={t("tools.title")}>
           <p className="text-sm text-muted-foreground px-1 leading-relaxed mb-3">
             {t("tools.intro")}
           </p>
