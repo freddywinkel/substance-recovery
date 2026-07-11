@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { getSetting, setSetting, SYNC_APPLIED_EVENT } from "@/db";
+import { getSetting, setSetting } from "@/db";
 
 export type Theme = "dark" | "light";
 
@@ -15,14 +15,6 @@ export function useUI() {
 
   useEffect(() => {
     void load();
-  }, [load]);
-
-  useEffect(() => {
-    const onApplied = () => {
-      void load();
-    };
-    window.addEventListener(SYNC_APPLIED_EVENT, onApplied);
-    return () => window.removeEventListener(SYNC_APPLIED_EVENT, onApplied);
   }, [load]);
 
   useEffect(() => {

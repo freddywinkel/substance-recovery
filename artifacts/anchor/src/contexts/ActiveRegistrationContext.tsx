@@ -57,7 +57,7 @@ interface ActiveRegistrationValue {
   session: ActiveRegistration | null;
   startSession: (args: StartArgs) => void;
   patchSession: (updates: PatchArgs) => void;
-  clearSession: () => void;
+  clearSession: () => Promise<void>;
 }
 
 const ActiveRegistrationContext = createContext<ActiveRegistrationValue | null>(null);
@@ -152,9 +152,15 @@ export function ActiveRegistrationProvider({ children }: { children: React.React
     [commit],
   );
 
-  const clearSession = useCallback(() => {
-    commit(null, true);
-  }, [commit]);
+  const clearSession = useCallback(async () => {
+    sessionRef.current = null;
+    setSession(null);
+    if (writeTimer.current) {
+      clearTimeout(writeTimer.current);
+      writeTimer.current = null;
+    }
+    await setSetting(SETTING_KEY, "");
+  }, []);
 
   if (!loaded) return null;
 

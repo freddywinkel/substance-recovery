@@ -4,7 +4,6 @@ import {
   addJournalEntry,
   getJournalEntries,
   deleteJournalEntry,
-  SYNC_APPLIED_EVENT,
 } from "@/db";
 
 export function useJournal() {
@@ -19,14 +18,6 @@ export function useJournal() {
 
   useEffect(() => {
     void load();
-  }, [load]);
-
-  useEffect(() => {
-    const onApplied = () => {
-      void load();
-    };
-    window.addEventListener(SYNC_APPLIED_EVENT, onApplied);
-    return () => window.removeEventListener(SYNC_APPLIED_EVENT, onApplied);
   }, [load]);
 
   const logEntry = useCallback(

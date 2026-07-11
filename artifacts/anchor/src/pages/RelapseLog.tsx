@@ -148,6 +148,7 @@ function SelectList<T extends string>({
         <button
           key={value}
           onClick={() => onSelect(value)}
+          aria-pressed={isSelected(value)}
           className={`flex items-center justify-between px-4 py-3.5 rounded-2xl border transition-all touch-target ${
             isSelected(value)
               ? "bg-primary/10 border-primary text-foreground"
@@ -179,6 +180,7 @@ function ChipGrid({ options, selected, onToggle, translate }: {
         <button
           key={opt}
           onClick={() => onToggle(opt)}
+          aria-pressed={selected.includes(opt)}
           className={`px-3.5 py-2.5 rounded-xl border text-sm font-medium transition-all ${
             selected.includes(opt)
               ? "bg-primary/10 border-primary text-foreground"
@@ -617,6 +619,7 @@ export function RelapseLog() {
                 <button
                   key={value}
                   onClick={() => update("acuteRisk", draft.acuteRisk === value ? "none" : value)}
+                  aria-pressed={draft.acuteRisk === value}
                   className={`py-3.5 px-3 rounded-2xl border text-sm font-medium text-left leading-tight transition-all touch-target ${
                     draft.acuteRisk === value
                       ? "bg-primary/10 border-primary text-foreground"

@@ -360,7 +360,8 @@ export interface WeeklyPoint {
 
 export function computeWeeklyTrend(
   logs: CravingLog[],
-  weeks = 10
+  weeks = 10,
+  locale = "en-GB",
 ): WeeklyPoint[] {
   const now = Date.now();
   return Array.from({ length: weeks }, (_, i) => {
@@ -373,7 +374,7 @@ export function computeWeeklyTrend(
         l.status === "completed"
     );
     const d = new Date(wStart);
-    const weekLabel = `${d.getMonth() + 1}/${d.getDate()}`;
+    const weekLabel = d.toLocaleDateString(locale, { day: "numeric", month: "numeric" });
     return {
       weekLabel,
       avgIntensity: avgOf(week.map((l) => l.intensity)),

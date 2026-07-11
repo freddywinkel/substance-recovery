@@ -1,6 +1,15 @@
 import { openDB, type DBSchema, type IDBPDatabase } from "idb";
 import { migrateCravingTo0to10 } from "./migrations";
-import type { SyncMetaRecord, DirtyRecord } from "./sync";
+interface SyncMetaRecord {
+  key: string;
+  value: string | number;
+}
+
+interface DirtyRecord {
+  id: string;
+  kind: string;
+  recordId: string;
+}
 
 
 /** Sync metadata mixed into every syncable record (IndexedDB v5). */

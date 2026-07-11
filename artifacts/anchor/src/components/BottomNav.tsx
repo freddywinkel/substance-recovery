@@ -24,10 +24,6 @@ export function BottomNav() {
   const { t } = useT();
   const { openRegistrationLauncher } = useRegistrationLauncher();
 
-  if (location.startsWith("/sign-in") || location.startsWith("/sign-up")) {
-    return null;
-  }
-
   const isRegistrationTracker =
     location.startsWith("/trek") ||
     location.startsWith("/craving") ||
@@ -98,7 +94,7 @@ export function BottomNav() {
             }`}
           />
           <span
-            className={`relative max-w-full truncate text-[8px] font-semibold leading-tight tracking-normal transition-colors duration-200 ${
+            className={`relative max-w-full truncate text-[9px] font-semibold leading-tight tracking-normal transition-colors duration-200 ${
               isActive
                 ? "text-primary"
                 : "text-muted-foreground group-hover:text-foreground"

@@ -373,6 +373,7 @@ export function CravingTracker() {
                 </p>
                 <IntensitySlider
                   value={draft.intensityAfter}
+                  ariaLabel={t("craving.q.intensity_after")}
                   onChange={(v) => {
                     update("intensityAfter", v);
                     applyOutcome(draft.cravingOutcome, v);
@@ -490,6 +491,7 @@ export function CravingTracker() {
             <p className="text-sm font-medium text-foreground">{t("craving.q.intensity")}</p>
             <IntensitySlider
               value={draft.intensity}
+              ariaLabel={t("craving.q.intensity")}
               onChange={(v) => update("intensity", v)}
               lowLabel={t("logs.cr_intensity_low")}
               highLabel={t("logs.cr_intensity_high")}
@@ -498,6 +500,7 @@ export function CravingTracker() {
             <p className="text-sm font-medium text-foreground">{t("craving.q.confidence")}</p>
             <IntensitySlider
               value={draft.confidenceBefore}
+              ariaLabel={t("craving.q.confidence")}
               onChange={(v) => update("confidenceBefore", v)}
               lowLabel={t("logs.cr_confidence_low")}
               highLabel={t("logs.cr_confidence_high")}

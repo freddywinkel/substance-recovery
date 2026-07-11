@@ -92,11 +92,13 @@ export function BoxBreathing() {
             style={{ width: `${scale * 70}%`, height: `${scale * 70}%`, borderColor: config.color, backgroundColor: `${config.color}18` }}
           />
           <div className="relative z-10 text-center">
-            <div className="text-4xl font-light tabular-nums transition-colors duration-500" style={{ color: config.color }}>
+            <div aria-hidden="true" className="text-4xl font-light tabular-nums transition-colors duration-500" style={{ color: config.color }}>
               {DURATION - tick}
             </div>
-            <div className="text-sm font-medium text-foreground mt-1">{config.label}</div>
-            <div className="text-xs text-muted-foreground mt-0.5">{config.instruction}</div>
+            <div aria-live="polite" aria-atomic="true">
+              <div className="text-sm font-medium text-foreground mt-1">{config.label}</div>
+              <div className="text-xs text-muted-foreground mt-0.5">{config.instruction}</div>
+            </div>
           </div>
         </div>
 

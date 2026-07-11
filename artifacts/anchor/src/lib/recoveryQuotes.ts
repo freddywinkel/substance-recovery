@@ -1,4 +1,5 @@
-const RECOVERY_QUOTES = [
+const RECOVERY_QUOTES = {
+  en: [
   "Cravings rise, peak, and pass. You only need to stay with this wave.",
   "You do not need to solve your whole life today. Protect the next hour.",
   "An urge is information, not an instruction.",
@@ -19,14 +20,38 @@ const RECOVERY_QUOTES = [
   "One breath. One choice. One moment.",
   "Your strength is in showing up again.",
   "Healing is not linear. It is real.",
-];
+  ],
+  nl: [
+    "Cravings komen op, bereiken een piek en zakken weer. Je hoeft alleen bij deze golf te blijven.",
+    "Je hoeft vandaag niet je hele leven op te lossen. Bescherm het komende uur.",
+    "Een drang is informatie, geen opdracht.",
+    "Herstel wordt opgebouwd in gewone momenten.",
+    "Pauzeer eerst. Kies daarna.",
+    "Eén beslissing tegelijk. Vandaag telt.",
+    "Nog steeds hier. Nog steeds in beweging.",
+    "Je hoeft alleen vandaag te beschermen.",
+    "De drang kan voorbijgaan. Je vooruitgang kan blijven.",
+    "Adem. Dit moment is genoeg.",
+    "Kleine stappen zijn nog steeds stappen vooruit.",
+    "Jij bent niet je cravings. Jij bent degene die ze waarneemt.",
+    "Elk moment van bewustzijn is een overwinning.",
+    "Compassie voor jezelf hoort bij herstel.",
+    "Dit gevoel is tijdelijk. Jij bent dat niet.",
+    "Merk op zonder oordeel. Dat is de oefening.",
+    "Wat je bevecht, houdt aan. Wat je toelaat, kan veranderen.",
+    "Eén ademhaling. Eén keuze. Eén moment.",
+    "Je kracht zit in opnieuw komen opdagen.",
+    "Herstel verloopt niet rechtlijnig. Het is wel echt.",
+  ],
+} as const;
 
 /**
  * Deterministically picks today's recovery quote based on the date.
  * Same day = same quote. No storage needed.
  */
-export function getTodaysQuote(): string {
+export function getTodaysQuote(language: "en" | "nl"): string {
   const now = new Date();
   const dayIndex = now.getFullYear() * 366 + now.getMonth() * 31 + now.getDate();
-  return RECOVERY_QUOTES[dayIndex % RECOVERY_QUOTES.length];
+  const quotes = RECOVERY_QUOTES[language];
+  return quotes[dayIndex % quotes.length];
 }

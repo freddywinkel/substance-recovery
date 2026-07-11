@@ -384,6 +384,7 @@ export function TrekTracker() {
             <p className="text-sm font-medium text-foreground">{t("trek.q.intensity")}</p>
             <IntensitySlider
               value={draft.intensity}
+              ariaLabel={t("trek.q.intensity")}
               onChange={(v) => update("intensity", v)}
               min={0}
               lowLabel="0"
@@ -393,6 +394,7 @@ export function TrekTracker() {
             <p className="text-sm font-medium text-foreground">{t("trek.q.confidence_before")}</p>
             <IntensitySlider
               value={draft.confidenceBefore}
+              ariaLabel={t("trek.q.confidence_before")}
               onChange={(v) => update("confidenceBefore", v)}
               min={0}
               lowLabel="0"
@@ -561,6 +563,7 @@ export function TrekTracker() {
             <p className="text-sm font-medium text-foreground">{t("trek.q.confidence_after")}</p>
             <IntensitySlider
               value={draft.confidenceAfter}
+              ariaLabel={t("trek.q.confidence_after")}
               onChange={(v) => update("confidenceAfter", v)}
               min={0}
               lowLabel="0"

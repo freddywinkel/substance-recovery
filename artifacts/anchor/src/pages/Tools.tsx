@@ -18,7 +18,7 @@ import {
   Wind,
 } from "lucide-react";
 
-function PinButton({ toolId }: { toolId: string }) {
+function PinButton({ toolId, title }: { toolId: string; title: string }) {
   const { t } = useT();
   const { isPinned, togglePin } = usePinnedTools();
   const pinned = isPinned(toolId);
@@ -35,7 +35,7 @@ function PinButton({ toolId }: { toolId: string }) {
           ? "bg-amber-400/10 text-amber-300"
           : "text-muted-foreground hover:bg-muted/40 hover:text-foreground"
       }`}
-      aria-label={pinned ? t("tools.unpin") : t("tools.pin")}
+      aria-label={`${pinned ? t("tools.unpin") : t("tools.pin")}: ${title}`}
       title={pinned ? t("tools.unpin") : t("tools.pin")}
     >
       {pinned ? <Pin size={16} strokeWidth={2} /> : <PinOff size={16} strokeWidth={2} />}
@@ -125,7 +125,7 @@ export function Tools() {
               <ToolCard
                 key={tool.to}
                 {...tool}
-                pinButton={<PinButton toolId={tool.to} />}
+                pinButton={<PinButton toolId={tool.to} title={tool.title} />}
               />
             ))}
           </div>

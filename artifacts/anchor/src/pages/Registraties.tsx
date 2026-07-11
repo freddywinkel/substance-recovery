@@ -9,8 +9,9 @@ export function Registraties() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-dvh">
+      <div role="status" className="flex items-center justify-center min-h-dvh">
         <div className="w-5 h-5 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+        <span className="sr-only">{t("common.loading")}</span>
       </div>
     );
   }

@@ -97,6 +97,8 @@ export function UrgeSurfing() {
 
         <div
           key={messageIndex}
+          aria-live="polite"
+          aria-atomic="true"
           className="bg-card border border-border rounded-2xl p-5 text-center animate-fade-up"
         >
           <p className="text-base leading-relaxed text-foreground/90 italic">
