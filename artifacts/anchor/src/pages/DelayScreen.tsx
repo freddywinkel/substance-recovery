@@ -38,7 +38,11 @@ export function DelayScreen() {
   const progress = (600 - seconds) / 600;
 
   const handleStop = useCallback(() => {
-    navigate(-1 as unknown as string);
+    if (window.history.length > 1) {
+      window.history.back();
+    } else {
+      navigate("/");
+    }
   }, [navigate]);
 
   return (
@@ -46,6 +50,7 @@ export function DelayScreen() {
       className="flex flex-col min-h-dvh bg-background"
       style={{ paddingTop: "env(safe-area-inset-top)" }}
     >
+      <h1 className="sr-only">{t("delay.title")}</h1>
       <div className="flex justify-end px-5 pt-5 pb-2">
         <button
           onClick={handleStop}
@@ -80,7 +85,7 @@ export function DelayScreen() {
           </div>
         </div>
 
-        <div className="text-center min-h-[3rem] flex items-center justify-center">
+        <div aria-live="polite" aria-atomic="true" className="text-center min-h-[3rem] flex items-center justify-center">
           {done ? (
             <p className="text-xl font-medium text-foreground">{t("delay.done")}</p>
           ) : (

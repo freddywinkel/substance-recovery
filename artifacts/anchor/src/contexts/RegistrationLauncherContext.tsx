@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { X } from "lucide-react";
 import { RegistrationTypeList } from "@/components/RegistrationTypeList";
 import { useT } from "@/hooks/useTranslation";
@@ -13,22 +13,52 @@ const RegistrationLauncherContext = createContext<RegistrationLauncherContextVal
 export function RegistrationLauncherProvider({ children }: { children: React.ReactNode }) {
   const { t } = useT();
   const [isOpen, setIsOpen] = useState(false);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
+
+  const open = useCallback(() => {
+    previousFocusRef.current = document.activeElement as HTMLElement | null;
+    setIsOpen(true);
+  }, []);
+
+  const close = useCallback(() => {
+    setIsOpen(false);
+    window.requestAnimationFrame(() => previousFocusRef.current?.focus());
+  }, []);
 
   useEffect(() => {
     if (!isOpen) return;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setIsOpen(false);
+      if (event.key === "Escape") close();
+      if (event.key !== "Tab" || !dialogRef.current) return;
+      const focusable = Array.from(
+        dialogRef.current.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ),
+      );
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
     };
+    closeButtonRef.current?.focus();
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [isOpen]);
+  }, [close, isOpen]);
 
   const value = useMemo<RegistrationLauncherContextValue>(
     () => ({
-      openRegistrationLauncher: () => setIsOpen(true),
-      closeRegistrationLauncher: () => setIsOpen(false),
+      openRegistrationLauncher: open,
+      closeRegistrationLauncher: close,
     }),
-    [],
+    [close, open],
   );
 
   return (
@@ -41,13 +71,12 @@ export function RegistrationLauncherProvider({ children }: { children: React.Rea
           aria-modal="true"
           aria-labelledby="registration-launcher-title"
         >
-          <button
-            type="button"
+          <div
             className="absolute inset-0 cursor-default"
-            onClick={() => setIsOpen(false)}
-            aria-label={t("common.cancel")}
+            onClick={close}
+            aria-hidden="true"
           />
-          <div className="relative w-full max-w-lg rounded-t-[2rem] border border-border/60 bg-background p-4 shadow-2xl shadow-black/40">
+          <div ref={dialogRef} className="relative w-full max-w-lg rounded-t-[2rem] border border-border/60 bg-background p-4 shadow-2xl shadow-black/40">
             <div className="mb-3 flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <h2 id="registration-launcher-title" className="text-base font-semibold text-foreground">
@@ -58,8 +87,9 @@ export function RegistrationLauncherProvider({ children }: { children: React.Rea
                 </p>
               </div>
               <button
+                ref={closeButtonRef}
                 type="button"
-                onClick={() => setIsOpen(false)}
+                onClick={close}
                 className="shrink-0 rounded-full p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
                 aria-label={t("common.cancel")}
               >
@@ -67,7 +97,7 @@ export function RegistrationLauncherProvider({ children }: { children: React.Rea
               </button>
             </div>
             <div className="max-h-[60dvh] overflow-y-auto scroll-smooth-ios pr-1">
-              <RegistrationTypeList onSelect={() => setIsOpen(false)} />
+              <RegistrationTypeList onSelect={close} />
             </div>
           </div>
         </div>

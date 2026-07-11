@@ -17,7 +17,8 @@ if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
 
-const basePath = process.env.BASE_PATH || "/";
+const rawBasePath = process.env.BASE_PATH || "/";
+const basePath = rawBasePath.endsWith("/") ? rawBasePath : `${rawBasePath}/`;
 
 if (!basePath) {
   throw new Error("BASE_PATH environment variable is required but was not provided.");
@@ -43,7 +44,7 @@ export default defineConfig({
         name: "Substance Recovery",
         short_name: "Substance Recovery",
         description: "A private, offline-capable companion for addiction recovery support.",
-        lang: "en",
+        lang: "nl",
         theme_color: "#0D0C0B",
         background_color: "#131820",
         display: "standalone",

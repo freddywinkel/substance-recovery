@@ -4,11 +4,11 @@ import { usePWA } from "@/hooks/usePWA";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useT } from "@/hooks/useTranslation";
 import { PageHeader } from "@/components/PageHeader";
-import { useReminders } from "@/hooks/useReminders";
+import { useActiveRegistration } from "@/contexts/ActiveRegistrationContext";
 import { useToast } from "@/hooks/use-toast";
 import {
-  Moon, Sun, Download, Trash2, Phone, Shield, Calendar,
-  Languages, UserPlus, X, Upload, Bell, FileDown,
+  Moon, Sun, Download, Trash2, Shield, Calendar,
+  Languages, UserPlus, X, FileDown,
   FileUp, CheckCircle2, AlertCircle, Clock,
 } from "lucide-react";
 import { EmergencyContact } from "@/db";
@@ -28,9 +28,9 @@ export function Settings() {
   const { t } = useT();
   const [, navigate] = useLocation();
   const { toast } = useToast();
+  const { clearSession } = useActiveRegistration();
 
   const [confirmReset, setConfirmReset] = useState(false);
-  const [resetDone, setResetDone] = useState(false);
   const [dateInput, setDateInput] = useState(sobrietyStartDate ?? "");
 
   const [lastExported, setLastExported] = useState<string | null>(null);
@@ -39,8 +39,6 @@ export function Settings() {
   const [importMessage, setImportMessage] = useState("");
   const [importConfirm, setImportConfirm] = useState(false);
   const [pendingImport, setPendingImport] = useState<Record<string, unknown> | null>(null);
-
-  const { settings: reminderSettings, saveSettings: saveReminderSettings, permission: reminderPermission, requestPermission: requestReminderPermission } = useReminders();
 
   const [selectedServiceId, setSelectedServiceId] = useState<string>("");
   const [customName, setCustomName] = useState("");
@@ -72,13 +70,11 @@ export function Settings() {
   }, [crisisService]);
 
   const handleReset = async () => {
-    await resetAllData({ signedIn: false, userId: null });
-    setConfirmReset(false);
-    setResetDone(true);
-    setDateInput("");
-    setSelectedServiceId("");
-    setCustomName("");
-    setCustomNumber("");
+    await clearSession();
+    await resetAllData();
+    localStorage.removeItem("anchor-pinned-tools");
+    localStorage.removeItem(LAST_EXPORTED_KEY);
+    window.location.reload();
   };
 
   const handleExport = async () => {
@@ -121,7 +117,13 @@ export function Settings() {
     reader.onload = (ev) => {
       try {
         const payload = JSON.parse(String(ev.target?.result ?? "{}"));
-        if (!payload || typeof payload !== "object" || !payload.version) {
+        const requiredArrays = ["journal", "cravingLogs", "relapseLogs", "anxietyLogs", "boredomLogs", "settings"];
+        if (
+          !payload ||
+          typeof payload !== "object" ||
+          payload.version !== 1 ||
+          !requiredArrays.every((key) => Array.isArray(payload[key]))
+        ) {
           setImportStatus("error");
           setImportMessage(t("import.error"));
           toast({
@@ -150,14 +152,27 @@ export function Settings() {
     setImportConfirm(false);
     try {
       const result = await importData(pendingImport);
-      setImportStatus("success");
-      setImportMessage(t("import.success").replace("{n}", String(result.imported)));
+      const partial = result.skipped > 0 || result.errors.length > 0;
+      setImportStatus(partial ? "error" : "success");
+      setImportMessage(
+        partial
+          ? t("import.partial")
+              .replace("{imported}", String(result.imported))
+              .replace("{skipped}", String(result.skipped))
+          : t("import.success").replace("{n}", String(result.imported)),
+      );
       toast({
-        title: t("import.success"),
-        description: `${result.imported} items restored`,
+        title: partial ? t("import.partial_title") : t("import.success"),
+        description: partial
+          ? t("import.partial")
+              .replace("{imported}", String(result.imported))
+              .replace("{skipped}", String(result.skipped))
+          : t("import.restored").replace("{n}", String(result.imported)),
+        variant: partial ? "destructive" : undefined,
       });
       setPendingImport(null);
-      setTimeout(() => setImportStatus("idle"), 3000);
+      if (!partial) setTimeout(() => window.location.reload(), 800);
+      else setTimeout(() => setImportStatus("idle"), 5000);
     } catch {
       setImportStatus("error");
       setImportMessage(t("import.error"));
@@ -269,6 +284,7 @@ export function Settings() {
             </div>
             <input
               type="date"
+              aria-label={t("settings.sobriety.label")}
               value={dateInput}
               max={todayStr}
               onChange={(e) => setDateInput(e.target.value)}
@@ -333,6 +349,7 @@ export function Settings() {
             <div className="flex gap-2">
               <button
                 onClick={() => setLanguage("nl")}
+                aria-pressed={language === "nl"}
                 className={`flex-1 py-2.5 rounded-xl border text-sm font-medium transition-all touch-target ${
                   language === "nl"
                     ? "bg-primary/10 border-primary text-foreground"
@@ -343,6 +360,7 @@ export function Settings() {
               </button>
               <button
                 onClick={() => setLanguage("en")}
+                aria-pressed={language === "en"}
                 className={`flex-1 py-2.5 rounded-xl border text-sm font-medium transition-all touch-target ${
                   language === "en"
                     ? "bg-primary/10 border-primary text-foreground"
@@ -385,6 +403,7 @@ export function Settings() {
           <div className="bg-card border border-border rounded-2xl p-4 flex flex-col gap-3">
             <p className="text-xs text-muted-foreground leading-relaxed">{t("settings.crisisService.description")}</p>
             <select
+              aria-label={t("settings.crisisService")}
               value={selectedServiceId}
               onChange={(e) => handleServiceChange(e.target.value)}
               className="w-full bg-background border border-input rounded-xl px-4 py-3 text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-ring appearance-none"
@@ -404,7 +423,7 @@ export function Settings() {
                   <input
                     type="text"
                     placeholder={t("settings.crisisService.customName")}
-                    aria-label="Crisis service name"
+                    aria-label={t("settings.crisisService.customName")}
                     value={customName}
                     onChange={(e) => setCustomName(e.target.value)}
                     className={`w-full bg-background border rounded-xl px-4 py-3 text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-ring ${
@@ -417,7 +436,7 @@ export function Settings() {
                   <input
                     type="tel"
                     placeholder={t("settings.crisisService.customNumber")}
-                    aria-label="Crisis service phone"
+                    aria-label={t("settings.crisisService.customNumber")}
                     value={customNumber}
                     onChange={(e) => setCustomNumber(e.target.value)}
                     className={`w-full bg-background border rounded-xl px-4 py-3 text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-ring ${
@@ -485,7 +504,7 @@ export function Settings() {
                   <input
                     type="text"
                     placeholder={t("settings.emergencyContacts.name")}
-                    aria-label="Emergency contact name"
+                    aria-label={t("settings.emergencyContacts.name")}
                     value={contactName}
                     onChange={(e) => setContactName(e.target.value)}
                     className={`w-full bg-background border rounded-xl px-4 py-3 text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-ring ${
@@ -498,7 +517,7 @@ export function Settings() {
                   <input
                     type="text"
                     placeholder={t("settings.emergencyContacts.relationship")}
-                    aria-label="Emergency contact relationship"
+                    aria-label={t("settings.emergencyContacts.relationship")}
                     value={contactRelation}
                     onChange={(e) => setContactRelation(e.target.value)}
                     className={`w-full bg-background border rounded-xl px-4 py-3 text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-ring ${
@@ -511,7 +530,7 @@ export function Settings() {
                   <input
                     type="tel"
                     placeholder={t("settings.emergencyContacts.phone")}
-                    aria-label="Emergency contact phone"
+                    aria-label={t("settings.emergencyContacts.phone")}
                     value={contactPhone}
                     onChange={(e) => setContactPhone(e.target.value)}
                     className={`w-full bg-background border rounded-xl px-4 py-3 text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-ring ${
@@ -630,10 +649,10 @@ export function Settings() {
                   <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{t("import.subtitle")}</p>
                 </div>
               </div>
-              <label className="flex items-center justify-center gap-2 border border-border rounded-xl py-3 font-medium text-sm text-foreground hover:bg-muted/40 transition-colors touch-target cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50">
+              <label className="flex items-center justify-center gap-2 border border-border rounded-xl py-3 font-medium text-sm text-foreground hover:bg-muted/40 transition-colors touch-target cursor-pointer focus-within:ring-2 focus-within:ring-primary/50">
                 <FileUp size={16} />
                 {t("import.btn")}
-                <input type="file" accept="application/json" onChange={handleImportFile} className="hidden" />
+                <input type="file" accept="application/json" onChange={handleImportFile} className="sr-only" />
               </label>
               {importStatus === "success" && (
                 <div className="flex items-center gap-2 text-xs text-primary animate-fade-up">
@@ -648,86 +667,6 @@ export function Settings() {
                 </div>
               )}
             </div>
-          </div>
-        </section>
-
-        {/* Reminders */}
-        <section>
-          <p className="text-xs text-muted-foreground uppercase tracking-widest px-1 mb-3">{t("reminder.section")}</p>
-          <div className="bg-card border border-border rounded-2xl p-4 flex flex-col gap-4">
-            <div className="flex items-start gap-3">
-              <Bell size={18} className="text-primary mt-0.5 shrink-0" />
-              <div className="flex-1">
-                <p className="text-sm font-medium text-foreground">{t("reminder.title")}</p>
-                <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{t("reminder.subtitle")}</p>
-              </div>
-            </div>
-
-            {!("Notification" in window) ? (
-              <p className="text-xs text-muted-foreground">{t("reminder.no_support")}</p>
-            ) : (
-              <>
-                <div className="bg-background border border-border rounded-xl p-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-foreground">{t("reminder.enable")}</span>
-                    <button
-                      onClick={() => {
-                        const next = !reminderSettings.enabled;
-                        saveReminderSettings({ ...reminderSettings, enabled: next });
-                      }}
-                      className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors touch-target ${
-                        reminderSettings.enabled ? "bg-primary" : "bg-muted"
-                      }`}
-                      role="switch"
-                      aria-checked={reminderSettings.enabled}
-                    >
-                      <span
-                        className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform duration-200 ${
-                          reminderSettings.enabled ? "translate-x-6" : "translate-x-1"
-                        }`}
-                      />
-                    </button>
-                  </div>
-                </div>
-
-                {reminderSettings.enabled && (
-                  <div className="bg-background border border-border rounded-xl p-3 flex items-center justify-between">
-                    <span className="text-sm text-foreground">{t("reminder.time")}</span>
-                    <input
-                      type="time"
-                      value={reminderSettings.time}
-                      onChange={(e) => {
-                        const next = e.target.value;
-                        saveReminderSettings({ ...reminderSettings, time: next });
-                      }}
-                      className="bg-background border border-input rounded-xl px-3 py-2 text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-ring appearance-none [color-scheme:inherit]"
-                    />
-                  </div>
-                )}
-
-                {reminderPermission === "granted" ? (
-                  <div className="flex items-center gap-1.5 text-xs text-primary">
-                    <CheckCircle2 size={12} />
-                    <span>{t("reminder.permission.granted")}</span>
-                  </div>
-                ) : reminderPermission === "denied" ? (
-                  <p className="text-xs text-destructive">{t("reminder.permission.denied")}</p>
-                ) : (
-                  <button
-                    onClick={async () => {
-                      const granted = await requestReminderPermission();
-                      if (!granted) {
-                        saveReminderSettings({ ...reminderSettings, enabled: false });
-                      }
-                    }}
-                    className="flex items-center justify-center gap-2 w-full bg-primary text-primary-foreground rounded-xl py-2.5 font-semibold text-sm hover:opacity-90 active:scale-95 transition-all touch-target"
-                  >
-                    <Bell size={14} />
-                    {t("reminder.permission")}
-                  </button>
-                )}
-              </>
-            )}
           </div>
         </section>
 
@@ -750,12 +689,6 @@ export function Settings() {
           </div>
         </section>
 
-        {resetDone && (
-          <p className="text-center text-sm text-muted-foreground animate-fade-up">
-            {t("settings.data.erased")}
-          </p>
-        )}
-
         <div className="text-center py-2">
           <p className="text-xs text-muted-foreground">
             {t("settings.footer")}
@@ -770,9 +703,9 @@ export function Settings() {
 
       {/* Confirm reset dialog */}
       {confirmReset && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-background/80 backdrop-blur-sm px-4 pb-8">
-          <div className="bg-card border border-border rounded-3xl p-6 w-full max-w-sm">
-            <h3 className="font-semibold text-foreground mb-1">{t("settings.reset.title")}</h3>
+        <div className="fixed inset-0 z-[70] flex items-end justify-center bg-background/80 backdrop-blur-sm px-4 pb-[calc(2rem+env(safe-area-inset-bottom,0px))]">
+          <div role="alertdialog" aria-modal="true" aria-labelledby="reset-dialog-title" className="bg-card border border-border rounded-3xl p-6 w-full max-w-sm">
+            <h3 id="reset-dialog-title" className="font-semibold text-foreground mb-1">{t("settings.reset.title")}</h3>
             <p className="text-sm text-muted-foreground mb-5 leading-relaxed">
               {t("settings.reset.body")}
             </p>
@@ -795,9 +728,9 @@ export function Settings() {
       )}
       {/* Confirm import dialog */}
       {importConfirm && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-background/80 backdrop-blur-sm px-4 pb-8">
-          <div className="bg-card border border-border rounded-3xl p-6 w-full max-w-sm">
-            <h3 className="font-semibold text-foreground mb-1">{t("import.confirm.title")}</h3>
+        <div className="fixed inset-0 z-[70] flex items-end justify-center bg-background/80 backdrop-blur-sm px-4 pb-[calc(2rem+env(safe-area-inset-bottom,0px))]">
+          <div role="alertdialog" aria-modal="true" aria-labelledby="import-dialog-title" className="bg-card border border-border rounded-3xl p-6 w-full max-w-sm">
+            <h3 id="import-dialog-title" className="font-semibold text-foreground mb-1">{t("import.confirm.title")}</h3>
             <p className="text-sm text-muted-foreground mb-5 leading-relaxed">
               {t("import.confirm.body")}
             </p>

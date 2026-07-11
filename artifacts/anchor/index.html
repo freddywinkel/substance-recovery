@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="nl">
   <head>
     <meta charset="UTF-8" />
 
@@ -41,7 +41,7 @@
     <!-- ── Content Security Policy ───────────────────────── -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://*.clerk.accounts.dev; frame-ancestors 'none'; base-uri 'self'; form-action 'self';"
+      content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self';"
     />
 
     <!-- ── Page title ──────────────────────────────────────── -->
@@ -53,13 +53,10 @@
       Safari ignores manifest icons — this file is the ONLY source
       for the iOS Home Screen icon. Must be 180×180 for iPhone.
     -->
-    <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="%BASE_URL%apple-touch-icon.png" />
     <!-- Fallback favicon for browser tabs -->
-    <link rel="icon" type="image/svg+xml" href="icon.svg" />
-    <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png" />
-
-    <!-- ── Web App Manifest ─────────────────────────────────── -->
-    <link rel="manifest" href="manifest.json" />
+    <link rel="icon" type="image/svg+xml" href="%BASE_URL%icon.svg" />
+    <link rel="icon" type="image/png" sizes="192x192" href="%BASE_URL%icon-192.png" />
 
     <!-- ── Fonts ───────────────────────────────────────────── -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />

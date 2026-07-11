@@ -8,16 +8,6 @@ import {
   type JournalEntry,
   type RelapseLog,
 } from "./schema";
-import {
-  markDirty,
-  nextUpdatedAt,
-  setSobrietyUpdatedAt,
-  SOBRIETY_RECORD_ID,
-  SOBRIETY_SETTING_KIND,
-  SOBRIETY_UPDATED_AT_KEY,
-  SYNCABLE_RECORD_KINDS,
-} from "./sync";
-
 export async function getCrisisService(): Promise<CrisisService | null> {
   const db = await getDB();
   const record = await db.get("settings", "crisisService");
@@ -41,9 +31,8 @@ export async function saveEmergencyContacts(contacts: EmergencyContact[]): Promi
 // ── Journal ──────────────────────────────────────────────────
 export async function addJournalEntry(entry: Omit<JournalEntry, "id">): Promise<JournalEntry> {
   const db = await getDB();
-  const full: JournalEntry = { ...entry, id: crypto.randomUUID(), updatedAt: await nextUpdatedAt() };
+  const full: JournalEntry = { ...entry, id: crypto.randomUUID() };
   await db.put("journal", full);
-  await markDirty("journal", full.id);
   return full;
 }
 export async function getJournalEntries(limit = 100): Promise<JournalEntry[]> {
@@ -53,10 +42,7 @@ export async function getJournalEntries(limit = 100): Promise<JournalEntry[]> {
 }
 export async function deleteJournalEntry(id: string): Promise<void> {
   const db = await getDB();
-  const existing = await db.get("journal", id);
-  if (!existing) return;
-  await db.put("journal", { ...existing, deleted: true, updatedAt: await nextUpdatedAt() });
-  await markDirty("journal", id);
+  await db.delete("journal", id);
 }
 
 // ── Settings ─────────────────────────────────────────────────
@@ -68,26 +54,18 @@ export async function getSetting(key: string, defaultValue?: string | number | b
 export async function setSetting(key: string, value: string | number | boolean) {
   const db = await getDB();
   await db.put("settings", { key, value });
-  // Only sobrietyStartDate is syncable; all other settings stay device-local.
-  if (key === SOBRIETY_RECORD_ID) {
-    await setSobrietyUpdatedAt(await nextUpdatedAt());
-    await markDirty(SOBRIETY_SETTING_KIND, SOBRIETY_RECORD_ID);
-  }
 }
 
 // ── Craving Logs ─────────────────────────────────────────────
 export async function addCravingLog(entry: Omit<CravingLog, "id">): Promise<CravingLog> {
   const db = await getDB();
-  const full: CravingLog = { ...entry, id: crypto.randomUUID(), updatedAt: await nextUpdatedAt() };
+  const full: CravingLog = { ...entry, id: crypto.randomUUID() };
   await db.put("cravingLogs", full);
-  await markDirty("cravingLogs", full.id);
   return full;
 }
 export async function updateCravingLog(log: CravingLog): Promise<void> {
   const db = await getDB();
-  const next: CravingLog = { ...log, updatedAt: await nextUpdatedAt() };
-  await db.put("cravingLogs", next);
-  await markDirty("cravingLogs", next.id);
+  await db.put("cravingLogs", log);
 }
 export async function getCravingLogs(limit = 200): Promise<CravingLog[]> {
   const db = await getDB();
@@ -96,18 +74,14 @@ export async function getCravingLogs(limit = 200): Promise<CravingLog[]> {
 }
 export async function deleteCravingLog(id: string): Promise<void> {
   const db = await getDB();
-  const existing = await db.get("cravingLogs", id);
-  if (!existing) return;
-  await db.put("cravingLogs", { ...existing, deleted: true, updatedAt: await nextUpdatedAt() });
-  await markDirty("cravingLogs", id);
+  await db.delete("cravingLogs", id);
 }
 
 // ── Relapse Logs ─────────────────────────────────────────────
 export async function addRelapseLog(entry: Omit<RelapseLog, "id">): Promise<RelapseLog> {
   const db = await getDB();
-  const full: RelapseLog = { ...entry, id: crypto.randomUUID(), updatedAt: await nextUpdatedAt() };
+  const full: RelapseLog = { ...entry, id: crypto.randomUUID() };
   await db.put("relapseLogs", full);
-  await markDirty("relapseLogs", full.id);
   return full;
 }
 export async function getRelapseLogs(limit = 200): Promise<RelapseLog[]> {
@@ -117,24 +91,18 @@ export async function getRelapseLogs(limit = 200): Promise<RelapseLog[]> {
 }
 export async function updateRelapseLog(log: RelapseLog): Promise<void> {
   const db = await getDB();
-  const next: RelapseLog = { ...log, updatedAt: await nextUpdatedAt() };
-  await db.put("relapseLogs", next);
-  await markDirty("relapseLogs", next.id);
+  await db.put("relapseLogs", log);
 }
 export async function deleteRelapseLog(id: string): Promise<void> {
   const db = await getDB();
-  const existing = await db.get("relapseLogs", id);
-  if (!existing) return;
-  await db.put("relapseLogs", { ...existing, deleted: true, updatedAt: await nextUpdatedAt() });
-  await markDirty("relapseLogs", id);
+  await db.delete("relapseLogs", id);
 }
 
 // ── Anxiety Logs ─────────────────────────────────────────────
 export async function addAnxietyLog(entry: Omit<AnxietyLog, "id">): Promise<AnxietyLog> {
   const db = await getDB();
-  const full: AnxietyLog = { ...entry, id: crypto.randomUUID(), updatedAt: await nextUpdatedAt() };
+  const full: AnxietyLog = { ...entry, id: crypto.randomUUID() };
   await db.put("anxietyLogs", full);
-  await markDirty("anxietyLogs", full.id);
   return full;
 }
 export async function getAnxietyLogs(limit = 200): Promise<AnxietyLog[]> {
@@ -144,24 +112,18 @@ export async function getAnxietyLogs(limit = 200): Promise<AnxietyLog[]> {
 }
 export async function updateAnxietyLog(log: AnxietyLog): Promise<void> {
   const db = await getDB();
-  const next: AnxietyLog = { ...log, updatedAt: await nextUpdatedAt() };
-  await db.put("anxietyLogs", next);
-  await markDirty("anxietyLogs", next.id);
+  await db.put("anxietyLogs", log);
 }
 export async function deleteAnxietyLog(id: string): Promise<void> {
   const db = await getDB();
-  const existing = await db.get("anxietyLogs", id);
-  if (!existing) return;
-  await db.put("anxietyLogs", { ...existing, deleted: true, updatedAt: await nextUpdatedAt() });
-  await markDirty("anxietyLogs", id);
+  await db.delete("anxietyLogs", id);
 }
 
 // ── Boredom Logs ──────────────────────────────────────────────
 export async function addBoredomLog(entry: Omit<BoredomLog, "id">): Promise<BoredomLog> {
   const db = await getDB();
-  const full: BoredomLog = { ...entry, id: crypto.randomUUID(), updatedAt: await nextUpdatedAt() };
+  const full: BoredomLog = { ...entry, id: crypto.randomUUID() };
   await db.put("boredomLogs", full);
-  await markDirty("boredomLogs", full.id);
   return full;
 }
 export async function getBoredomLogs(limit = 200): Promise<BoredomLog[]> {
@@ -171,16 +133,11 @@ export async function getBoredomLogs(limit = 200): Promise<BoredomLog[]> {
 }
 export async function updateBoredomLog(log: BoredomLog): Promise<void> {
   const db = await getDB();
-  const next: BoredomLog = { ...log, updatedAt: await nextUpdatedAt() };
-  await db.put("boredomLogs", next);
-  await markDirty("boredomLogs", next.id);
+  await db.put("boredomLogs", log);
 }
 export async function deleteBoredomLog(id: string): Promise<void> {
   const db = await getDB();
-  const existing = await db.get("boredomLogs", id);
-  if (!existing) return;
-  await db.put("boredomLogs", { ...existing, deleted: true, updatedAt: await nextUpdatedAt() });
-  await markDirty("boredomLogs", id);
+  await db.delete("boredomLogs", id);
 }
 
 // ── Clear all ────────────────────────────────────────────────
@@ -194,84 +151,14 @@ export async function clearAllData(): Promise<void> {
     db.clear("relapseLogs"),
     db.clear("anxietyLogs"),
     db.clear("boredomLogs"),
-    // Drop the pending-push queue too, so erased data is never pushed up. The
-    // revision cursor in syncMeta is intentionally kept: it leaves already-synced
-    // server revisions un-re-pulled, so a local erase stays erased on this device.
     db.clear("dirtyRecords"),
+    db.clear("syncMeta"),
   ]);
-}
-
-/**
- * Account switch on a shared browser: drop the previous account's locally
- * materialized syncable data (its records are already on the server under that
- * account) so it neither shows to nor gets pushed into the newly signed-in
- * account. Device-local data (theme, language, check-ins, crisis service,
- * contacts) is left untouched. Edge case: a previous account's not-yet-pushed
- * dirty writes are dropped — acceptable versus leaking data across accounts.
- */
-export async function clearSyncableStoresForAccountSwitch(): Promise<void> {
-  const db = await getDB();
-  await Promise.all([
-    db.clear("journal"),
-    db.clear("cravingLogs"),
-    db.clear("relapseLogs"),
-    db.clear("anxietyLogs"),
-    db.clear("boredomLogs"),
-    db.clear("dirtyRecords"),
-    db.delete("settings", SOBRIETY_RECORD_ID),
-    db.delete("syncMeta", SOBRIETY_UPDATED_AT_KEY),
-  ]);
-}
-
-/**
- * Privacy-preserving erase for syncable data while signed in: tombstone every
- * live syncable record and the sobriety setting, marking them dirty so the next
- * push wipes the cloud copy too. Tombstones (not hard deletes) are required so
- * the deletion propagates to the account and other devices.
- */
-export async function eraseSyncableDataWithTombstones(): Promise<void> {
-  const db = await getDB();
-  for (const store of SYNCABLE_RECORD_KINDS) {
-    const all = await db.getAll(store);
-    for (const rec of all) {
-      if (rec.deleted) continue;
-      await db.put(store as "journal", {
-        ...rec,
-        deleted: true,
-        updatedAt: await nextUpdatedAt(),
-      } as JournalEntry);
-      await markDirty(store, rec.id);
-    }
-  }
-  const sob = await db.get("settings", SOBRIETY_RECORD_ID);
-  if (sob && typeof sob.value === "string" && sob.value !== "") {
-    await db.put("settings", { key: SOBRIETY_RECORD_ID, value: "" });
-    await setSobrietyUpdatedAt(await nextUpdatedAt());
-    await markDirty(SOBRIETY_SETTING_KIND, SOBRIETY_RECORD_ID);
-  }
-}
-
-/**
- * Clear device-local-only data (check-ins + all device-local settings) without
- * touching the syncable tombstones/dirty queue/cursor. Used by the signed-in
- * erase when the tombstone push could not complete (offline): the cloud wipe
- * stays queued and runs on reconnect, while the device still looks erased.
- */
-export async function clearDeviceLocalData(): Promise<void> {
-  const db = await getDB();
-  await db.clear("checkIns");
-  const keys = await db.getAllKeys("settings");
-  for (const key of keys) {
-    // Keep the emptied sobriety marker; its tombstone is still queued to push.
-    if (key === SOBRIETY_RECORD_ID) continue;
-    await db.delete("settings", key);
-  }
 }
 
 /**
  * Export all local data (journal, logs, settings, contacts, crisis service)
- * as a JSON blob that can be downloaded or shared. Useful for non-signed-in
- * users who want a manual backup.
+ * as a JSON blob that can be downloaded or stored as a manual backup.
  */
 export async function exportAllData(): Promise<Record<string, unknown>> {
   const db = await getDB();
@@ -304,6 +191,39 @@ export async function exportAllData(): Promise<Record<string, unknown>> {
  * first — so merging is possible. Call clearAllData() before import if a full
  * restore is desired.
  */
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
+
+function isValidImportedLog(key: string, item: unknown): item is Record<string, unknown> {
+  if (
+    !isRecord(item) ||
+    typeof item.id !== "string" ||
+    typeof item.timestamp !== "number" ||
+    !Number.isFinite(item.timestamp)
+  ) {
+    return false;
+  }
+
+  const requiredArrays: Record<string, string[]> = {
+    cravingLogs: ["situationPresets", "emotions", "physicalSensations", "thoughtPresets", "socialContext", "substances"],
+    relapseLogs: ["substances", "preUseFactors", "missedWarnings", "couldHaveHelpedEarly", "couldHaveHelpedMiddle", "couldHaveHelpedLast"],
+    anxietyLogs: ["bodySensations"],
+    boredomLogs: ["feelingTypes"],
+  };
+
+  if (key === "journal") {
+    return (
+      Number.isInteger(item.mood) &&
+      Number(item.mood) >= 1 &&
+      Number(item.mood) <= 5 &&
+      typeof item.note === "string"
+    );
+  }
+
+  return (requiredArrays[key] ?? []).every((field) => Array.isArray(item[field]));
+}
+
 export async function importAllData(
   payload: Record<string, unknown>,
 ): Promise<{ imported: number; skipped: number; errors: string[] }> {
@@ -324,12 +244,16 @@ export async function importAllData(
     const arr = payload[key];
     if (!Array.isArray(arr)) continue;
     for (const item of arr) {
-      if (!item || typeof item !== "object" || !item.id) {
+      if (!isValidImportedLog(key, item)) {
         skipped++;
         continue;
       }
       try {
-        await db.put(store, item);
+        if (store === "journal") await db.put("journal", item as unknown as JournalEntry);
+        else if (store === "cravingLogs") await db.put("cravingLogs", item as unknown as CravingLog);
+        else if (store === "relapseLogs") await db.put("relapseLogs", item as unknown as RelapseLog);
+        else if (store === "anxietyLogs") await db.put("anxietyLogs", item as unknown as AnxietyLog);
+        else await db.put("boredomLogs", item as unknown as BoredomLog);
         imported++;
       } catch (e) {
         skipped++;
@@ -341,21 +265,34 @@ export async function importAllData(
   const settingsArr = payload.settings;
   if (Array.isArray(settingsArr)) {
     for (const s of settingsArr) {
-      if (s && s.key) {
+      if (
+        isRecord(s) &&
+        typeof s.key === "string" &&
+        ["string", "number", "boolean"].includes(typeof s.value)
+      ) {
         try {
-          await db.put("settings", s);
+          await db.put("settings", s as unknown as { key: string; value: string | number | boolean });
           imported++;
         } catch (e) {
           errors.push(`Failed to import setting ${s.key}: ${String(e)}`);
         }
-      }
+      } else skipped++;
     }
   }
 
   const contacts = payload.emergencyContacts;
   if (Array.isArray(contacts)) {
+    const validContacts = contacts.filter(
+      (contact): contact is EmergencyContact =>
+        isRecord(contact) &&
+        typeof contact.id === "string" &&
+        typeof contact.name === "string" &&
+        typeof contact.relationship === "string" &&
+        typeof contact.phone === "string",
+    );
+    skipped += contacts.length - validContacts.length;
     try {
-      await saveEmergencyContacts(contacts as EmergencyContact[]);
+      await saveEmergencyContacts(validContacts);
       imported++;
     } catch (e) {
       errors.push(`Failed to import contacts: ${String(e)}`);
@@ -363,9 +300,15 @@ export async function importAllData(
   }
 
   const crisis = payload.crisisService;
-  if (crisis && typeof crisis === "object") {
+  if (
+    isRecord(crisis) &&
+    typeof crisis.id === "string" &&
+    typeof crisis.name === "string" &&
+    typeof crisis.number === "string" &&
+    typeof crisis.isCustom === "boolean"
+  ) {
     try {
-      await saveCrisisService(crisis as CrisisService);
+      await saveCrisisService(crisis as unknown as CrisisService);
       imported++;
     } catch (e) {
       errors.push(`Failed to import crisis service: ${String(e)}`);

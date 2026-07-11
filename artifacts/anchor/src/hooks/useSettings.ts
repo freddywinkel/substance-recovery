@@ -8,7 +8,6 @@ import {
   getEmergencyContacts,
   saveCrisisService,
   saveEmergencyContacts,
-  SYNC_APPLIED_EVENT,
 } from "@/db";
 
 export function useSettings() {
@@ -38,14 +37,6 @@ export function useSettings() {
 
   useEffect(() => {
     void load();
-  }, [load]);
-
-  useEffect(() => {
-    const onApplied = () => {
-      void load();
-    };
-    window.addEventListener(SYNC_APPLIED_EVENT, onApplied);
-    return () => window.removeEventListener(SYNC_APPLIED_EVENT, onApplied);
   }, [load]);
 
   const setSobrietyStartDate = useCallback(

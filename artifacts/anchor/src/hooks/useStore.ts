@@ -8,8 +8,9 @@ import {
   CrisisService,
   EmergencyContact,
   clearAllData,
+  exportAllData,
+  importAllData,
 } from "@/db";
-import { eraseAccountAndLocalData } from "@/lib/sync-engine";
 import { useJournal } from "./useJournal";
 import { useLogs } from "./useLogs";
 import { useSettings } from "./useSettings";
@@ -49,10 +50,7 @@ interface StoreActions {
   setSobrietyStartDate: (date: string | null) => Promise<void>;
   setCrisisService: (service: CrisisService | null) => Promise<void>;
   setEmergencyContacts: (contacts: EmergencyContact[]) => Promise<void>;
-  resetAllData: (opts?: {
-    signedIn?: boolean;
-    userId?: string | null;
-  }) => Promise<void>;
+  resetAllData: () => Promise<void>;
   refresh: () => Promise<void>;
   exportData: () => Promise<Record<string, unknown>>;
   importData: (
@@ -82,12 +80,8 @@ export function useStore(): StoreState & StoreActions {
   }, [journalHook.reload, logsHook.reload, settingsHook.reload, uiHook.reload]);
 
   const resetAllData = useCallback(
-    async (opts?: { signedIn?: boolean; userId?: string | null }) => {
-      if (opts?.signedIn && opts.userId) {
-        await eraseAccountAndLocalData(opts.userId);
-      } else {
-        await clearAllData();
-      }
+    async () => {
+      await clearAllData();
       await Promise.all([
         journalHook.reload(),
         logsHook.reload(),
@@ -99,14 +93,12 @@ export function useStore(): StoreState & StoreActions {
   );
 
   const exportData = useCallback(async () => {
-    return import("@/db").then((mod) => mod.exportAllData());
+    return exportAllData();
   }, []);
 
   const importData = useCallback(
     async (payload: Record<string, unknown>) => {
-      const result = await import("@/db").then((mod) =>
-        mod.importAllData(payload)
-      );
+      const result = await importAllData(payload);
       await refresh();
       return result;
     },

@@ -1,19 +1,15 @@
 import { Switch, Route, Router as WouterRouter } from "wouter";
-import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { LanguageProvider } from "@/contexts/LanguageContext";
 import { ActiveRegistrationProvider } from "@/contexts/ActiveRegistrationContext";
 import { RegistrationLauncherProvider } from "@/contexts/RegistrationLauncherContext";
-import { SyncProvider } from "@/contexts/SyncContext";
 import { useT } from "@/hooks/useTranslation";
 import { BottomNav } from "@/components/BottomNav";
-import { OfflineBanner } from "@/components/OfflineBanner";
 import { RegistrationReturnBanner } from "@/components/RegistrationReturnBanner";
-import { usePWA } from "@/hooks/usePWA";
-import { queryClient } from "@/lib/queryClient";
+import { PWAProvider } from "@/hooks/usePWA";
 import { AtmosphericBackground } from "@/components/AtmosphericBackground";
 import { ScrollToTop } from "@/components/ScrollToTop";
-import { basePath } from "@/lib/clerk";
+import { basePath } from "@/lib/basePath";
 import { Home } from "@/pages/Home";
 import { CrisisNow } from "@/pages/CrisisNow";
 import { Tools } from "@/pages/Tools";
@@ -80,13 +76,10 @@ function AppRoutes() {
 }
 
 function AppShell() {
-  const { isOffline } = usePWA();
-
   return (
     <>
       <AtmosphericBackground />
       <ScrollToTop />
-      <OfflineBanner isOffline={isOffline} />
       <RegistrationLauncherProvider>
         <div
           className="relative flex h-dvh min-h-dvh flex-col overflow-hidden"
@@ -105,22 +98,20 @@ function AppShell() {
 
 function OfflineAppShell() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <SyncProvider>
-        <ActiveRegistrationProvider>
-          <AppShell />
-        </ActiveRegistrationProvider>
-      </SyncProvider>
-    </QueryClientProvider>
+    <ActiveRegistrationProvider>
+      <AppShell />
+    </ActiveRegistrationProvider>
   );
 }
 
 export default function App() {
   return (
     <LanguageProvider>
-      <WouterRouter base={basePath}>
-        <OfflineAppShell />
-      </WouterRouter>
+      <PWAProvider>
+        <WouterRouter base={basePath}>
+          <OfflineAppShell />
+        </WouterRouter>
+      </PWAProvider>
     </LanguageProvider>
   );
 }

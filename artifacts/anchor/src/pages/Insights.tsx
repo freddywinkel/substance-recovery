@@ -63,6 +63,7 @@ function RangeFilter({ value, onChange, opts }: { value: TimeRange; onChange: (r
         <button
           key={v}
           onClick={() => onChange(v)}
+          aria-pressed={value === v}
           className={`flex-1 py-1.5 rounded-full text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 ${
             value === v ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:text-foreground"
           }`}
@@ -83,8 +84,18 @@ export function Insights() {
     sobrietyStartDate,
     loading,
   } = useStore();
-  const { t, tOpt } = useT();
+  const { t, tOpt, language } = useT();
   const [range, setRange] = useState<TimeRange>("30d");
+
+  const currentStreak = useMemo(() => {
+    if (!sobrietyStartDate) return null;
+    const start = new Date(`${sobrietyStartDate}T00:00:00`).getTime();
+    if (!Number.isFinite(start) || start > Date.now()) return null;
+    const latestRelapse = relapseLogs
+      .filter((entry) => entry.timestamp >= start)
+      .reduce((latest, entry) => Math.max(latest, entry.timestamp), start);
+    return Math.max(0, Math.floor((Date.now() - latestRelapse) / 86_400_000));
+  }, [relapseLogs, sobrietyStartDate]);
 
   const rangeOpts: { v: TimeRange; label: string }[] = [
     { v: "7d", label: t("progress.range.7d") },
@@ -102,7 +113,10 @@ export function Insights() {
   const rStats = useMemo(() => computeRelapseStats(filteredRelapses), [filteredRelapses]);
   const aStats = useMemo(() => computeAnxietyStats(filteredAnxiety), [filteredAnxiety]);
   const bStats = useMemo(() => computeBoredomStats(filteredBoredom), [filteredBoredom]);
-  const weekly = useMemo(() => computeWeeklyTrend(filteredCravings, 10), [filteredCravings]);
+  const weekly = useMemo(
+    () => computeWeeklyTrend(filteredCravings, 10, language === "nl" ? "nl-NL" : "en-GB"),
+    [filteredCravings, language],
+  );
 
   const allPatternEntries = useMemo(() => {
     return [
@@ -132,8 +146,8 @@ export function Insights() {
   }, [allPatternEntries, t]);
 
   const triggerData = useMemo(() => {
-    return cStats.topSituations.slice(0, 6).map((item) => ({ name: item.label, count: item.count }));
-  }, [cStats.topSituations]);
+    return cStats.topSituations.slice(0, 6).map((item) => ({ name: tOpt(item.label), count: item.count }));
+  }, [cStats.topSituations, tOpt]);
 
   const impactItems = useMemo(
     () => buildImpactInsights({ cravingLogs, relapseLogs, anxietyLogs, boredomLogs }, range),
@@ -142,8 +156,9 @@ export function Insights() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-dvh">
+      <div role="status" className="flex items-center justify-center min-h-dvh">
         <div className="w-5 h-5 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+        <span className="sr-only">{t("common.loading")}</span>
       </div>
     );
   }
@@ -211,7 +226,7 @@ export function Insights() {
 
           <TabsContent value="patterns" className="mt-3 flex flex-col gap-4">
             <div className="grid grid-cols-2 gap-3">
-              <StatCard label={t("progress.stat.streak")} value={sobrietyStartDate ? "-" : "-"} sub={t("progress.stat.streak_sub")} />
+              <StatCard label={t("progress.stat.streak")} value={currentStreak ?? "-"} sub={t("progress.stat.streak_sub")} />
               <StatCard label={t("progress.stat.cravings")} value={cStats.total} />
               <StatCard label={t("progress.stat.lapses")} value={rStats.total} sub={t("progress.stat.in_period")} />
               <StatCard label={t("progress.stat.avg_intensity")} value={cStats.avgIntensity?.toFixed(1) ?? "-"} sub={t("progress.stat.avg_intensity_sub")} />
@@ -292,13 +307,13 @@ export function Insights() {
             {cStats.topSituations.length > 0 && (
               <div className="rounded-[1.5rem] border border-border/50 bg-card/50 p-4">
                 <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground mb-3">{t("progress.patterns.situations")}</p>
-                <FreqBars items={cStats.topSituations} />
+                <FreqBars items={cStats.topSituations} translate={tOpt} />
               </div>
             )}
             {cStats.topActions.length > 0 && (
               <div className="rounded-[1.5rem] border border-border/50 bg-card/50 p-4">
                 <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground mb-3">{t("progress.section.deescalation")}</p>
-                <FreqBars items={cStats.topActions} />
+                <FreqBars items={cStats.topActions} translate={tOpt} />
               </div>
             )}
           </TabsContent>

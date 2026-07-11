@@ -1,6 +1,7 @@
 import { useLocation } from "wouter";
 import { ArrowLeft } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useT } from "@/hooks/useTranslation";
 
 interface StepLayoutProps {
   title: string;
@@ -24,6 +25,7 @@ export function StepLayout({
   children,
 }: StepLayoutProps) {
   const [, navigate] = useLocation();
+  const { t } = useT();
   const goBack = () => {
     if (window.history.length > 1) {
       window.history.back();
@@ -41,7 +43,7 @@ export function StepLayout({
             <button
               onClick={goBack}
               className="p-2 -ml-2 rounded-full hover:bg-muted transition-colors touch-target"
-              aria-label="Back"
+              aria-label={t("common.back")}
             >
               <ArrowLeft size={20} className="text-foreground" />
             </button>

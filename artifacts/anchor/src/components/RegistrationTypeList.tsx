@@ -13,7 +13,8 @@ export function RegistrationTypeList({ onSelect }: RegistrationTypeListProps) {
   const { cravingLogs, relapseLogs, anxietyLogs, boredomLogs } = useStore();
   const { t } = useT();
 
-  const lastCraving = cravingLogs[0];
+  const lastActiveCraving = cravingLogs.find((log) => log.cravingType === "active");
+  const lastPassiveCraving = cravingLogs.find((log) => log.cravingType !== "active");
   const lastRelapse = relapseLogs[0];
   const lastAnxiety = anxietyLogs[0];
   const lastBoredom = boredomLogs[0];
@@ -30,14 +31,14 @@ export function RegistrationTypeList({ onSelect }: RegistrationTypeListProps) {
       type: "trek",
       label: t("registrations.trek.title"),
       sub: t("registrations.trek.sub"),
-      lastLog: lastCraving?.cravingType === "active" ? lastCraving.timestamp : undefined,
+      lastLog: lastActiveCraving?.timestamp,
     },
     {
       to: "/craving",
       type: "craving",
       label: t("registrations.craving.title"),
       sub: t("registrations.craving.sub"),
-      lastLog: lastCraving && lastCraving.cravingType !== "active" ? lastCraving.timestamp : undefined,
+      lastLog: lastPassiveCraving?.timestamp,
     },
     {
       to: "/boredom",

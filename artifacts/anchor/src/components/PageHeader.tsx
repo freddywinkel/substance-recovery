@@ -1,6 +1,7 @@
 import { useCallback } from "react";
 import { ArrowLeft } from "lucide-react";
 import { useT } from "@/hooks/useTranslation";
+import { useLocation } from "wouter";
 
 interface PageHeaderProps {
   title: string;
@@ -11,15 +12,16 @@ interface PageHeaderProps {
 
 export function PageHeader({ title, back = false, subtitle, onBack }: PageHeaderProps) {
   const { t } = useT();
+  const [, navigate] = useLocation();
   const handleBack = useCallback(() => {
     if (onBack) {
       onBack();
     } else if (window.history.length > 1) {
       window.history.back();
     } else {
-      window.location.href = "/";
+      navigate("/");
     }
-  }, [onBack]);
+  }, [navigate, onBack]);
 
   return (
     <header

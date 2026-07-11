@@ -3,7 +3,6 @@ import { Link, useLocation } from "wouter";
 import { useStore } from "@/hooks/useStore";
 import { useT } from "@/hooks/useTranslation";
 import { useActiveRegistration } from "@/contexts/ActiveRegistrationContext";
-import { useClerkAvailable } from "@/lib/clerk-safe";
 import { getTodaysQuote } from "@/lib/recoveryQuotes";
 import { hapticLight } from "@/lib/haptics";
 import { calculateRiskScore } from "@/lib/riskScore";
@@ -12,7 +11,7 @@ import { useRegistrationLauncher } from "@/contexts/RegistrationLauncherContext"
 import { buildImpactInsights } from "@/lib/impactInsights";
 import {
   Wind, Eye, Droplets, Waves, Rewind, Heart, Shuffle,
-  CalendarCheck, RotateCcw, User, LogIn,
+  CalendarCheck, RotateCcw, Settings,
   TrendingUp, HeartPulse, Info,
 } from "lucide-react";
 
@@ -37,6 +36,7 @@ const RESUME_LABEL_KEYS: Record<string, string> = {
   trek: "home.trek.title",
   anxiety: "home.anxiety_title",
   boredom: "home.boredom_title",
+  relapse: "relapse.title",
 };
 
 function computeSobrietyStats(
@@ -75,10 +75,9 @@ export function Home() {
   const { t, language } = useT();
   const { session, clearSession } = useActiveRegistration();
   const [, navigate] = useLocation();
-  const clerkAvailable = useClerkAvailable();
   const { pinned } = usePinnedTools();
   const { openRegistrationLauncher } = useRegistrationLauncher();
-  const todaysQuote = useMemo(() => getTodaysQuote(), []);
+  const todaysQuote = useMemo(() => getTodaysQuote(language), [language]);
 
   const sobriety = useMemo(() => computeSobrietyStats(sobrietyStartDate, relapseLogs), [sobrietyStartDate, relapseLogs]);
 
@@ -127,8 +126,9 @@ export function Home() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-dvh">
+      <div role="status" className="flex items-center justify-center min-h-dvh">
         <div className="w-5 h-5 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+        <span className="sr-only">{t("common.loading")}</span>
       </div>
     );
   }
@@ -144,7 +144,7 @@ export function Home() {
           <p className="text-muted-foreground text-sm mt-0.5">{t("home.private")}</p>
         </div>
         <button onClick={() => navigate("/settings")} className="shrink-0 mt-0.5 p-2 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors touch-target focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50" aria-label={t("nav.settings")}>
-          {clerkAvailable ? <User size={20} strokeWidth={1.8} /> : <LogIn size={20} strokeWidth={1.8} />}
+          <Settings size={20} strokeWidth={1.8} />
         </button>
       </header>
 
@@ -152,7 +152,7 @@ export function Home() {
 
         {/* Resume in-progress log entry */}
         {session && !session.pendingReturn && (
-          <section aria-label="Resume log entry" className="animate-fade-up">
+          <section aria-label={t("resume.card_title")} className="animate-fade-up">
             <div className="bg-primary/10 border border-primary/30 rounded-[1.5rem] p-4 flex flex-col gap-3">
               <div className="flex items-start gap-3">
                 <div className="rounded-xl bg-primary/20 w-10 h-10 flex items-center justify-center text-primary shrink-0">
@@ -176,7 +176,7 @@ export function Home() {
 
         {/* Sobriety streak hero */}
         {sobriety ? (
-          <section aria-label="Sobriety streak" className="animate-fade-up">
+          <section aria-label={t("home.streak_label")} className="animate-fade-up">
             <div className="relative overflow-hidden rounded-[2rem] border border-border/50 bg-gradient-to-br from-card/90 via-card/80 to-card/60 p-6 shadow-xl shadow-black/20">
               <div className="absolute -top-24 -right-20 h-48 w-48 rounded-full bg-primary/10 blur-3xl" />
               <div className="absolute -bottom-24 -left-20 h-48 w-48 rounded-full bg-emerald-400/10 blur-3xl" />
@@ -197,11 +197,11 @@ export function Home() {
                   <TrendingUp size={15} className="text-muted-foreground shrink-0" />
                   <div>
                     <p className="text-xs text-muted-foreground"><span className="font-semibold text-foreground">{sobriety.totalDays}</span> {" "}{t("home.total_days")}</p>
-                    <p className="text-[10px] text-muted-foreground/60 mt-0.5">{t("home.since")} {new Date(sobriety.startDate + "T00:00:00").toLocaleDateString(language === "nl" ? "nl-NL" : undefined, { month: "long", day: "numeric", year: "numeric" })}</p>
+                    <p className="text-[10px] text-muted-foreground/60 mt-0.5">{t("home.since")} {new Date(sobriety.startDate + "T00:00:00").toLocaleDateString(language === "nl" ? "nl-NL" : "en-GB", { month: "long", day: "numeric", year: "numeric" })}</p>
                   </div>
                 </div>
               ) : (
-                <p className="relative mt-4 text-[10px] text-muted-foreground/60">{t("home.since")} {new Date(sobriety.startDate + "T00:00:00").toLocaleDateString(language === "nl" ? "nl-NL" : undefined, { month: "long", day: "numeric", year: "numeric" })}</p>
+                <p className="relative mt-4 text-[10px] text-muted-foreground/60">{t("home.since")} {new Date(sobriety.startDate + "T00:00:00").toLocaleDateString(language === "nl" ? "nl-NL" : "en-GB", { month: "long", day: "numeric", year: "numeric" })}</p>
               )}
             </div>
 
@@ -222,7 +222,7 @@ export function Home() {
             </div>
           </section>
         ) : (
-          <section aria-label="Sobriety streak" className="animate-fade-up">
+          <section aria-label={t("home.streak_label")} className="animate-fade-up">
             <Link href="/settings" asChild>
               <a className="block rounded-[1.5rem] border border-dashed border-border bg-card/30 p-5 flex flex-col gap-2 hover:border-primary/40 transition-colors active:scale-[0.98]">
                 <div className="flex items-center gap-2">
@@ -237,7 +237,7 @@ export function Home() {
         )}
 
         {/* Risk overview */}
-        <section aria-label="Risk overview" className="animate-fade-up">
+        <section aria-label={t("home.risk.label")} className="animate-fade-up">
           <div className={`rounded-[1.5rem] border p-4 ${riskInfo.level === "high" ? "border-rose-300/30 bg-rose-400/5" : riskInfo.level === "medium" ? "border-amber-300/30 bg-amber-400/5" : "border-border/50 bg-card/50"}`}>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -264,7 +264,7 @@ export function Home() {
               <div className="mt-3">
                 <div className="flex items-baseline gap-2">
                   <span className={`text-2xl font-semibold tabular-nums ${riskInfo.level === "high" ? "text-rose-300" : riskInfo.level === "medium" ? "text-amber-300" : "text-emerald-300"}`}>
-                    {riskInfo.label}
+                    {t(riskInfo.label)}
                   </span>
                   <span className="text-xs text-muted-foreground">
                     {t("home.risk.score")}: {riskInfo.score}/100
@@ -275,7 +275,7 @@ export function Home() {
                     {riskInfo.factors.map((f, i) => (
                       <li key={i} className="text-xs text-muted-foreground flex items-start gap-1.5">
                         <span className="mt-1.5 h-1 w-1 rounded-full bg-muted-foreground/50 shrink-0" />
-                        {f}
+                        {t(f)}
                       </li>
                     ))}
                   </ul>
@@ -293,7 +293,7 @@ export function Home() {
         </section>
 
         {topImpactInsight && (
-          <section aria-label="Most impactful insight" className="animate-fade-up">
+          <section aria-label={t("home.top_insight.label")} className="animate-fade-up">
             <Link href="/insights" asChild>
               <a className="block rounded-[1.5rem] border border-border/50 bg-card/50 p-4 transition-all duration-300 hover:bg-card/70 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50">
                 <div className="flex items-start justify-between gap-3">
@@ -326,7 +326,7 @@ export function Home() {
         )}
 
         {/* Daily recovery insight */}
-        <section aria-label="Daily insight" className="animate-fade-up">
+        <section aria-label={t("home.insight.label")} className="animate-fade-up">
           <div className="rounded-[1.5rem] border border-border/50 bg-card/50 p-4">
             <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">{t("home.insight.label")}</p>
             <p className="mt-2 text-sm leading-6 text-foreground/70">{todaysQuote}</p>
@@ -335,7 +335,7 @@ export function Home() {
 
         {/* Pinned tools */}
         {pinned.length > 0 && (
-          <section aria-label="Pinned tools" className="animate-fade-up">
+          <section aria-label={t("tools.pinned.title")} className="animate-fade-up">
             <p className="text-xs text-muted-foreground uppercase tracking-widest px-1 mb-3">{t("tools.pinned.title")}</p>
             <div className="grid grid-cols-2 gap-3">
               {pinned.map((id) => {

@@ -14,6 +14,7 @@ function Slider({ value, onChange }: { value: number; onChange: (v: number) => v
       </div>
       <input
         type="range"
+        aria-label={t("journal.craving_q")}
         min={0}
         max={10}
         step={1}
@@ -94,6 +95,7 @@ export function JournalNewEntry() {
               <button
                 key={v}
                 onClick={() => setMood(v)}
+                aria-pressed={mood === v}
                 className={`flex-1 flex flex-col items-center gap-1 py-3 rounded-2xl border transition-all touch-target focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 ${
                   mood === v
                     ? "border-primary bg-primary/10 text-primary"
@@ -119,6 +121,7 @@ export function JournalNewEntry() {
           <p className="text-base font-medium text-foreground mb-1">{t("journal.trigger_q")}</p>
           <p className="text-sm text-muted-foreground mb-3">{t("journal.trigger_sub")}</p>
           <textarea
+            aria-label={t("journal.trigger_q")}
             value={trigger}
             onChange={(e) => setTrigger(e.target.value)}
             placeholder={t("journal.trigger_placeholder")}
@@ -132,6 +135,7 @@ export function JournalNewEntry() {
           <p className="text-base font-medium text-foreground mb-1">{t("journal.coping_q")}</p>
           <p className="text-sm text-muted-foreground mb-3">{t("journal.coping_sub")}</p>
           <textarea
+            aria-label={t("journal.coping_q")}
             value={coping}
             onChange={(e) => setCoping(e.target.value)}
             placeholder={t("journal.coping_placeholder")}
@@ -145,6 +149,7 @@ export function JournalNewEntry() {
           <p className="text-base font-medium text-foreground mb-1">{t("journal.note_q")}</p>
           <p className="text-sm text-muted-foreground mb-3">{t("journal.note_sub")}</p>
           <textarea
+            aria-label={t("journal.note_q")}
             value={note}
             onChange={(e) => setNote(e.target.value)}
             placeholder={t("journal.note_placeholder")}
@@ -177,7 +182,7 @@ export function JournalNewEntry() {
         style={{ bottom: "var(--bottom-nav-h)" }}
       >
         {error && (
-          <p className="text-sm text-red-500 mb-2 text-center">{error}</p>
+          <p role="alert" className="text-sm text-red-500 mb-2 text-center">{error}</p>
         )}
         <div className="flex gap-3 max-w-lg mx-auto">
           <button

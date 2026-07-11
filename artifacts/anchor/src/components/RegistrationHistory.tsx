@@ -20,7 +20,7 @@ const LABEL_KEYS: Record<RegistrationEntry["_type"], string> = {
 };
 
 function fmtDate(ts: number, locale: string) {
-  return new Date(ts).toLocaleString(locale === "nl" ? "nl-NL" : undefined, {
+  return new Date(ts).toLocaleString(locale === "nl" ? "nl-NL" : "en-GB", {
     weekday: "short",
     month: "short",
     day: "numeric",
@@ -36,8 +36,12 @@ function textValue(value: unknown): string {
   return "";
 }
 
-function DetailRow({ label, value }: { label: string; value: unknown }) {
-  const text = textValue(value);
+function DetailRow({ label, value, translate }: { label: string; value: unknown; translate?: (value: string) => string }) {
+  const text = Array.isArray(value)
+    ? value.filter(Boolean).map((item) => translate ? translate(String(item)) : String(item)).join(", ")
+    : translate && typeof value === "string"
+      ? translate(value.trim())
+      : textValue(value);
   if (!text) return null;
   return (
     <p className="text-xs text-muted-foreground">
@@ -198,12 +202,12 @@ export function RegistrationHistory() {
                 ) : (
                   <DetailRow label={t("logs.detail.note")} value={entry.note} />
                 )}
-                <DetailRow label={t("logs.detail.situation")} value={"situationPresets" in entry ? entry.situationPresets : "situation" in entry ? entry.situation : ""} />
-                <DetailRow label={t("logs.detail.trigger")} value={"triggers" in entry ? entry.triggers : "trigger" in entry ? entry.trigger : "firstTriggerText" in entry ? entry.firstTriggerText : ""} />
-                <DetailRow label={t("logs.detail.emotions")} value={"emotions" in entry ? entry.emotions : ""} />
-                <DetailRow label={t("logs.detail.substances")} value={"substances" in entry ? entry.substances : ""} />
-                <DetailRow label={t("logs.detail.action")} value={"chosenAction" in entry && entry.chosenAction ? tOpt(entry.chosenAction) : "action" in entry ? entry.action : ""} />
-                <DetailRow label={t("logs.detail.outcome")} value={"cravingOutcome" in entry ? entry.cravingOutcome : "outcomeAfter" in entry ? entry.outcomeAfter : ""} />
+                <DetailRow label={t("logs.detail.situation")} value={"situationPresets" in entry ? entry.situationPresets : "situation" in entry ? entry.situation : ""} translate={tOpt} />
+                <DetailRow label={t("logs.detail.trigger")} value={"triggers" in entry ? entry.triggers : "trigger" in entry ? entry.trigger : "firstTriggerText" in entry ? entry.firstTriggerText : ""} translate={tOpt} />
+                <DetailRow label={t("logs.detail.emotions")} value={"emotions" in entry ? entry.emotions : ""} translate={tOpt} />
+                <DetailRow label={t("logs.detail.substances")} value={"substances" in entry ? entry.substances : ""} translate={tOpt} />
+                <DetailRow label={t("logs.detail.action")} value={"chosenAction" in entry && entry.chosenAction ? entry.chosenAction : "action" in entry ? entry.action : ""} translate={tOpt} />
+                <DetailRow label={t("logs.detail.outcome")} value={"cravingOutcome" in entry ? entry.cravingOutcome : "outcomeAfter" in entry ? entry.outcomeAfter : ""} translate={tOpt} />
 
                 <div className="mt-1 flex flex-wrap justify-end gap-2">
                   {isEditing ? (

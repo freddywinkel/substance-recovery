@@ -8,6 +8,7 @@ export function IntensitySlider({
   label,
   lowLabel,
   highLabel,
+  ariaLabel,
 }: {
   value: number;
   onChange: (v: number) => void;
@@ -16,6 +17,7 @@ export function IntensitySlider({
   label?: string;
   lowLabel?: string;
   highLabel?: string;
+  ariaLabel?: string;
 }) {
   const pct = ((value - min) / (max - min)) * 100;
   return (
@@ -30,6 +32,7 @@ export function IntensitySlider({
         max={max}
         step={1}
         value={value}
+        aria-label={ariaLabel ?? label ?? [lowLabel, highLabel].filter(Boolean).join(" – ")}
         onChange={(e) => onChange(Number(e.target.value))}
         className="intensity-slider w-full"
         style={{ "--thumb-pct": `${pct}%` } as CSSProperties}

@@ -6,7 +6,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { Plus, Trash2, Star, Search, Calendar, X } from "lucide-react";
 
 function formatDate(ts: number, locale: string) {
-  return new Date(ts).toLocaleString(locale === "nl" ? "nl-NL" : undefined, {
+  return new Date(ts).toLocaleString(locale === "nl" ? "nl-NL" : "en-GB", {
     weekday: "short",
     month: "short",
     day: "numeric",
@@ -15,7 +15,7 @@ function formatDate(ts: number, locale: string) {
   });
 }
 function formatShortDate(ts: number, locale: string) {
-  return new Date(ts).toLocaleDateString(locale === "nl" ? "nl-NL" : undefined, {
+  return new Date(ts).toLocaleDateString(locale === "nl" ? "nl-NL" : "en-GB", {
     month: "short",
     day: "numeric",
   });
@@ -30,17 +30,22 @@ export function Journal() {
   const [, navigate] = useLocation();
 
   const filteredEntries = useMemo(() => {
-    const now = Date.now();
-    const dayMs = 1000 * 60 * 60 * 24;
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const weekStartDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const dayFromMonday = (weekStartDate.getDay() + 6) % 7;
+    weekStartDate.setDate(weekStartDate.getDate() - dayFromMonday);
+    const weekStart = weekStartDate.getTime();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
     let entries = journal;
 
     // Date filter
     if (dateFilter === "today") {
-      entries = entries.filter((e) => now - e.timestamp < dayMs);
+      entries = entries.filter((e) => e.timestamp >= todayStart);
     } else if (dateFilter === "week") {
-      entries = entries.filter((e) => now - e.timestamp < 7 * dayMs);
+      entries = entries.filter((e) => e.timestamp >= weekStart);
     } else if (dateFilter === "month") {
-      entries = entries.filter((e) => now - e.timestamp < 30 * dayMs);
+      entries = entries.filter((e) => e.timestamp >= monthStart);
     }
 
     // Keyword search
@@ -80,6 +85,7 @@ export function Journal() {
           <input
             type="text"
             value={searchQuery}
+            aria-label={t("journal.search_placeholder")}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder={t("journal.search_placeholder")}
             className="w-full rounded-xl border border-border/50 bg-card pl-9 pr-9 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
@@ -102,6 +108,7 @@ export function Journal() {
             <button
               key={v}
               onClick={() => setDateFilter(v)}
+              aria-pressed={dateFilter === v}
               className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 ${
                 dateFilter === v
                   ? "bg-primary text-primary-foreground"
@@ -196,9 +203,9 @@ export function Journal() {
       </button>
 
       {confirmDelete && (
-        <div className="fixed inset-0 z-[70] flex items-end justify-center bg-background/80 backdrop-blur-sm px-4 pb-8">
-          <div className="bg-card border border-border rounded-3xl p-6 w-full max-w-sm">
-            <h3 className="font-semibold text-foreground mb-2">{t("journal.delete_title")}</h3>
+        <div className="fixed inset-0 z-[70] flex items-end justify-center bg-background/80 backdrop-blur-sm px-4 pb-[calc(2rem+env(safe-area-inset-bottom,0px))]">
+          <div role="alertdialog" aria-modal="true" aria-labelledby="delete-entry-title" className="bg-card border border-border rounded-3xl p-6 w-full max-w-sm">
+            <h3 id="delete-entry-title" className="font-semibold text-foreground mb-2">{t("journal.delete_title")}</h3>
             <p className="text-sm text-muted-foreground mb-5">{t("journal.delete_body")}</p>
             <div className="flex gap-3">
               <button

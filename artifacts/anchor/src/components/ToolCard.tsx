@@ -21,9 +21,9 @@ export function ToolCard({
   pinButton,
 }: ToolCardProps) {
   return (
-    <Link href={to} asChild>
-      <a className="block animate-fade-up focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 rounded-2xl">
-        <div className="bg-card border border-border rounded-2xl p-4 active:scale-[0.98] transition-all duration-200 hover:border-primary/40">
+    <div className="flex items-stretch gap-1 rounded-2xl border border-border bg-card p-1 animate-fade-up transition-all duration-200 hover:border-primary/40">
+      <Link href={to} asChild>
+        <a className="min-w-0 flex-1 rounded-xl p-3 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50">
           <div className="flex items-start gap-3">
             <div
               className={`rounded-xl p-2.5 bg-muted/60 ${accent} shrink-0`}
@@ -43,10 +43,10 @@ export function ToolCard({
                 {description}
               </p>
             </div>
-            {pinButton && <div className="shrink-0 self-center">{pinButton}</div>}
           </div>
-        </div>
-      </a>
-    </Link>
+        </a>
+      </Link>
+      {pinButton && <div className="flex shrink-0 items-center pr-2">{pinButton}</div>}
+    </div>
   );
 }
