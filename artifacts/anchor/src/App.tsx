@@ -87,9 +87,9 @@ function AppShell() {
           <main className="app-main min-h-0 flex-1 overflow-hidden">
             <AppRoutes />
           </main>
-          <RegistrationReturnBanner />
-          <BottomNav />
         </div>
+        <RegistrationReturnBanner />
+        <BottomNav />
       </RegistrationLauncherProvider>
       <Toaster />
     </>
