@@ -209,10 +209,6 @@
     max-width: 100%;
   }
 
-  .bottom-nav-shell {
-    box-shadow: 0 -2px 8px hsl(var(--bottom-nav-shadow));
-  }
-
   .modal-overlay {
     background-color: hsl(var(--modal-overlay));
   }
