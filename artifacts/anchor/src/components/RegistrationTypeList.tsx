@@ -77,11 +77,10 @@ export function RegistrationTypeList({ onSelect }: RegistrationTypeListProps) {
         const meta = CATEGORY_META[reg.type];
         const lastText = formatLastLog(reg.lastLog);
         return (
-          <Link key={reg.to} href={reg.to} asChild>
+          <Link key={reg.to} href={reg.to} onClick={onSelect} asChild>
             <a
               className="block animate-fade-up focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
               style={{ animationDelay: `${i * 0.03}s` }}
-              onClick={onSelect}
             >
               <div className="group min-h-[112px] rounded-[1.5rem] border border-border/50 bg-card/70 p-4 shadow-lg shadow-black/10 transition-all duration-300 hover:bg-card/85 active:scale-[0.98] flex items-center gap-4">
                 <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ${meta.bg} ${meta.color} ring-1 ${meta.ring} ${meta.ringHover} transition-all`}>

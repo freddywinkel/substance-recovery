@@ -66,7 +66,7 @@ export function RegistrationLauncherProvider({ children }: { children: React.Rea
       {children}
       {isOpen && (
         <div
-          className="fixed inset-0 z-[70] flex items-end justify-center bg-black/60 px-3 pb-[calc(var(--bottom-nav-h)+0.75rem)] pt-safe"
+          className="modal-overlay fixed inset-0 z-[70] flex items-end justify-center px-3 pb-[calc(var(--bottom-nav-h)+0.75rem)] pt-safe"
           role="dialog"
           aria-modal="true"
           aria-labelledby="registration-launcher-title"
@@ -76,7 +76,7 @@ export function RegistrationLauncherProvider({ children }: { children: React.Rea
             onClick={close}
             aria-hidden="true"
           />
-          <div ref={dialogRef} className="relative w-full max-w-lg rounded-t-[2rem] border border-border/60 bg-background p-4 shadow-2xl shadow-black/40">
+          <div ref={dialogRef} className="relative w-full max-w-lg rounded-[2rem] border border-border/60 bg-background p-4 shadow-2xl shadow-black/20 dark:shadow-black/40">
             <div className="mb-3 flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <h2 id="registration-launcher-title" className="text-base font-semibold text-foreground">

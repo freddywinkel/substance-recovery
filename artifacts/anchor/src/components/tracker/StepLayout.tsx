@@ -37,7 +37,10 @@ export function StepLayout({
   return (
     <div className="flex h-full min-h-0 flex-col bg-background">
       {/* Header */}
-      <div className="px-4 pt-4 pb-2">
+      <div
+        className="px-4 pb-2"
+        style={{ paddingTop: "calc(1rem + env(safe-area-inset-top, 0px))" }}
+      >
         <div className="flex items-center gap-3">
           {back && (
             <button
