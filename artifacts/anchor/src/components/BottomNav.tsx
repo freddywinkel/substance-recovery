@@ -5,6 +5,7 @@ import {
   ClipboardList,
   Home,
   Plus,
+  Settings,
   Zap,
   type LucideIcon,
 } from "lucide-react";
@@ -15,6 +16,7 @@ type NavItem = {
   to: string;
   icon: LucideIcon;
   label: string;
+  displayLabel?: string;
   match: (path: string) => boolean;
 };
 
@@ -54,19 +56,27 @@ export function BottomNav() {
       label: t("nav.insights"),
       match: (path) => path.startsWith("/insights"),
     },
+    {
+      to: "/settings",
+      icon: Settings,
+      label: t("nav.settings"),
+      displayLabel: t("nav.settings_short"),
+      match: (path) => path.startsWith("/settings"),
+    },
   ];
 
-  const renderItem = ({ to, icon: Icon, label, match }: NavItem) => {
+  const renderItem = ({ to, icon: Icon, label, displayLabel, match }: NavItem) => {
     const isActive = match(location);
     return (
       <Link key={to} href={to} asChild>
         <a
           className="relative flex min-h-12 min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-xl py-1 transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+          aria-label={label}
           aria-current={isActive ? "page" : undefined}
         >
           {isActive && <span className="absolute top-0.5 h-1 w-4 rounded-full bg-primary" />}
           <Icon
-            size={22}
+            size={20}
             strokeWidth={isActive ? 2 : 1.5}
             className={`relative transition-colors duration-200 ${
               isActive
@@ -75,13 +85,13 @@ export function BottomNav() {
             }`}
           />
           <span
-            className={`relative max-w-full truncate text-[10px] font-medium leading-tight transition-colors duration-200 min-[360px]:text-[11px] ${
+            className={`relative max-w-full truncate text-[9px] font-medium leading-tight transition-colors duration-200 min-[360px]:text-[10px] ${
               isActive
                 ? "text-primary"
                 : "text-muted-foreground"
             }`}
           >
-            {label}
+            {displayLabel ?? label}
           </span>
         </a>
       </Link>
@@ -91,8 +101,8 @@ export function BottomNav() {
   return (
     <footer className="bottom-nav-shell fixed inset-x-0 bottom-0 z-50 h-[var(--bottom-nav-h)] border-0 bg-background/90 backdrop-blur-lg">
       <div className="relative mx-auto flex h-full w-full items-center px-1 pb-[env(safe-area-inset-bottom,0px)] pt-1">
-        <nav className="flex min-w-0 flex-1 items-center justify-around" aria-label={`${t("nav.aria")} — ${t("nav.home")}, ${t("nav.tools")}`}>
-          {items.slice(0, 2).map(renderItem)}
+        <nav className="flex min-w-0 flex-1 items-center justify-around" aria-label={`${t("nav.aria")} — ${t("nav.home")}, ${t("nav.tools")}, ${t("nav.journal")}`}>
+          {items.slice(0, 3).map(renderItem)}
         </nav>
         <button
           type="button"
@@ -102,8 +112,8 @@ export function BottomNav() {
         >
           <Plus size={22} strokeWidth={2.4} />
         </button>
-        <nav className="flex min-w-0 flex-1 items-center justify-around" aria-label={`${t("nav.aria")} — ${t("nav.journal")}, ${t("nav.log")}, ${t("nav.insights")}`}>
-          {items.slice(2).map(renderItem)}
+        <nav className="flex min-w-0 flex-1 items-center justify-around" aria-label={`${t("nav.aria")} — ${t("nav.log")}, ${t("nav.insights")}, ${t("nav.settings")}`}>
+          {items.slice(3).map(renderItem)}
         </nav>
       </div>
     </footer>
