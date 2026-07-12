@@ -74,7 +74,6 @@ export function BottomNav() {
           aria-label={label}
           aria-current={isActive ? "page" : undefined}
         >
-          {isActive && <span className="absolute top-0.5 h-1 w-4 rounded-full bg-primary" />}
           <Icon
             size={20}
             strokeWidth={isActive ? 2 : 1.5}
