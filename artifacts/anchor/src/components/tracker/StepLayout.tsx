@@ -80,14 +80,12 @@ export function StepLayout({
       {/* Content */}
       <div className={cn("flex-1 overflow-y-auto scroll-smooth-ios px-4 py-4 flex flex-col gap-5", contentClassName)}>
         {children}
+        {actionBar && (
+          <div className="mt-auto border-t border-border/70 pb-1 pt-3">
+            {actionBar}
+          </div>
+        )}
       </div>
-
-      {/* Action bar */}
-      {actionBar && (
-        <div className="px-4 pb-4 pt-2 bg-background border-t border-border">
-          {actionBar}
-        </div>
-      )}
     </div>
   );
 }

@@ -59,7 +59,7 @@ export function Grounding54321() {
     return (
       <div className="flex flex-col min-h-dvh bg-background">
         <PageHeader title={t("ground.title")} back />
-        <div className="flex-1 flex flex-col items-center justify-center px-6 pb-safe gap-6 text-center animate-fade-up">
+        <div className="flex-1 min-h-0 overflow-y-auto scroll-smooth-ios flex flex-col items-center justify-center px-6 py-6 pb-safe gap-6 text-center animate-fade-up">
           <CheckCircle2 size={56} strokeWidth={1.5} className="text-primary" />
           <h2 className="text-2xl font-semibold">{t("ground.done_title")}</h2>
           <p className="text-muted-foreground leading-relaxed max-w-xs">
@@ -91,7 +91,7 @@ export function Grounding54321() {
         ))}
       </div>
 
-      <div className="flex-1 flex flex-col px-6 pb-safe pt-4 gap-6 animate-fade-up">
+      <div className="flex-1 min-h-0 overflow-y-auto scroll-smooth-ios flex flex-col px-6 pb-safe pt-4 gap-6 animate-fade-up">
 
         <div className="bg-card border border-border rounded-3xl p-6 flex flex-col items-center gap-4 text-center">
           <div className={`rounded-2xl p-4 bg-muted/70 ${current.color}`}>

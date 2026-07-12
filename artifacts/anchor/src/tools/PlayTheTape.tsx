@@ -33,7 +33,7 @@ export function PlayTheTape() {
     return (
       <div className="flex flex-col min-h-dvh bg-background">
         <PageHeader title={t("tape.title")} back subtitle={t("tape.subtitle")} />
-        <div className="flex-1 flex flex-col px-6 pb-safe pt-6 gap-6 animate-fade-up">
+        <div className="flex-1 min-h-0 overflow-y-auto scroll-smooth-ios flex flex-col px-6 pb-safe pt-6 gap-6 animate-fade-up">
           <div className="bg-card border border-border rounded-3xl p-6">
             <p className="text-foreground/90 leading-relaxed">{t("tape.intro_body")}</p>
             <p className="text-muted-foreground text-sm mt-3 leading-relaxed">{t("tape.intro_sub")}</p>
@@ -56,7 +56,7 @@ export function PlayTheTape() {
     return (
       <div className="flex flex-col min-h-dvh bg-background">
         <PageHeader title={t("tape.title")} back />
-        <div className="flex-1 flex flex-col items-center justify-center px-6 pb-safe gap-6 text-center animate-fade-up">
+        <div className="flex-1 min-h-0 overflow-y-auto scroll-smooth-ios flex flex-col items-center justify-center px-6 py-6 pb-safe gap-6 text-center animate-fade-up">
           <CheckCircle2 size={56} strokeWidth={1.5} className="text-primary" />
           <h2 className="text-2xl font-semibold">{t("tape.done_title")}</h2>
           <p className="text-muted-foreground leading-relaxed max-w-xs">{t("tape.done_body")}</p>
@@ -89,7 +89,7 @@ export function PlayTheTape() {
         />
       </div>
 
-      <div className="flex-1 flex flex-col px-6 pb-safe pt-6 gap-6 animate-fade-up">
+      <div className="flex-1 min-h-0 overflow-y-auto scroll-smooth-ios flex flex-col px-6 pb-safe pt-6 gap-6 animate-fade-up">
         <div className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
           {current.timeframe}
         </div>

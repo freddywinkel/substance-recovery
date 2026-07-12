@@ -84,8 +84,7 @@ export function JournalNewEntry() {
       />
 
       <div
-        className="flex-1 overflow-y-auto scroll-smooth-ios px-4 pt-4 flex flex-col gap-6"
-        style={{ paddingBottom: "calc(9rem + env(safe-area-inset-bottom))" }}
+        className="flex-1 overflow-y-auto scroll-smooth-ios px-4 pb-4 pt-4 flex flex-col gap-6"
       >
         {/* Mood */}
         <div>
@@ -175,29 +174,29 @@ export function JournalNewEntry() {
           <Star size={16} strokeWidth={2} className={favourite ? "fill-amber-300" : ""} />
           <span className="text-sm font-medium">{t("journal.favourite")}</span>
         </button>
-      </div>
 
-      <div
-        className="fixed left-0 right-0 bg-background/95 backdrop-blur-sm border-t border-border px-4 pt-3 pb-3 z-40"
-        style={{ bottom: "var(--bottom-nav-h)" }}
-      >
+        {/* Form actions belong at the end of the form, not over its content. */}
+        <div className="mt-auto border-t border-border/70 pb-1 pt-4">
         {error && (
           <p role="alert" className="text-sm text-red-500 mb-2 text-center">{error}</p>
         )}
         <div className="flex gap-3 max-w-lg mx-auto">
           <button
+            type="button"
             onClick={() => navigate("/journal")}
             className="touch-target px-5 py-3.5 border border-border rounded-2xl font-medium text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
           >
             {t("common.cancel")}
           </button>
           <button
+            type="button"
             onClick={handleSave}
             disabled={saving}
             className="flex-1 bg-primary text-primary-foreground rounded-2xl py-3.5 font-semibold touch-target hover:opacity-90 active:scale-95 transition-all disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
           >
             {saving ? t("journal.saving") : t("journal.save")}
           </button>
+        </div>
         </div>
       </div>
     </div>

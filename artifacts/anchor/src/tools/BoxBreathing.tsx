@@ -74,7 +74,7 @@ export function BoxBreathing() {
     <div className="flex flex-col min-h-dvh bg-background">
       <PageHeader title={t("breath.title")} back subtitle={t("breath.subtitle")} />
 
-      <div className="flex-1 flex flex-col items-center justify-center px-6 pb-safe gap-10">
+      <div className="flex-1 min-h-0 overflow-y-auto scroll-smooth-ios flex flex-col items-center px-6 py-6 pb-safe gap-8">
 
         <div className="text-center animate-fade-up">
           <p className="text-muted-foreground text-sm">

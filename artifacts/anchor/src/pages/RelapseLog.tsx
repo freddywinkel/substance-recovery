@@ -146,6 +146,7 @@ function SelectList<T extends string>({
     <div className="flex flex-col gap-2">
       {options.map(({ value, label, sub }) => (
         <button
+          type="button"
           key={value}
           onClick={() => onSelect(value)}
           aria-pressed={isSelected(value)}
@@ -178,10 +179,11 @@ function ChipGrid({ options, selected, onToggle, translate }: {
     <div className="flex flex-wrap gap-2">
       {options.map((opt) => (
         <button
+          type="button"
           key={opt}
           onClick={() => onToggle(opt)}
           aria-pressed={selected.includes(opt)}
-          className={`px-3.5 py-2.5 rounded-xl border text-sm font-medium transition-all ${
+          className={`touch-target px-3.5 py-2.5 rounded-xl border text-sm font-medium transition-all ${
             selected.includes(opt)
               ? "bg-primary/10 border-primary text-foreground"
               : "bg-card border-border text-muted-foreground hover:border-primary/30"
@@ -434,8 +436,7 @@ export function RelapseLog() {
         </div>
       )}
 
-      <div className="flex-1 overflow-y-auto scroll-smooth-ios px-4 pt-4 flex flex-col gap-4"
-        style={{ paddingBottom: "calc(9rem + env(safe-area-inset-bottom))" }}>
+      <div className="flex-1 overflow-y-auto scroll-smooth-ios px-4 pb-4 pt-4 flex flex-col gap-4">
 
         {/* ── Label ─────────────────────────────────────────── */}
         {step === "label" && (
@@ -510,6 +511,7 @@ export function RelapseLog() {
               translate={tOpt}
             />
             <textarea
+              aria-label={t("relapse.q.trigger")}
               value={draft.firstTriggerText}
               onChange={(e) => update("firstTriggerText", e.target.value)}
               placeholder={t("relapse.q.trigger_placeholder")}
@@ -531,6 +533,7 @@ export function RelapseLog() {
               translate={tOpt}
             />
             <textarea
+              aria-label={t("relapse.q.before")}
               value={draft.context}
               onChange={(e) => update("context", e.target.value)}
               placeholder={t("relapse.q.before_other_placeholder")}
@@ -556,6 +559,7 @@ export function RelapseLog() {
               translate={tOpt}
             />
             <textarea
+              aria-label={t("relapse.q.thought")}
               value={draft.preUseThoughtFreeText}
               onChange={(e) => update("preUseThoughtFreeText", e.target.value)}
               placeholder={t("relapse.q.thought_placeholder")}
@@ -586,6 +590,7 @@ export function RelapseLog() {
             />
             <input
               type="text"
+              aria-label={t("relapse.q.next_support")}
               value={draft.supportContactOther}
               onChange={(e) => update("supportContactOther", e.target.value)}
               placeholder={t("relapse.q.next_support_placeholder")}
@@ -601,6 +606,7 @@ export function RelapseLog() {
             />
             <input
               type="text"
+              aria-label={t("relapse.q.next_step")}
               value={draft.nextStepOther}
               onChange={(e) => update("nextStepOther", e.target.value)}
               placeholder={t("relapse.q.next_step_other_placeholder")}
@@ -617,6 +623,7 @@ export function RelapseLog() {
                 { value: "withdrawal" as AcuteRisk, label: "Withdrawal concern" },
               ].map(({ value, label }) => (
                 <button
+                  type="button"
                   key={value}
                   onClick={() => update("acuteRisk", draft.acuteRisk === value ? "none" : value)}
                   aria-pressed={draft.acuteRisk === value}
@@ -648,6 +655,7 @@ export function RelapseLog() {
             </p>
             <p className="text-sm text-muted-foreground -mt-2">{t("relapse.q.note_sub")}</p>
             <textarea
+              aria-label={t("relapse.q.note")}
               value={draft.note}
               onChange={(e) => update("note", e.target.value)}
               placeholder={t("relapse.q.note_placeholder")}
@@ -656,21 +664,18 @@ export function RelapseLog() {
             />
           </>
         )}
-      </div>
 
-      {/* Bottom action bar */}
-      <div
-        className="fixed left-0 right-0 bg-background/95 backdrop-blur-sm border-t border-border px-4 pt-3 pb-3 z-40"
-        style={{ bottom: "var(--bottom-nav-h)" }}
-      >
-        <div className="flex gap-3 max-w-lg mx-auto">
+        {/* The primary action appears only after the step content. */}
+        <div className="mt-auto border-t border-border/70 pb-1 pt-4">
+          <div className="flex gap-3 max-w-lg mx-auto">
           {canGoBack && (
-            <button onClick={goBack}
+            <button type="button" onClick={goBack}
               className="touch-target px-5 py-3.5 border border-border rounded-2xl font-medium text-muted-foreground hover:text-foreground transition-colors">
               {t("common.back")}
             </button>
           )}
           <button
+            type="button"
             disabled={saving || !canProceed}
             onClick={goNext}
             className="flex-1 flex items-center justify-center gap-2 bg-primary text-primary-foreground rounded-2xl py-3.5 font-semibold touch-target hover:opacity-90 active:scale-95 transition-all disabled:opacity-60"
@@ -679,6 +684,7 @@ export function RelapseLog() {
               ? (saving ? t("common.saving") : t("common.save"))
               : <><span>{t("common.next")}</span><ArrowRight size={16} /></>}
           </button>
+          </div>
         </div>
       </div>
     </div>

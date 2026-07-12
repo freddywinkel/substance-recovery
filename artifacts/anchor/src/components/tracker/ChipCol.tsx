@@ -13,6 +13,7 @@ export function ChipCol({
     <div className="flex flex-col gap-2">
       {options.map((opt) => (
         <button
+          type="button"
           key={opt}
           onClick={() => onChange(opt === value ? "" : opt)}
           aria-pressed={value === opt}

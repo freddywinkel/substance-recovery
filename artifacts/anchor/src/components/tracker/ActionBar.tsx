@@ -27,24 +27,20 @@ export function ActionBar({
     <div className="flex items-center gap-3 py-2">
       {showBack ? (
         <button
+          type="button"
           onClick={onBack}
           disabled={saving}
           className="flex-1 py-3.5 px-4 rounded-2xl border border-border bg-card text-foreground font-medium text-sm hover:bg-muted transition-colors touch-target disabled:opacity-50"
         >
           {backLabel}
         </button>
-      ) : (
-        <div className="flex-1" />
-      )}
+      ) : null}
 
       <button
+        type="button"
         onClick={onNext}
         disabled={!canProceed || saving}
-        className={`flex-[2] py-3.5 px-4 rounded-2xl font-semibold text-sm transition-colors touch-target disabled:opacity-50 ${
-          nextIsSubmit
-            ? "bg-primary text-primary-foreground hover:bg-primary/90"
-            : "bg-primary text-primary-foreground hover:bg-primary/90"
-        }`}
+        className={`${showBack ? "flex-[2]" : "flex-1"} touch-target rounded-2xl bg-primary px-4 py-3.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50`}
       >
         {saving ? savingLabel : nextIsSubmit ? saveLabel : nextLabel}
       </button>
