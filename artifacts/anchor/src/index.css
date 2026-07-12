@@ -184,7 +184,8 @@
     position: relative;
     isolation: isolate;
     width: 100%;
-    height: 100dvh;
+    height: 100vh;
+    height: -webkit-fill-available;
     min-height: 0;
     overflow: hidden;
     background-color: hsl(var(--background));
