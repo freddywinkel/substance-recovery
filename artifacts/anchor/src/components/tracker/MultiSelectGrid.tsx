@@ -17,6 +17,7 @@ export function MultiSelectGrid({
     <div className={`grid gap-2 ${gridClass}`}>
       {options.map((opt) => (
         <button
+          type="button"
           key={opt}
           onClick={() => onToggle(opt)}
           aria-pressed={value.includes(opt)}
