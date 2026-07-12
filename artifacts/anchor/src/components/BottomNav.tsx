@@ -108,9 +108,9 @@ export function BottomNav() {
   };
 
   return (
-    <footer className="fixed inset-x-0 bottom-0 z-50 border-t border-border bg-background shadow-[0_-12px_28px_rgba(0,0,0,0.38)]">
+    <footer className="bottom-nav-shell fixed inset-x-0 bottom-0 z-50 h-[var(--bottom-nav-h)] border-t border-border bg-background">
       <nav
-        className="mx-auto grid w-full max-w-xl grid-cols-[repeat(3,minmax(0,1fr))_4rem_repeat(3,minmax(0,1fr))] items-center gap-0.5 px-2 pb-[calc(0.55rem+env(safe-area-inset-bottom,0px))] pt-2"
+        className="mx-auto grid h-full w-full max-w-xl grid-cols-[repeat(3,minmax(0,1fr))_4rem_repeat(3,minmax(0,1fr))] items-center gap-0.5 px-2 pb-[calc(0.55rem+env(safe-area-inset-bottom,0px))] pt-2"
         aria-label={t("nav.aria")}
       >
         {items.slice(0, 3).map(renderItem)}

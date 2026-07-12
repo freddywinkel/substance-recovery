@@ -305,10 +305,10 @@ export function Settings() {
         <section>
           <p className="text-xs text-muted-foreground uppercase tracking-widest px-1 mb-3">{t("settings.section.appearance")}</p>
           <div className="bg-card border border-border rounded-2xl p-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                {theme === "dark" ? <Moon size={18} /> : <Sun size={18} />}
-                <div>
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex min-w-0 flex-1 items-center gap-3">
+                {theme === "dark" ? <Moon size={18} className="shrink-0" /> : <Sun size={18} className="shrink-0" />}
+                <div className="min-w-0">
                   <p className="text-sm font-medium text-foreground">
                     {theme === "dark" ? t("settings.theme.dark") : t("settings.theme.light")}
                   </p>
@@ -319,7 +319,7 @@ export function Settings() {
               </div>
               <button
                 onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-                className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors touch-target ${
+                className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition-colors touch-target ${
                   theme === "light" ? "bg-primary" : "bg-muted"
                 }`}
                 role="switch"

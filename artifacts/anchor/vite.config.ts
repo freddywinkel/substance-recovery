@@ -46,7 +46,7 @@ export default defineConfig({
         description: "A private, offline-capable companion for addiction recovery support.",
         lang: "nl",
         theme_color: "#0D0C0B",
-        background_color: "#131820",
+        background_color: "#0D0C0B",
         display: "standalone",
         orientation: "portrait",
         start_url: basePath,
