@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import { useLocation } from "wouter";
 import { RotateCcw } from "lucide-react";
 import { useActiveRegistration } from "@/contexts/ActiveRegistrationContext";
@@ -15,8 +15,6 @@ export function RegistrationReturnBanner() {
   const { session } = useActiveRegistration();
   const [location, navigate] = useLocation();
   const { t } = useT();
-  const ref = useRef<HTMLButtonElement>(null);
-
   const pending = session?.pendingReturn;
   const visible = !!pending && location !== pending.returnRoute;
 
@@ -27,21 +25,10 @@ export function RegistrationReturnBanner() {
       return;
     }
 
-    const apply = () => {
-      const h = ref.current?.offsetHeight ?? 48;
-      // Reserve the banner height plus a small gap so the page button clears it.
-      root.style.setProperty("--return-banner-h", `${h + 12}px`);
-    };
-    apply();
-
-    let ro: ResizeObserver | undefined;
-    if (ref.current && typeof ResizeObserver !== "undefined") {
-      ro = new ResizeObserver(apply);
-      ro.observe(ref.current);
-    }
+    // Fixed 48px banner plus a 12px breathing gap for page actions.
+    root.style.setProperty("--return-banner-h", "3.75rem");
 
     return () => {
-      ro?.disconnect();
       root.style.removeProperty("--return-banner-h");
     };
   }, [visible]);
@@ -50,10 +37,10 @@ export function RegistrationReturnBanner() {
 
   return (
     <button
-      ref={ref}
       onClick={() => navigate(pending.returnRoute)}
-      className="fixed left-0 right-0 z-[55] bg-primary text-primary-foreground px-4 py-3 flex items-center justify-center gap-2 text-sm font-semibold shadow-lg active:opacity-90 transition-opacity"
+      className="fixed left-0 right-0 z-[55] h-12 bg-primary text-primary-foreground px-4 flex items-center justify-center gap-2 text-sm font-semibold shadow-lg active:opacity-90 transition-opacity"
       style={{ bottom: "var(--bottom-nav-h)" }}
+      aria-label={t("resume.banner")}
     >
       <RotateCcw size={16} />
       {t("resume.banner")}
