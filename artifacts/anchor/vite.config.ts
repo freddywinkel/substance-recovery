@@ -32,7 +32,8 @@ export default defineConfig({
 
     runtimeErrorOverlay(),
     VitePWA({
-      registerType: "autoUpdate",
+      registerType: "prompt",
+      injectRegister: "auto",
       includeAssets: [
         "icon-192.png",
         "icon-512.png",

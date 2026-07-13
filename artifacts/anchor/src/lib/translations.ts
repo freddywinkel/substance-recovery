@@ -41,6 +41,13 @@ const en: Record<string, string> = {
   "nav.tools": "Tools",
   "nav.more": "More",
   "nav.new_registration": "New registration",
+  "pwa.update.title": "A new version is ready",
+  "pwa.update.body": "Update when you are ready. The app will reload, but your saved data stays on this device.",
+  "pwa.update.action": "Update",
+  "pwa.update.later": "Later",
+  "pwa.offline.title": "Substance Recovery is ready offline",
+  "pwa.offline.body": "You can keep using the app without an internet connection.",
+  "pwa.offline.dismiss": "Got it",
 
   // ── Home ─────────────────────────────────────────────────
   "home.greeting.night": "Still going.",
@@ -1216,6 +1223,13 @@ const nl: Record<string, string> = {
   "nav.tools": "Tools",
   "nav.more": "Meer",
   "nav.new_registration": "Nieuwe registratie",
+  "pwa.update.title": "Er staat een nieuwe versie klaar",
+  "pwa.update.body": "Werk bij wanneer het jou uitkomt. De app wordt opnieuw geladen, maar je opgeslagen gegevens blijven op dit apparaat.",
+  "pwa.update.action": "Bijwerken",
+  "pwa.update.later": "Later",
+  "pwa.offline.title": "Substance Recovery is offline beschikbaar",
+  "pwa.offline.body": "Je kunt de app zonder internetverbinding blijven gebruiken.",
+  "pwa.offline.dismiss": "Begrepen",
 
   // ── Home ─────────────────────────────────────────────────
   "home.greeting.night": "Nog steeds bezig.",
