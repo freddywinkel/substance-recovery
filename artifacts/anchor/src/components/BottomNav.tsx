@@ -70,12 +70,12 @@ export function BottomNav() {
     return (
       <Link key={to} href={to} asChild>
         <a
-          className="relative flex min-h-12 min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-xl py-1 transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+          className="relative flex min-h-14 min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-xl py-1 transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
           aria-label={label}
           aria-current={isActive ? "page" : undefined}
         >
           <Icon
-            size={20}
+            size={24}
             strokeWidth={isActive ? 2 : 1.5}
             className={`relative transition-colors duration-200 ${
               isActive
@@ -84,7 +84,7 @@ export function BottomNav() {
             }`}
           />
           <span
-            className={`relative max-w-full truncate text-[9px] font-medium leading-tight transition-colors duration-200 min-[360px]:text-[10px] ${
+            className={`relative max-w-full truncate text-[10px] font-medium leading-tight transition-colors duration-200 min-[360px]:text-[11px] ${
               isActive
                 ? "text-primary"
                 : "text-muted-foreground"
@@ -106,10 +106,10 @@ export function BottomNav() {
         <button
           type="button"
           onClick={openRegistrationLauncher}
-          className="relative z-10 flex h-11 w-11 shrink-0 -translate-y-1 items-center justify-center rounded-full border border-primary/40 bg-primary text-primary-foreground shadow-md shadow-black/20 transition-all active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+          className="relative z-10 flex h-12 w-12 shrink-0 -translate-y-1 items-center justify-center rounded-full border border-primary/40 bg-primary text-primary-foreground shadow-md shadow-black/20 transition-all active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
           aria-label={t("nav.new_registration")}
         >
-          <Plus size={22} strokeWidth={2.4} />
+          <Plus size={24} strokeWidth={2.4} />
         </button>
         <nav className="flex min-w-0 flex-1 items-center justify-around" aria-label={`${t("nav.aria")} — ${t("nav.log")}, ${t("nav.insights")}, ${t("nav.settings")}`}>
           {items.slice(3).map(renderItem)}
