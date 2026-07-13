@@ -19,6 +19,7 @@ import { JournalNewEntry } from "@/pages/JournalNewEntry";
 import { Registraties } from "@/pages/Registraties";
 import { Insights } from "@/pages/Insights";
 import { Settings } from "@/pages/Settings";
+import { More } from "@/pages/More";
 import { CravingTracker } from "@/pages/CravingTracker";
 import { RelapseLog } from "@/pages/RelapseLog";
 import { AnxietyTracker } from "@/pages/AnxietyTracker";
@@ -70,6 +71,7 @@ function AppRoutes() {
       <Route path="/journal/new" component={JournalNewEntry} />
       <Route path="/insights" component={Insights} />
       <Route path="/settings" component={Settings} />
+      <Route path="/more" component={More} />
       <Route path="/privacy" component={PrivacyPolicy} />
       <Route component={NotFound} />
     </Switch>

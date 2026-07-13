@@ -1,11 +1,9 @@
 import { Link, useLocation } from "wouter";
 import {
-  BarChart2,
-  BookOpen,
   ClipboardList,
   Home,
+  MoreHorizontal,
   Plus,
-  Settings,
   Zap,
   type LucideIcon,
 } from "lucide-react";
@@ -16,7 +14,6 @@ type NavItem = {
   to: string;
   icon: LucideIcon;
   label: string;
-  displayLabel?: string;
   match: (path: string) => boolean;
 };
 
@@ -39,58 +36,46 @@ export function BottomNav() {
       match: (path) => path.startsWith("/tools") || path.startsWith("/delay"),
     },
     {
-      to: "/journal",
-      icon: BookOpen,
-      label: t("nav.journal"),
-      match: (path) => path.startsWith("/journal"),
-    },
-    {
       to: "/registraties",
       icon: ClipboardList,
       label: t("nav.log"),
       match: (path) => path.startsWith("/registraties"),
     },
     {
-      to: "/insights",
-      icon: BarChart2,
-      label: t("nav.insights"),
-      match: (path) => path.startsWith("/insights"),
-    },
-    {
-      to: "/settings",
-      icon: Settings,
-      label: t("nav.settings"),
-      displayLabel: t("nav.settings_short"),
-      match: (path) => path.startsWith("/settings"),
+      to: "/more",
+      icon: MoreHorizontal,
+      label: t("nav.more"),
+      match: (path) =>
+        path.startsWith("/more") ||
+        path.startsWith("/journal") ||
+        path.startsWith("/insights") ||
+        path.startsWith("/settings") ||
+        path.startsWith("/privacy"),
     },
   ];
 
-  const renderItem = ({ to, icon: Icon, label, displayLabel, match }: NavItem) => {
+  const renderItem = ({ to, icon: Icon, label, match }: NavItem) => {
     const isActive = match(location);
     return (
       <Link key={to} href={to} asChild>
         <a
-          className="relative flex min-h-14 min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-xl py-1 transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+          className="flex min-h-16 min-w-0 flex-col items-center justify-center gap-1 rounded-xl px-1 py-1 text-center transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
           aria-label={label}
           aria-current={isActive ? "page" : undefined}
         >
           <Icon
             size={24}
-            strokeWidth={isActive ? 2 : 1.5}
-            className={`relative transition-colors duration-200 ${
-              isActive
-                ? "text-primary"
-                : "text-muted-foreground"
-            }`}
+            strokeWidth={isActive ? 2.15 : 1.65}
+            className={isActive ? "text-primary" : "text-muted-foreground"}
           />
           <span
-            className={`relative max-w-full truncate text-[10px] font-medium leading-tight transition-colors duration-200 min-[360px]:text-[11px] ${
+            className={`max-w-full truncate text-[11px] leading-none ${
               isActive
-                ? "text-primary"
-                : "text-muted-foreground"
+                ? "font-semibold text-primary"
+                : "font-medium text-muted-foreground"
             }`}
           >
-            {displayLabel ?? label}
+            {label}
           </span>
         </a>
       </Link>
@@ -98,23 +83,29 @@ export function BottomNav() {
   };
 
   return (
-    <footer className="bottom-nav-shell fixed inset-x-0 bottom-0 z-50 border-0 bg-background/90 backdrop-blur-lg">
-      <div className="relative mx-auto flex w-full items-center px-1 pb-[calc(0.55rem+env(safe-area-inset-bottom,0px))] pt-2">
-        <nav className="flex min-w-0 flex-1 items-center justify-around" aria-label={`${t("nav.aria")} — ${t("nav.home")}, ${t("nav.tools")}, ${t("nav.journal")}`}>
-          {items.slice(0, 3).map(renderItem)}
-        </nav>
+    <footer className="bottom-nav-shell fixed inset-x-0 bottom-0 z-50 bg-card/95 backdrop-blur-xl">
+      <nav
+        className="mx-auto grid min-h-[var(--bottom-nav-h)] w-full max-w-lg grid-cols-5 items-center px-2 pb-[calc(0.25rem+env(safe-area-inset-bottom,0px))] pt-1"
+        aria-label={t("nav.aria")}
+      >
+        {items.slice(0, 2).map(renderItem)}
+
         <button
           type="button"
           onClick={openRegistrationLauncher}
-          className="relative z-10 flex h-12 w-12 shrink-0 -translate-y-1 items-center justify-center rounded-full border border-primary/40 bg-primary text-primary-foreground shadow-md shadow-black/20 transition-all active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+          className="flex min-h-16 min-w-0 flex-col items-center justify-center gap-1 rounded-xl px-1 py-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
           aria-label={t("nav.new_registration")}
         >
-          <Plus size={24} strokeWidth={2.4} />
+          <span className="flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-black/25 transition-transform active:scale-95">
+            <Plus size={27} strokeWidth={2.4} />
+          </span>
+          <span className="max-w-full truncate text-[11px] font-semibold leading-none text-primary">
+            {t("nav.new_short")}
+          </span>
         </button>
-        <nav className="flex min-w-0 flex-1 items-center justify-around" aria-label={`${t("nav.aria")} — ${t("nav.log")}, ${t("nav.insights")}, ${t("nav.settings")}`}>
-          {items.slice(3).map(renderItem)}
-        </nav>
-      </div>
+
+        {items.slice(2).map(renderItem)}
+      </nav>
     </footer>
   );
 }
