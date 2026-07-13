@@ -82,7 +82,7 @@ function AppShell() {
       <ScrollToTop />
       <RegistrationLauncherProvider>
         <div
-          className="app-shell relative flex h-dvh min-h-0 w-full max-w-full flex-col overflow-hidden bg-background"
+          className="relative flex h-dvh min-h-dvh w-full max-w-full flex-col overflow-hidden bg-background"
         >
           <main className="app-main min-h-0 flex-1 overflow-hidden">
             <AppRoutes />
