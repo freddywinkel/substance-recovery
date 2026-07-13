@@ -79,7 +79,7 @@
   --destructive-foreground: 0 0% 98%;
 
   --app-font-sans: 'Inter', system-ui, -apple-system, sans-serif;
-  --bottom-nav-h: calc(4.5rem + env(safe-area-inset-bottom, 0px));
+  --bottom-nav-h: calc(5rem + env(safe-area-inset-bottom, 0px));
   --bottom-nav-shadow: 0 0% 0% / 0.18;
   --modal-overlay: 0 0% 0% / 0.60;
   --radius: 1rem;
