@@ -5,6 +5,7 @@ import { ActiveRegistrationProvider } from "@/contexts/ActiveRegistrationContext
 import { RegistrationLauncherProvider } from "@/contexts/RegistrationLauncherContext";
 import { useT } from "@/hooks/useTranslation";
 import { BottomNav } from "@/components/BottomNav";
+import { PwaUpdatePrompt } from "@/components/PwaUpdatePrompt";
 import { RegistrationReturnBanner } from "@/components/RegistrationReturnBanner";
 import { PWAProvider } from "@/hooks/usePWA";
 import { AtmosphericBackground } from "@/components/AtmosphericBackground";
@@ -91,6 +92,7 @@ function AppShell() {
           <BottomNav />
         </div>
       </RegistrationLauncherProvider>
+      <PwaUpdatePrompt />
       <Toaster />
     </>
   );
