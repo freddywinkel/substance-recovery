@@ -98,8 +98,8 @@ export function BottomNav() {
   };
 
   return (
-    <footer className="bottom-nav-shell fixed inset-x-0 bottom-0 z-50 h-[var(--bottom-nav-h)] border-0 bg-background/90 backdrop-blur-lg">
-      <div className="relative mx-auto flex h-full w-full items-center px-1 pb-[env(safe-area-inset-bottom,0px)] pt-1">
+    <footer className="bottom-nav-shell fixed inset-x-0 bottom-0 z-50 border-0 bg-background/90 backdrop-blur-lg">
+      <div className="relative mx-auto flex w-full items-center px-1 pb-[calc(0.55rem+env(safe-area-inset-bottom,0px))] pt-2">
         <nav className="flex min-w-0 flex-1 items-center justify-around" aria-label={`${t("nav.aria")} — ${t("nav.home")}, ${t("nav.tools")}, ${t("nav.journal")}`}>
           {items.slice(0, 3).map(renderItem)}
         </nav>

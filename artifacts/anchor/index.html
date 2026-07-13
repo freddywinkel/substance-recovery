@@ -4,15 +4,10 @@
     <meta charset="UTF-8" />
 
     <!-- ── Viewport ────────────────────────────────────────── -->
-    <!--
-      viewport-fit=cover  → content fills the screen edge-to-edge
-                            (lets us control safe-area ourselves)
-      maximum-scale=1     → prevent accidental pinch-zoom on iOS
-      user-scalable=no    → same — text fields already bump scale
-    -->
+    <!-- Prevent accidental pinch-zoom while retaining the stable iOS web-app viewport. -->
     <meta
       name="viewport"
-      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"
     />
 
     <!-- ── Theme color ─────────────────────────────────────── -->
@@ -86,9 +81,7 @@
       html,
       body {
         width: 100%;
-        height: 100%;
         margin: 0;
-        overflow: hidden;
         background: #0d0c0b;
       }
 

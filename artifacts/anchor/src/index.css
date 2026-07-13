@@ -152,20 +152,15 @@
   }
 
   html {
-    width: 100%;
     height: 100%;
-    overflow: hidden;
-    overscroll-behavior: none;
     background-color: hsl(var(--background));
   }
 
   body {
     @apply font-sans antialiased bg-background text-foreground;
-    width: 100%;
-    height: 100%;
-    min-height: 100%;
-    overflow: hidden;
-    overscroll-behavior: none;
+    min-height: 100dvh;
+    overflow-x: hidden;
+    overscroll-behavior-x: none;
     -webkit-font-smoothing: antialiased;
     /*
       ⚠️  Do NOT add padding-top: env(safe-area-inset-top) here.
@@ -181,13 +176,7 @@
   }
 
   #root {
-    position: relative;
-    isolation: isolate;
-    width: 100%;
-    height: 100dvh;
-    min-height: 0;
-    overflow: hidden;
-    background-color: hsl(var(--background));
+    min-height: 100dvh;
     display: flex;
     flex-direction: column;
   }
@@ -403,22 +392,6 @@
   select,
   textarea {
     font-size: 16px;
-  }
-}
-
-/*
- * WebKit can resolve dynamic viewport units to Safari's shorter browser
- * viewport after a site is installed to the iOS Home Screen. In standalone
- * mode, 100vh represents the full web-app viewport, including its safe area.
- */
-@media (display-mode: standalone) {
-  #root,
-  .app-shell {
-    height: 100vh;
-  }
-
-  .bottom-nav-shell {
-    bottom: calc(0px - env(safe-area-inset-bottom, 0px));
   }
 }
 
