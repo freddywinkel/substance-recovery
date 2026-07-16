@@ -1,5 +1,6 @@
 import { useCallback } from "react";
 import {
+  CigaretteLog,
   JournalEntry,
   CravingLog,
   RelapseLog,
@@ -20,6 +21,7 @@ export type { Theme } from "./useUI";
 
 interface StoreState {
   journal: JournalEntry[];
+  cigaretteLogs: CigaretteLog[];
   cravingLogs: CravingLog[];
   relapseLogs: RelapseLog[];
   anxietyLogs: AnxietyLog[];
@@ -34,6 +36,9 @@ interface StoreState {
 interface StoreActions {
   logEntry: (entry: Omit<JournalEntry, "id">) => Promise<void>;
   removeEntry: (id: string) => Promise<void>;
+  logCigarette: (entry: Omit<CigaretteLog, "id">) => Promise<CigaretteLog>;
+  updateCigarette: (entry: CigaretteLog) => Promise<void>;
+  removeCigarette: (id: string) => Promise<void>;
   logCraving: (entry: Omit<CravingLog, "id">) => Promise<CravingLog>;
   updateCraving: (entry: CravingLog) => Promise<void>;
   removeCraving: (id: string) => Promise<void>;
@@ -107,6 +112,7 @@ export function useStore(): StoreState & StoreActions {
 
   return {
     journal: journalHook.journal,
+    cigaretteLogs: logsHook.cigaretteLogs,
     cravingLogs: logsHook.cravingLogs,
     relapseLogs: logsHook.relapseLogs,
     anxietyLogs: logsHook.anxietyLogs,
@@ -118,6 +124,9 @@ export function useStore(): StoreState & StoreActions {
     loading,
     logEntry: journalHook.logEntry,
     removeEntry: journalHook.removeEntry,
+    logCigarette: logsHook.logCigarette,
+    updateCigarette: logsHook.updateCigarette,
+    removeCigarette: logsHook.removeCigarette,
     logCraving: logsHook.logCraving,
     updateCraving: logsHook.updateCraving,
     removeCraving: logsHook.removeCraving,

@@ -250,6 +250,13 @@ export interface BoredomLog extends SyncFields {
   outcomeAfter?: "decreased" | "same" | "increased" | null; // set on done screen
 }
 
+// ── Cigarette Log ─────────────────────────────────────────────
+export interface CigaretteLog extends SyncFields {
+  id: string;
+  timestamp: number;
+  note?: string;
+}
+
 // ── Crisis & Emergency ────────────────────────────────────────
 export interface CrisisService {
   id: string;
@@ -303,6 +310,11 @@ interface AnchorDB extends DBSchema {
     value: BoredomLog;
     indexes: { byTimestamp: number };
   };
+  cigaretteLogs: {
+    key: string;
+    value: CigaretteLog;
+    indexes: { byTimestamp: number };
+  };
   // Local-only sync bookkeeping (v5). Never affects offline behaviour.
   syncMeta: {
     key: string;
@@ -319,7 +331,7 @@ let dbInstance: IDBPDatabase<AnchorDB> | null = null;
 export async function getDB(): Promise<IDBPDatabase<AnchorDB>> {
   if (dbInstance) return dbInstance;
 
-  dbInstance = await openDB<AnchorDB>("anchor-recovery", 5, {
+  dbInstance = await openDB<AnchorDB>("anchor-recovery", 6, {
     upgrade(db, oldVersion, _newVersion, tx) {
       if (oldVersion < 1) {
         const journalStore = db.createObjectStore("journal", { keyPath: "id" });
@@ -381,6 +393,13 @@ export async function getDB(): Promise<IDBPDatabase<AnchorDB>> {
         }
         if (!db.objectStoreNames.contains("dirtyRecords")) {
           db.createObjectStore("dirtyRecords", { keyPath: "id" });
+        }
+      }
+      // v6 — cigarette log store for tobacco-use tracking.
+      if (oldVersion < 6) {
+        if (!db.objectStoreNames.contains("cigaretteLogs")) {
+          const cl = db.createObjectStore("cigaretteLogs", { keyPath: "id" });
+          cl.createIndex("byTimestamp", "timestamp");
         }
       }
     },

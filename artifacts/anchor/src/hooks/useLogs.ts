@@ -1,9 +1,14 @@
 import { useState, useEffect, useCallback } from "react";
 import {
+  CigaretteLog,
   CravingLog,
   RelapseLog,
   AnxietyLog,
   BoredomLog,
+  addCigaretteLog,
+  getCigaretteLogs,
+  updateCigaretteLog,
+  deleteCigaretteLog,
   addCravingLog,
   getCravingLogs,
   updateCravingLog,
@@ -23,6 +28,7 @@ import {
 } from "@/db";
 
 export function useLogs() {
+  const [cigaretteLogs, setCigaretteLogs] = useState<CigaretteLog[]>([]);
   const [cravingLogs, setCravingLogs] = useState<CravingLog[]>([]);
   const [relapseLogs, setRelapseLogs] = useState<RelapseLog[]>([]);
   const [anxietyLogs, setAnxietyLogs] = useState<AnxietyLog[]>([]);
@@ -30,12 +36,14 @@ export function useLogs() {
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
-    const [cravings, relapses, anxieties, boredoms] = await Promise.all([
+    const [cigarettes, cravings, relapses, anxieties, boredoms] = await Promise.all([
+      getCigaretteLogs(),
       getCravingLogs(),
       getRelapseLogs(),
       getAnxietyLogs(),
       getBoredomLogs(),
     ]);
+    setCigaretteLogs(cigarettes);
     setCravingLogs(cravings);
     setRelapseLogs(relapses);
     setAnxietyLogs(anxieties);
@@ -123,16 +131,39 @@ export function useLogs() {
     setBoredomLogs(await getBoredomLogs());
   }, []);
 
+  const logCigarette = useCallback(
+    async (entry: Omit<CigaretteLog, "id">) => {
+      const result = await addCigaretteLog(entry);
+      setCigaretteLogs(await getCigaretteLogs());
+      return result;
+    },
+    []
+  );
+
+  const removeCigarette = useCallback(async (id: string) => {
+    await deleteCigaretteLog(id);
+    setCigaretteLogs(await getCigaretteLogs());
+  }, []);
+
+  const updateCigarette = useCallback(async (log: CigaretteLog) => {
+    await updateCigaretteLog(log);
+    setCigaretteLogs(await getCigaretteLogs());
+  }, []);
+
   const reload = useCallback(async () => {
     await load();
   }, [load]);
 
   return {
+    cigaretteLogs,
     cravingLogs,
     relapseLogs,
     anxietyLogs,
     boredomLogs,
     loading,
+    logCigarette,
+    updateCigarette,
+    removeCigarette,
     logCraving,
     updateCraving,
     removeCraving,

@@ -1185,6 +1185,21 @@ const en: Record<string, string> = {
   "crisis.kindertelefoon": "Child Helpline",
   "crisis.injebol": "In je bol (young people)",
 
+  // ── Cigarette counter ──────────────────────────────────────
+  "cigarette.title": "Cigarettes",
+  "cigarette.today": "Today",
+  "cigarette.this_week": "This Week",
+  "cigarette.this_month": "This Month",
+  "cigarette.avg_per_day": "Avg/day",
+  "cigarette.time_since_last": "Since last",
+  "cigarette.avg_gap": "Avg gap",
+  "cigarette.longest_gap_today": "Longest gap today",
+  "cigarette.trend_up": "Up from last week",
+  "cigarette.trend_down": "Down from last week",
+  "cigarette.trend_same": "Same as last week",
+  "cigarette.log_btn": "Log cigarette",
+  "cigarette.no_data": "No cigarettes logged yet.",
+
 };
 
 const nl: Record<string, string> = {
@@ -2370,6 +2385,21 @@ const nl: Record<string, string> = {
   "crisis.ypsilon": "Ypsilon (voor naasten)",
   "crisis.kindertelefoon": "Kindertelefoon",
   "crisis.injebol": "In je bol (jongeren)",
+
+  // ── Cigarette counter ──────────────────────────────────────
+  "cigarette.title": "Sigaretten",
+  "cigarette.today": "Vandaag",
+  "cigarette.this_week": "Deze week",
+  "cigarette.this_month": "Deze maand",
+  "cigarette.avg_per_day": "Gem/dag",
+  "cigarette.time_since_last": "Sinds laatste",
+  "cigarette.avg_gap": "Gem. tijd ertussen",
+  "cigarette.longest_gap_today": "Langste tijd vandaag",
+  "cigarette.trend_up": "Meer dan vorige week",
+  "cigarette.trend_down": "Minder dan vorige week",
+  "cigarette.trend_same": "Hetzelfde als vorige week",
+  "cigarette.log_btn": "Log sigaret",
+  "cigarette.no_data": "Nog geen sigaretten gelogd.",
 
 };
 

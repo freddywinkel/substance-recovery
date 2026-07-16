@@ -2,6 +2,7 @@ import {
   getDB,
   type AnxietyLog,
   type BoredomLog,
+  type CigaretteLog,
   type CravingLog,
   type CrisisService,
   type EmergencyContact,
@@ -140,6 +141,27 @@ export async function deleteBoredomLog(id: string): Promise<void> {
   await db.delete("boredomLogs", id);
 }
 
+// ── Cigarette Logs ───────────────────────────────────────────
+export async function addCigaretteLog(entry: Omit<CigaretteLog, "id">): Promise<CigaretteLog> {
+  const db = await getDB();
+  const full: CigaretteLog = { ...entry, id: crypto.randomUUID() };
+  await db.put("cigaretteLogs", full);
+  return full;
+}
+export async function getCigaretteLogs(limit = 200): Promise<CigaretteLog[]> {
+  const db = await getDB();
+  const all = await db.getAllFromIndex("cigaretteLogs", "byTimestamp");
+  return all.filter((e) => !e.deleted).slice(-limit).reverse();
+}
+export async function updateCigaretteLog(log: CigaretteLog): Promise<void> {
+  const db = await getDB();
+  await db.put("cigaretteLogs", log);
+}
+export async function deleteCigaretteLog(id: string): Promise<void> {
+  const db = await getDB();
+  await db.delete("cigaretteLogs", id);
+}
+
 // ── Clear all ────────────────────────────────────────────────
 export async function clearAllData(): Promise<void> {
   const db = await getDB();
@@ -151,6 +173,7 @@ export async function clearAllData(): Promise<void> {
     db.clear("relapseLogs"),
     db.clear("anxietyLogs"),
     db.clear("boredomLogs"),
+    db.clear("cigaretteLogs"),
     db.clear("dirtyRecords"),
     db.clear("syncMeta"),
   ]);
@@ -167,6 +190,7 @@ export async function exportAllData(): Promise<Record<string, unknown>> {
   const relapseLogs = await db.getAll("relapseLogs");
   const anxietyLogs = await db.getAll("anxietyLogs");
   const boredomLogs = await db.getAll("boredomLogs");
+  const cigaretteLogs = await db.getAll("cigaretteLogs");
   const settings = await db.getAll("settings");
   const contacts = await getEmergencyContacts();
   const crisis = await getCrisisService();
@@ -179,6 +203,7 @@ export async function exportAllData(): Promise<Record<string, unknown>> {
     relapseLogs: relapseLogs.filter((e) => !e.deleted),
     anxietyLogs: anxietyLogs.filter((e) => !e.deleted),
     boredomLogs: boredomLogs.filter((e) => !e.deleted),
+    cigaretteLogs: cigaretteLogs.filter((e) => !e.deleted),
     settings,
     emergencyContacts: contacts,
     crisisService: crisis,
@@ -210,6 +235,7 @@ function isValidImportedLog(key: string, item: unknown): item is Record<string, 
     relapseLogs: ["substances", "preUseFactors", "missedWarnings", "couldHaveHelpedEarly", "couldHaveHelpedMiddle", "couldHaveHelpedLast"],
     anxietyLogs: ["bodySensations"],
     boredomLogs: ["feelingTypes"],
+    cigaretteLogs: [],
   };
 
   if (key === "journal") {
@@ -238,6 +264,7 @@ export async function importAllData(
     { key: "relapseLogs", store: "relapseLogs" as const },
     { key: "anxietyLogs", store: "anxietyLogs" as const },
     { key: "boredomLogs", store: "boredomLogs" as const },
+    { key: "cigaretteLogs", store: "cigaretteLogs" as const },
   ];
 
   for (const { key, store } of stores) {
@@ -253,7 +280,8 @@ export async function importAllData(
         else if (store === "cravingLogs") await db.put("cravingLogs", item as unknown as CravingLog);
         else if (store === "relapseLogs") await db.put("relapseLogs", item as unknown as RelapseLog);
         else if (store === "anxietyLogs") await db.put("anxietyLogs", item as unknown as AnxietyLog);
-        else await db.put("boredomLogs", item as unknown as BoredomLog);
+        else if (store === "boredomLogs") await db.put("boredomLogs", item as unknown as BoredomLog);
+        else if (store === "cigaretteLogs") await db.put("cigaretteLogs", item as unknown as CigaretteLog);
         imported++;
       } catch (e) {
         skipped++;

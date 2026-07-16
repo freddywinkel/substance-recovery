@@ -9,6 +9,7 @@ import { calculateRiskScore } from "@/lib/riskScore";
 import { usePinnedTools } from "@/hooks/usePinnedTools";
 import { useRegistrationLauncher } from "@/contexts/RegistrationLauncherContext";
 import { buildImpactInsights } from "@/lib/impactInsights";
+import { CigaretteCounter } from "@/components/CigaretteCounter";
 import {
   Wind, Eye, Droplets, Waves, Rewind, Heart, Shuffle,
   CalendarCheck, RotateCcw, Settings,
@@ -71,7 +72,7 @@ function milestoneLabel(days: number, t: (key: string) => string): string {
 }
 
 export function Home() {
-  const { cravingLogs, relapseLogs, anxietyLogs, boredomLogs, journal, sobrietyStartDate, loading } = useStore();
+  const { cravingLogs, relapseLogs, anxietyLogs, boredomLogs, journal, sobrietyStartDate, loading, cigaretteLogs, logCigarette } = useStore();
   const { t, language } = useT();
   const { session, clearSession } = useActiveRegistration();
   const [, navigate] = useLocation();
@@ -235,6 +236,9 @@ export function Home() {
             </Link>
           </section>
         )}
+
+        {/* Cigarette counter */}
+        <CigaretteCounter logs={cigaretteLogs} onLog={() => logCigarette({ timestamp: Date.now() })} />
 
         {/* Risk overview */}
         <section aria-label={t("home.risk.label")} className="animate-fade-up">
