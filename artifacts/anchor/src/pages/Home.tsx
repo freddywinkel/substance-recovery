@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useStore } from "@/hooks/useStore";
 import { useT } from "@/hooks/useTranslation";
@@ -10,6 +10,7 @@ import { usePinnedTools } from "@/hooks/usePinnedTools";
 import { useRegistrationLauncher } from "@/contexts/RegistrationLauncherContext";
 import { buildImpactInsights } from "@/lib/impactInsights";
 import { CigaretteCounter } from "@/components/CigaretteCounter";
+import { CigaretteDayDrawer } from "@/components/CigaretteDayDrawer";
 import {
   Wind, Eye, Droplets, Waves, Rewind, Heart, Shuffle,
   CalendarCheck, RotateCcw, Settings,
@@ -72,13 +73,14 @@ function milestoneLabel(days: number, t: (key: string) => string): string {
 }
 
 export function Home() {
-  const { cravingLogs, relapseLogs, anxietyLogs, boredomLogs, journal, sobrietyStartDate, loading, cigaretteLogs, logCigarette } = useStore();
+  const { cravingLogs, relapseLogs, anxietyLogs, boredomLogs, journal, sobrietyStartDate, loading, cigaretteLogs, logCigarette, updateCigarette, removeCigarette } = useStore();
   const { t, language } = useT();
   const { session, clearSession } = useActiveRegistration();
   const [, navigate] = useLocation();
   const { pinned } = usePinnedTools();
   const { openRegistrationLauncher } = useRegistrationLauncher();
   const todaysQuote = useMemo(() => getTodaysQuote(language), [language]);
+  const [cigaretteDrawerOpen, setCigaretteDrawerOpen] = useState(false);
 
   const sobriety = useMemo(() => computeSobrietyStats(sobrietyStartDate, relapseLogs), [sobrietyStartDate, relapseLogs]);
 
@@ -238,7 +240,17 @@ export function Home() {
         )}
 
         {/* Cigarette counter */}
-        <CigaretteCounter logs={cigaretteLogs} onLog={() => logCigarette({ timestamp: Date.now() })} />
+        <CigaretteCounter logs={cigaretteLogs} onLog={() => logCigarette({ timestamp: Date.now() })} onOpenDrawer={() => setCigaretteDrawerOpen(true)} />
+
+        <CigaretteDayDrawer
+          logs={cigaretteLogs}
+          dayStart={new Date().setHours(0, 0, 0, 0)}
+          open={cigaretteDrawerOpen}
+          onOpenChange={setCigaretteDrawerOpen}
+          onUpdate={updateCigarette}
+          onRemove={removeCigarette}
+          onAdd={logCigarette}
+        />
 
         {/* Risk overview */}
         <section aria-label={t("home.risk.label")} className="animate-fade-up">

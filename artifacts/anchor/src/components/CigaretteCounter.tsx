@@ -8,9 +8,10 @@ import { hapticLight } from "@/lib/haptics";
 interface CigaretteCounterProps {
   logs: CigaretteLog[];
   onLog: () => void;
+  onOpenDrawer?: () => void;
 }
 
-export function CigaretteCounter({ logs, onLog }: CigaretteCounterProps) {
+export function CigaretteCounter({ logs, onLog, onOpenDrawer }: CigaretteCounterProps) {
   const { t } = useT();
   const stats = useMemo(() => computeCigaretteStats(logs), [logs]);
 
@@ -42,12 +43,15 @@ export function CigaretteCounter({ logs, onLog }: CigaretteCounterProps) {
           <p className="mt-3 text-sm text-muted-foreground">{t("cigarette.no_data")}</p>
         ) : (
           <>
-            <div className="mt-3 flex items-baseline gap-2">
+            <button
+              onClick={() => { hapticLight(); onOpenDrawer?.(); }}
+              className="mt-3 flex items-baseline gap-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 rounded-lg"
+            >
               <span className="text-5xl font-semibold tracking-[-0.06em] text-foreground tabular-nums">
                 {stats.todayCount}
               </span>
               <span className="text-sm text-muted-foreground">{t("cigarette.today")}</span>
-            </div>
+            </button>
 
             {trendText() && (
               <p className="mt-1 text-xs text-muted-foreground">{trendText()}</p>
