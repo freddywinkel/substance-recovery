@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { ChevronDown, ChevronUp, Pencil, Save, Trash2 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 import { useStore } from "@/hooks/useStore";
 import { useT } from "@/hooks/useTranslation";
 import { CATEGORY_META } from "@/lib/constants";
@@ -98,6 +99,7 @@ export function RegistrationHistory() {
     logCigarette,
   } = useStore();
   const { t, tOpt, language } = useT();
+  const { toast } = useToast();
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [editing, setEditing] = useState<{ id: string; note: string } | null>(null);
@@ -159,6 +161,9 @@ export function RegistrationHistory() {
         // Delete all cigarettes in this day
         await Promise.all(entry.logs.map((l) => removeCigarette(l.id)));
       }
+      toast({ title: t("logs.delete_success") });
+    } catch (e) {
+      toast({ title: t("logs.delete_error"), variant: "destructive" });
     } finally {
       setDeleteConfirm(null);
       setExpandedId((current) => (current === entry.id ? null : current));
@@ -175,24 +180,29 @@ export function RegistrationHistory() {
     if (editing?.id !== entry.id || entry._type === "cigarette-day") return;
 
     const regEntry = entry as RegistrationEntry;
-    if (regEntry._type === "trek" || regEntry._type === "craving") {
-      const { _type, ...log } = regEntry;
-      await updateCraving({ ...log, note: editing.note } as CravingLog);
-    } else if (regEntry._type === "relapse") {
-      const { _type, ...log } = regEntry;
-      await updateRelapse({ ...log, note: editing.note } as RelapseLog);
-    } else if (regEntry._type === "anxiety") {
-      const { _type, ...log } = regEntry;
-      await updateAnxiety({ ...log, note: editing.note } as AnxietyLog);
-    } else if (regEntry._type === "boredom") {
-      const { _type, ...log } = regEntry;
-      await updateBoredom({ ...log, note: editing.note } as BoredomLog);
-    } else if (regEntry._type === "cigarette") {
-      const { _type, ...log } = regEntry;
-      await updateCigarette({ ...log, note: editing.note } as CigaretteLog);
+    try {
+      if (regEntry._type === "trek" || regEntry._type === "craving") {
+        const { _type, ...log } = regEntry;
+        await updateCraving({ ...log, note: editing.note } as CravingLog);
+      } else if (regEntry._type === "relapse") {
+        const { _type, ...log } = regEntry;
+        await updateRelapse({ ...log, note: editing.note } as RelapseLog);
+      } else if (regEntry._type === "anxiety") {
+        const { _type, ...log } = regEntry;
+        await updateAnxiety({ ...log, note: editing.note } as AnxietyLog);
+      } else if (regEntry._type === "boredom") {
+        const { _type, ...log } = regEntry;
+        await updateBoredom({ ...log, note: editing.note } as BoredomLog);
+      } else if (regEntry._type === "cigarette") {
+        const { _type, ...log } = regEntry;
+        await updateCigarette({ ...log, note: editing.note } as CigaretteLog);
+      }
+      toast({ title: t("common.save") });
+    } catch (e) {
+      toast({ title: t("common.save_error"), variant: "destructive" });
+    } finally {
+      setEditing(null);
     }
-
-    setEditing(null);
   };
 
   if (items.length === 0) {
