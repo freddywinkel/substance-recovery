@@ -8,7 +8,53 @@ import {
   type EmergencyContact,
   type JournalEntry,
   type RelapseLog,
+  type RegistrationRecordMetadata,
 } from "./schema";
+import {
+  BACKUP_FORMAT_VERSION,
+  validateBackupEnvelope,
+  validateImportedStoreRecord,
+  type ImportStoreKey,
+} from "./validation";
+import { CURRENT_REGISTRATION_DATA_VERSION } from "./migrations";
+import { parseActiveRegistration } from "@/contexts/activeRegistrationValidation";
+
+type NewRegistrationRecord<T extends { id: string }> = Omit<T, "id"> & {
+  id?: string;
+};
+
+type TimedRegistrationRecord = RegistrationRecordMetadata & {
+  id: string;
+  timestamp: number;
+};
+
+function prepareRegistrationRecord<T extends TimedRegistrationRecord>(
+  entry: Omit<T, "id"> & { id?: string },
+): T {
+  const occurredAt =
+    typeof entry.occurredAt === "number" && Number.isFinite(entry.occurredAt)
+      ? entry.occurredAt
+      : entry.timestamp;
+  const startedAt =
+    typeof entry.startedAt === "number" && Number.isFinite(entry.startedAt)
+      ? entry.startedAt
+      : occurredAt;
+  const completedAt =
+    typeof entry.completedAt === "number" && Number.isFinite(entry.completedAt)
+      ? entry.completedAt
+      : Date.now();
+
+  return {
+    ...entry,
+    id: entry.id ?? crypto.randomUUID(),
+    // Keep existing indexes/analytics compatible with the canonical occurrence.
+    timestamp: occurredAt,
+    occurredAt,
+    startedAt,
+    completedAt,
+    dataVersion: entry.dataVersion ?? CURRENT_REGISTRATION_DATA_VERSION,
+  } as T;
+}
 export async function getCrisisService(): Promise<CrisisService | null> {
   const db = await getDB();
   const record = await db.get("settings", "crisisService");
@@ -58,9 +104,9 @@ export async function setSetting(key: string, value: string | number | boolean) 
 }
 
 // ── Craving Logs ─────────────────────────────────────────────
-export async function addCravingLog(entry: Omit<CravingLog, "id">): Promise<CravingLog> {
+export async function addCravingLog(entry: NewRegistrationRecord<CravingLog>): Promise<CravingLog> {
   const db = await getDB();
-  const full: CravingLog = { ...entry, id: crypto.randomUUID() };
+  const full = prepareRegistrationRecord<CravingLog>(entry);
   await db.put("cravingLogs", full);
   return full;
 }
@@ -79,9 +125,9 @@ export async function deleteCravingLog(id: string): Promise<void> {
 }
 
 // ── Relapse Logs ─────────────────────────────────────────────
-export async function addRelapseLog(entry: Omit<RelapseLog, "id">): Promise<RelapseLog> {
+export async function addRelapseLog(entry: NewRegistrationRecord<RelapseLog>): Promise<RelapseLog> {
   const db = await getDB();
-  const full: RelapseLog = { ...entry, id: crypto.randomUUID() };
+  const full = prepareRegistrationRecord<RelapseLog>(entry);
   await db.put("relapseLogs", full);
   return full;
 }
@@ -100,9 +146,9 @@ export async function deleteRelapseLog(id: string): Promise<void> {
 }
 
 // ── Anxiety Logs ─────────────────────────────────────────────
-export async function addAnxietyLog(entry: Omit<AnxietyLog, "id">): Promise<AnxietyLog> {
+export async function addAnxietyLog(entry: NewRegistrationRecord<AnxietyLog>): Promise<AnxietyLog> {
   const db = await getDB();
-  const full: AnxietyLog = { ...entry, id: crypto.randomUUID() };
+  const full = prepareRegistrationRecord<AnxietyLog>(entry);
   await db.put("anxietyLogs", full);
   return full;
 }
@@ -121,9 +167,9 @@ export async function deleteAnxietyLog(id: string): Promise<void> {
 }
 
 // ── Boredom Logs ──────────────────────────────────────────────
-export async function addBoredomLog(entry: Omit<BoredomLog, "id">): Promise<BoredomLog> {
+export async function addBoredomLog(entry: NewRegistrationRecord<BoredomLog>): Promise<BoredomLog> {
   const db = await getDB();
-  const full: BoredomLog = { ...entry, id: crypto.randomUUID() };
+  const full = prepareRegistrationRecord<BoredomLog>(entry);
   await db.put("boredomLogs", full);
   return full;
 }
@@ -142,9 +188,9 @@ export async function deleteBoredomLog(id: string): Promise<void> {
 }
 
 // ── Cigarette Logs ───────────────────────────────────────────
-export async function addCigaretteLog(entry: Omit<CigaretteLog, "id">): Promise<CigaretteLog> {
+export async function addCigaretteLog(entry: NewRegistrationRecord<CigaretteLog>): Promise<CigaretteLog> {
   const db = await getDB();
-  const full: CigaretteLog = { ...entry, id: crypto.randomUUID() };
+  const full = prepareRegistrationRecord<CigaretteLog>(entry);
   await db.put("cigaretteLogs", full);
   return full;
 }
@@ -196,7 +242,8 @@ export async function exportAllData(): Promise<Record<string, unknown>> {
   const crisis = await getCrisisService();
 
   return {
-    version: 1,
+    version: BACKUP_FORMAT_VERSION,
+    dataVersion: CURRENT_REGISTRATION_DATA_VERSION,
     exportedAt: Date.now(),
     journal: journal.filter((e) => !e.deleted),
     cravingLogs: cravingLogs.filter((e) => !e.deleted),
@@ -220,72 +267,132 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object" && !Array.isArray(value);
 }
 
-function isValidImportedLog(key: string, item: unknown): item is Record<string, unknown> {
-  if (
-    !isRecord(item) ||
-    typeof item.id !== "string" ||
-    typeof item.timestamp !== "number" ||
-    !Number.isFinite(item.timestamp)
-  ) {
-    return false;
+function validEmergencyContact(value: unknown): value is EmergencyContact {
+  return (
+    isRecord(value) &&
+    typeof value.id === "string" &&
+    value.id.trim() !== "" &&
+    typeof value.name === "string" &&
+    typeof value.relationship === "string" &&
+    typeof value.phone === "string"
+  );
+}
+
+function validCrisisService(value: unknown): value is CrisisService {
+  return (
+    isRecord(value) &&
+    typeof value.id === "string" &&
+    value.id.trim() !== "" &&
+    typeof value.name === "string" &&
+    typeof value.number === "string" &&
+    typeof value.isCustom === "boolean"
+  );
+}
+
+function parseJsonSetting(value: string): unknown {
+  try {
+    return JSON.parse(value);
+  } catch {
+    return undefined;
+  }
+}
+
+function normalizeImportedSetting(
+  value: unknown,
+): { key: string; value: string | number | boolean } | null {
+  if (!isRecord(value) || typeof value.key !== "string") return null;
+  const key = value.key;
+  const settingValue = value.value;
+
+  if (key === "theme") {
+    return settingValue === "dark" || settingValue === "light"
+      ? { key, value: settingValue }
+      : null;
+  }
+  if (key === "language") {
+    return settingValue === "nl" || settingValue === "en"
+      ? { key, value: settingValue }
+      : null;
+  }
+  if (key === "sobrietyStartDate") {
+    return typeof settingValue === "string" &&
+      (settingValue === "" || /^\d{4}-\d{2}-\d{2}$/.test(settingValue))
+      ? { key, value: settingValue }
+      : null;
+  }
+  if (key === "activeRegistration") {
+    if (typeof settingValue !== "string") return null;
+    const parsed = parseActiveRegistration(settingValue);
+    return parsed.ok
+      ? { key, value: parsed.value ? JSON.stringify(parsed.value) : "" }
+      : null;
+  }
+  if (key === "emergencyContacts") {
+    if (typeof settingValue !== "string") return null;
+    const contacts = parseJsonSetting(settingValue);
+    return Array.isArray(contacts) && contacts.every(validEmergencyContact)
+      ? { key, value: settingValue }
+      : null;
+  }
+  if (key === "crisisService") {
+    if (settingValue === "") return { key, value: "" };
+    if (typeof settingValue !== "string") return null;
+    const service = parseJsonSetting(settingValue);
+    return validCrisisService(service) ? { key, value: settingValue } : null;
   }
 
-  const requiredArrays: Record<string, string[]> = {
-    cravingLogs: ["situationPresets", "emotions", "physicalSensations", "thoughtPresets", "socialContext", "substances"],
-    relapseLogs: ["substances", "preUseFactors", "missedWarnings", "couldHaveHelpedEarly", "couldHaveHelpedMiddle", "couldHaveHelpedLast"],
-    anxietyLogs: ["bodySensations"],
-    boredomLogs: ["feelingTypes"],
-    cigaretteLogs: [],
-  };
-
-  if (key === "journal") {
-    return (
-      Number.isInteger(item.mood) &&
-      Number(item.mood) >= 1 &&
-      Number(item.mood) <= 5 &&
-      typeof item.note === "string"
-    );
-  }
-
-  return (requiredArrays[key] ?? []).every((field) => Array.isArray(item[field]));
+  // Version 1 has a closed setting catalog. A future backup version can add
+  // new keys deliberately instead of silently accepting arbitrary settings.
+  return null;
 }
 
 export async function importAllData(
   payload: Record<string, unknown>,
 ): Promise<{ imported: number; skipped: number; errors: string[] }> {
+  const envelope = validateBackupEnvelope(payload);
+  if (!envelope.ok) {
+    return { imported: 0, skipped: 0, errors: [envelope.error] };
+  }
+
   const db = await getDB();
   const errors: string[] = [];
   let imported = 0;
   let skipped = 0;
 
-  const stores = [
-    { key: "journal", store: "journal" as const },
-    { key: "cravingLogs", store: "cravingLogs" as const },
-    { key: "relapseLogs", store: "relapseLogs" as const },
-    { key: "anxietyLogs", store: "anxietyLogs" as const },
-    { key: "boredomLogs", store: "boredomLogs" as const },
-    { key: "cigaretteLogs", store: "cigaretteLogs" as const },
+  const stores: ImportStoreKey[] = [
+    "journal",
+    "cravingLogs",
+    "relapseLogs",
+    "anxietyLogs",
+    "boredomLogs",
+    "cigaretteLogs",
   ];
 
-  for (const { key, store } of stores) {
+  for (const key of stores) {
     const arr = payload[key];
     if (!Array.isArray(arr)) continue;
-    for (const item of arr) {
-      if (!isValidImportedLog(key, item)) {
+    for (const [index, item] of arr.entries()) {
+      const validation = validateImportedStoreRecord(key, item);
+      if (!validation.ok) {
         skipped++;
+        const id = isRecord(item) && typeof item.id === "string"
+          ? item.id
+          : `item ${index + 1}`;
+        errors.push(`Invalid ${key} ${id}: ${validation.error}`);
         continue;
       }
       try {
-        if (store === "journal") await db.put("journal", item as unknown as JournalEntry);
-        else if (store === "cravingLogs") await db.put("cravingLogs", item as unknown as CravingLog);
-        else if (store === "relapseLogs") await db.put("relapseLogs", item as unknown as RelapseLog);
-        else if (store === "anxietyLogs") await db.put("anxietyLogs", item as unknown as AnxietyLog);
-        else if (store === "boredomLogs") await db.put("boredomLogs", item as unknown as BoredomLog);
-        else if (store === "cigaretteLogs") await db.put("cigaretteLogs", item as unknown as CigaretteLog);
+        if (key === "journal") await db.put("journal", validation.value as JournalEntry);
+        else if (key === "cravingLogs") await db.put("cravingLogs", validation.value as CravingLog);
+        else if (key === "relapseLogs") await db.put("relapseLogs", validation.value as RelapseLog);
+        else if (key === "anxietyLogs") await db.put("anxietyLogs", validation.value as AnxietyLog);
+        else if (key === "boredomLogs") await db.put("boredomLogs", validation.value as BoredomLog);
+        else await db.put("cigaretteLogs", validation.value as CigaretteLog);
         imported++;
       } catch (e) {
         skipped++;
-        errors.push(`Failed to import ${key} ${item.id}: ${String(e)}`);
+        const id = isRecord(item) && typeof item.id === "string" ? item.id : `item ${index + 1}`;
+        errors.push(`Failed to import ${key} ${id}: ${String(e)}`);
       }
     }
   }
@@ -293,53 +400,59 @@ export async function importAllData(
   const settingsArr = payload.settings;
   if (Array.isArray(settingsArr)) {
     for (const s of settingsArr) {
-      if (
-        isRecord(s) &&
-        typeof s.key === "string" &&
-        ["string", "number", "boolean"].includes(typeof s.value)
-      ) {
-        try {
-          await db.put("settings", s as unknown as { key: string; value: string | number | boolean });
-          imported++;
-        } catch (e) {
-          errors.push(`Failed to import setting ${s.key}: ${String(e)}`);
+      const normalized = normalizeImportedSetting(s);
+      if (!normalized) {
+        skipped++;
+        errors.push(`Invalid or unsupported setting ${isRecord(s) && typeof s.key === "string" ? s.key : "<unknown>"}.`);
+        continue;
+      }
+      try {
+        await db.put("settings", normalized);
+        imported++;
+      } catch (e) {
+        errors.push(`Failed to import setting ${normalized.key}: ${String(e)}`);
+      }
+    }
+  }
+
+  if (Object.prototype.hasOwnProperty.call(payload, "emergencyContacts")) {
+    const contacts = payload.emergencyContacts;
+    if (!Array.isArray(contacts)) {
+      skipped++;
+      errors.push("Invalid emergencyContacts: expected an array.");
+    } else {
+      const validContacts: EmergencyContact[] = [];
+      contacts.forEach((contact, index) => {
+        if (validEmergencyContact(contact)) {
+          validContacts.push(contact);
+        } else {
+          skipped++;
+          errors.push(`Invalid emergencyContacts item ${index + 1}.`);
         }
-      } else skipped++;
+      });
+      try {
+        await saveEmergencyContacts(validContacts);
+        imported++;
+      } catch (e) {
+        skipped++;
+        errors.push(`Failed to import contacts: ${String(e)}`);
+      }
     }
   }
 
-  const contacts = payload.emergencyContacts;
-  if (Array.isArray(contacts)) {
-    const validContacts = contacts.filter(
-      (contact): contact is EmergencyContact =>
-        isRecord(contact) &&
-        typeof contact.id === "string" &&
-        typeof contact.name === "string" &&
-        typeof contact.relationship === "string" &&
-        typeof contact.phone === "string",
-    );
-    skipped += contacts.length - validContacts.length;
-    try {
-      await saveEmergencyContacts(validContacts);
-      imported++;
-    } catch (e) {
-      errors.push(`Failed to import contacts: ${String(e)}`);
-    }
-  }
-
-  const crisis = payload.crisisService;
-  if (
-    isRecord(crisis) &&
-    typeof crisis.id === "string" &&
-    typeof crisis.name === "string" &&
-    typeof crisis.number === "string" &&
-    typeof crisis.isCustom === "boolean"
-  ) {
-    try {
-      await saveCrisisService(crisis as unknown as CrisisService);
-      imported++;
-    } catch (e) {
-      errors.push(`Failed to import crisis service: ${String(e)}`);
+  if (Object.prototype.hasOwnProperty.call(payload, "crisisService")) {
+    const crisis = payload.crisisService;
+    if (crisis !== null && !validCrisisService(crisis)) {
+      skipped++;
+      errors.push("Invalid crisisService: expected a service object or null.");
+    } else {
+      try {
+        await saveCrisisService(crisis as CrisisService | null);
+        imported++;
+      } catch (e) {
+        skipped++;
+        errors.push(`Failed to import crisis service: ${String(e)}`);
+      }
     }
   }
 

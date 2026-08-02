@@ -1,5 +1,8 @@
 import { openDB, type DBSchema, type IDBPDatabase } from "idb";
-import { migrateCravingTo0to10 } from "./migrations";
+import {
+  migrateCravingTo0to10,
+  migrateRegistrationRecordMetadata,
+} from "./migrations";
 interface SyncMetaRecord {
   key: string;
   value: string | number;
@@ -20,6 +23,43 @@ export interface SyncFields {
   deleted?: boolean;
 }
 
+export type RegistrationAnswerValue =
+  | string
+  | string[]
+  | number
+  | boolean
+  | null;
+
+/**
+ * Versioned metadata shared by every registration record.
+ *
+ * `timestamp` remains the compatibility timestamp used by existing indexes and
+ * consumers. New writes mirror `occurredAt` into it. The explicit fields keep
+ * occurrence, tracker start, and completion from being conflated in future UI
+ * and analytics work.
+ */
+export interface RegistrationRecordMetadata {
+  /** When the event occurred. Falls back to the legacy timestamp. */
+  occurredAt?: number;
+  /** When the user started this registration flow. */
+  startedAt?: number;
+  /** When the registration was committed. */
+  completedAt?: number;
+  /** Shape version for the canonical metadata/answers envelope. */
+  dataVersion?: number;
+  /** Optional option-catalog/content version used to interpret stable IDs. */
+  contentVersion?: string;
+  /** Stable answer IDs for forward-compatible tracker payloads. */
+  answers?: Record<string, RegistrationAnswerValue>;
+}
+
+export type FollowUpOutcome =
+  | "decreased"
+  | "same"
+  | "increased"
+  | "unknown"
+  | null;
+
 export interface JournalEntry extends SyncFields {
   id: string;
   timestamp: number;
@@ -39,7 +79,7 @@ export interface AppSettings {
 }
 
 // ── Craving Log ──────────────────────────────────────────────
-export interface CravingLog extends SyncFields {
+export interface CravingLog extends SyncFields, RegistrationRecordMetadata {
   id: string;
   timestamp: number;
   status: "draft" | "completed";
@@ -49,8 +89,8 @@ export interface CravingLog extends SyncFields {
   situationOther: string;
 
   // Step 2 — intensity
-  intensity: number; // 0–10
-  distressLevel: number; // 0–10, -1 = skipped
+  intensity: number | null; // 0–10, null = unanswered
+  distressLevel: number | null; // 0–10, null = unanswered
   riskLevel: "" | "low" | "medium" | "high";
 
   // Step 3 — emotions
@@ -79,15 +119,16 @@ export interface CravingLog extends SyncFields {
   // Step 9 — chosen action
   chosenAction: string;
   chosenActionOther: string;
+  actionAttempted?: boolean | null; // null/undefined = unanswered
   toolUsed: string | null;
 
   // Step 10 — confidence
-  confidenceBefore: number; // 0–10
+  confidenceBefore: number | null; // 0–10, null = unanswered
 
   // Follow-up (set later)
   intensityAfter: number | null;
   confidenceAfter: number | null;
-  cravingOutcome: "decreased" | "same" | "increased" | null;
+  cravingOutcome: FollowUpOutcome;
   interventionUsed: boolean | null;
   markAsPattern: boolean;
 
@@ -123,7 +164,8 @@ export type EpisodeDuration =
   | "single-moment"
   | "few-hours"
   | "whole-day"
-  | "multiple-days";
+  | "multiple-days"
+  | "unanswered";
 
 export type AmountCategory =
   | "small"
@@ -131,16 +173,18 @@ export type AmountCategory =
   | "a-lot"
   | "multiple-times"
   | "binge"
-  | "prefer-not";
+  | "prefer-not"
+  | "unanswered";
 
 export type AcuteRisk =
   | "none"
   | "unsafe"
   | "fear-continued-use"
   | "withdrawal"
-  | "self-harm-risk";
+  | "self-harm-risk"
+  | "unanswered";
 
-export interface RelapseLog extends SyncFields {
+export interface RelapseLog extends SyncFields, RegistrationRecordMetadata {
   id: string;
   timestamp: number;
   status: "draft" | "completed";
@@ -187,7 +231,7 @@ export interface RelapseLog extends SyncFields {
   // Step 10 — optional note
   note: string;
   context: string;
-  emotionAfter: number;
+  emotionAfter: number | null;
 
   // v2 extended fields (optional, undefined on old records)
   whatNeeded?: string;        // "What did you actually need?" — relief, sleep, numbness…
@@ -202,10 +246,10 @@ export interface RelapseLog extends SyncFields {
 // The goal is fast pattern recognition and building tolerance for uncomfortable
 // internal states without immediately reacting.
 
-export interface AnxietyLog extends SyncFields {
+export interface AnxietyLog extends SyncFields, RegistrationRecordMetadata {
   id: string;
   timestamp: number;
-  intensity: number; // 1–10
+  intensity: number | null; // 0–10, null = unanswered
 
   // v1 fields
   context: string; // single-select
@@ -218,26 +262,28 @@ export interface AnxietyLog extends SyncFields {
   anxietyTypes?: string[];        // multi-select: panic spike, social anxiety, dread…
   bodyLocations?: string[];       // chest, stomach, throat, head, arms, legs, whole body
   bodyPrediction?: string;        // what is your brain predicting?
-  urgencyHigh?: boolean;          // urgent / needs-help-now flag
+  urgencyHigh?: boolean | null;   // null/undefined = unanswered
   reassuranceSeeking?: string[];  // googling, checking body, asking others…
   linkedState?: string;           // legacy single-select: triggered craving, restlessness, etc.
   linkedStates?: string[];        // linked states (multi-select)
   triggers?: string[];            // triggers (multi-select)
-  outcomeAfter?: "decreased" | "same" | "increased" | null; // set on done screen
+  outcomeAfter?: FollowUpOutcome; // set on done screen
 }
 
 // ── Boredom Log ───────────────────────────────────────────────
-export interface BoredomLog extends SyncFields {
+export interface BoredomLog extends SyncFields, RegistrationRecordMetadata {
   id: string;
   timestamp: number;
-  intensity: number; // 1–10
+  intensity: number | null; // 0–10, null = unanswered
 
   // v1 fields
   feelingTypes: string[]; // 1–2 select
   situation: string; // single-select
+  situationOther?: string;
   urge: string; // single-select
+  urgeOther?: string;
   action: string; // single-select: escaped/delayed/sat-with-it/replaced
-  delayDuration: string; // "0" | "5" | "10" | "20+" | ""
+  delayDuration: string | null; // null = not recorded
   note: string;
 
   // v2 extended fields (optional, undefined on old records)
@@ -247,11 +293,11 @@ export interface BoredomLog extends SyncFields {
   rescueMenu?: string[];          // selected rescue actions (shower, walk, stretch…)
   convertCheck?: string;          // is this actually: craving | anxiety | loneliness | exhaustion
   environmentReset?: string[];    // open window, softer lights, leave room…
-  outcomeAfter?: "decreased" | "same" | "increased" | null; // set on done screen
+  outcomeAfter?: FollowUpOutcome; // set on done screen
 }
 
 // ── Cigarette Log ─────────────────────────────────────────────
-export interface CigaretteLog extends SyncFields {
+export interface CigaretteLog extends SyncFields, RegistrationRecordMetadata {
   id: string;
   timestamp: number;
   note?: string;
@@ -331,7 +377,7 @@ let dbInstance: IDBPDatabase<AnchorDB> | null = null;
 export async function getDB(): Promise<IDBPDatabase<AnchorDB>> {
   if (dbInstance) return dbInstance;
 
-  dbInstance = await openDB<AnchorDB>("anchor-recovery", 6, {
+  dbInstance = await openDB<AnchorDB>("anchor-recovery", 7, {
     upgrade(db, oldVersion, _newVersion, tx) {
       if (oldVersion < 1) {
         const journalStore = db.createObjectStore("journal", { keyPath: "id" });
@@ -400,6 +446,28 @@ export async function getDB(): Promise<IDBPDatabase<AnchorDB>> {
         if (!db.objectStoreNames.contains("cigaretteLogs")) {
           const cl = db.createObjectStore("cigaretteLogs", { keyPath: "id" });
           cl.createIndex("byTimestamp", "timestamp");
+        }
+      }
+      // v7 — preserve the legacy timestamp/index while giving every existing
+      // registration explicit occurrence/start/completion metadata. Historical
+      // records cannot be reconstructed more precisely, so all three fields use
+      // their authoritative legacy timestamp during this one-shot migration.
+      if (oldVersion < 7) {
+        const stores = [
+          "cravingLogs",
+          "relapseLogs",
+          "anxietyLogs",
+          "boredomLogs",
+          "cigaretteLogs",
+        ] as const;
+        for (const storeName of stores) {
+          if (!db.objectStoreNames.contains(storeName)) continue;
+          const store = tx.objectStore(storeName);
+          store.openCursor().then(function migrateCursor(cursor): Promise<void> | void {
+            if (!cursor) return;
+            cursor.update(migrateRegistrationRecordMetadata(cursor.value));
+            return cursor.continue().then(migrateCursor);
+          });
         }
       }
     },

@@ -10,7 +10,10 @@ import { ChipCol } from "@/components/tracker/ChipCol";
 import { MultiSelectGrid } from "@/components/tracker/MultiSelectGrid";
 import { StepLayout } from "@/components/tracker/StepLayout";
 import { ActionBar } from "@/components/tracker/ActionBar";
-import { CheckCircle2, Zap, ChevronDown, ChevronUp, Info } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Zap, ChevronDown, ChevronUp, Info } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { removeHiddenOtherText, toStableOptionId, toStableOptionIds } from "@/lib/registrationIds";
+import { getSubstanceSafetyWarnings, getUrgentSafetyCopy } from "@/lib/registrationSafety";
 
 // ── Step type ────────────────────────────────────────────────
 type Step = "onset" | "trigger" | "inner" | "substance" | "action" | "outcome" | "done";
@@ -62,9 +65,8 @@ const OUTCOME_ACTIONS = [
   { value: "box-breathing", label: "Box breathing", tool: "/tools/breathing" },
   { value: "grounding", label: "Grounding", tool: "/tools/grounding" },
   { value: "distraction", label: "Distraction", tool: "/tools/distraction" },
-  { value: "call-someone", label: "Called someone" },
-  { value: "used", label: "Used" },
-  { value: "just-observed", label: "Just observed" },
+  { value: "call-someone", label: "Call or text someone" },
+  { value: "just-observed", label: "Observe without acting" },
 ];
 
 const OUTCOMES = [
@@ -91,8 +93,8 @@ const USE_OUTCOMES: { value: "not_used" | "used" | "unsure"; labelKey: string }[
 // ── Draft state ───────────────────────────────────────────────
 interface Draft {
   onsetType: string;
-  intensity: number;
-  confidenceBefore: number;
+  intensity: number | null;
+  confidenceBefore: number | null;
   situationPresets: string[];
   physicalSensations: string[];
   buildupDuration: string;
@@ -104,17 +106,18 @@ interface Draft {
   thoughtPresets: string[];
   thoughtFreeText: string;
   chosenAction: string;
+  actionAttempted: boolean | null;
   substances: string[];
   cravingOutcome: string;
-  intensityAfter: number;
+  intensityAfter: number | null;
   useOutcome: "" | "used" | "not_used" | "unsure";
 }
 
 function blankDraft(): Draft {
   return {
     onsetType: "",
-    intensity: 5,
-    confidenceBefore: 5,
+    intensity: null,
+    confidenceBefore: null,
     situationPresets: [],
     physicalSensations: [],
     buildupDuration: "",
@@ -126,9 +129,10 @@ function blankDraft(): Draft {
     thoughtPresets: [],
     thoughtFreeText: "",
     chosenAction: "",
+    actionAttempted: null,
     substances: [],
     cravingOutcome: "",
-    intensityAfter: 5,
+    intensityAfter: null,
     useOutcome: "",
   };
 }
@@ -147,7 +151,9 @@ export function CravingTracker() {
   const [savedLog, setSavedLog] = useState<CravingLog | null>(null);
   const { logCraving } = useStore();
   const [, navigate] = useLocation();
-  const { t, tOpt } = useT();
+  const { t, tOpt, language } = useT();
+  const { toast } = useToast();
+  const safetyCopy = getUrgentSafetyCopy(language);
 
   const STEP_LABELS: Record<Step, string> = {
     onset: t("craving.step.onset"),
@@ -166,25 +172,31 @@ export function CravingTracker() {
   const toggleArr = useCallback((key: "situationPresets" | "physicalSensations" | "substances", val: string) => {
     setDraft((prev) => {
       const arr = prev[key];
+      const next = arr.includes(val)
+        ? arr.filter((x) => x !== val)
+        : key === "physicalSensations" && arr.length >= 3
+          ? arr
+          : [...arr, val];
       return {
         ...prev,
-        [key]: arr.includes(val) ? arr.filter((x) => x !== val) : [...arr, val],
+        [key]: next,
+        ...(key === "situationPresets" && !next.includes("Other") ? { triggerOther: "" } : {}),
       };
     });
   }, []);
 
-  // Inner-experience toggles — capped (emotions 3, thoughts 2) via drop-oldest.
+  // Visible caps prevent accidental loss of an earlier answer.
   const toggleEmotion = useCallback((v: string) => {
     setDraft((prev) => {
       const arr = prev.emotions;
-      return { ...prev, emotions: arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v].slice(-3) };
+      return { ...prev, emotions: arr.includes(v) ? arr.filter((x) => x !== v) : arr.length < 3 ? [...arr, v] : arr };
     });
   }, []);
 
   const toggleThought = useCallback((v: string) => {
     setDraft((prev) => {
       const arr = prev.thoughtPresets;
-      return { ...prev, thoughtPresets: arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v].slice(-2) };
+      return { ...prev, thoughtPresets: arr.includes(v) ? arr.filter((x) => x !== v) : arr.length < 2 ? [...arr, v] : arr };
     });
   }, []);
 
@@ -193,12 +205,12 @@ export function CravingTracker() {
       case "onset":   return draft.onsetType !== "" && (draft.onsetType !== "Other" || draft.onsetOther.trim() !== "");
       case "trigger": return draft.situationPresets.length > 0 && draft.buildupDuration !== "" && (!draft.situationPresets.includes("Other") || draft.triggerOther.trim() !== "");
       case "inner":   return draft.emotions.length > 0 || draft.emotionOther.trim() !== "" || draft.thoughtPresets.length > 0 || draft.thoughtFreeText.trim() !== "";
-      case "substance": return draft.substances.length > 0;
-      case "action":  return draft.chosenAction !== "";
+      case "substance": return true;
+      case "action":  return draft.chosenAction !== "" && draft.actionAttempted !== null;
       case "outcome": return draft.useOutcome !== "";
       default:        return true;
     }
-  }, [step, draft.onsetType, draft.onsetOther, draft.situationPresets, draft.triggerOther, draft.buildupDuration, draft.emotions, draft.emotionOther, draft.thoughtPresets, draft.thoughtFreeText, draft.substances, draft.chosenAction, draft.useOutcome]);
+  }, [step, draft.onsetType, draft.onsetOther, draft.situationPresets, draft.triggerOther, draft.buildupDuration, draft.emotions, draft.emotionOther, draft.thoughtPresets, draft.thoughtFreeText, draft.chosenAction, draft.actionAttempted, draft.useOutcome]);
 
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -226,11 +238,6 @@ export function CravingTracker() {
   const canGoBack = stepIdx > 0;
   const goBack = () => setStep(STEP_ORDER[stepIdx - 1]);
   const goNext = () => {
-    // "Used" on the action step short-circuits the outcome step → straight to relapse logging.
-    if (step === "action" && draft.chosenAction === "used") {
-      save();
-      return;
-    }
     if (stepIdx === STEP_ORDER.length - 1) {
       save();
     } else {
@@ -239,72 +246,119 @@ export function CravingTracker() {
   };
 
   const save = async () => {
+    if (saving) return;
     setSaving(true);
-    const usedSub = draft.chosenAction === "used";
-    const saved = await logCraving({
-      cravingType: "passive",
-      timestamp: Date.now(),
-      status: "completed",
-      onsetType: draft.onsetType,
-      intensity: draft.intensity,
-      distressLevel: 0,
-      riskLevel: "",
-      situationPresets: draft.situationPresets,
-      situationOther: draft.situationPresets.includes("Other") ? draft.triggerOther : "",
-      emotions: draft.emotions,
-      emotionOther: draft.emotionOther,
-      physicalSensations: draft.physicalSensations,
-      thoughtPresets: draft.thoughtPresets,
-      thoughtFreeText: draft.thoughtFreeText,
-      onsetOther: draft.onsetType === "Other" ? draft.onsetOther : "",
-      location: draft.location,
-      locationOther: "",
-      socialContext: [],
-      substances: draft.substances,
-      primarySubstance: "",
-      buildupDuration: draft.buildupDuration,
-      chosenAction: draft.chosenAction,
-      chosenActionOther: "",
-      toolUsed: null,
-      confidenceBefore: draft.confidenceBefore,
-      intensityAfter: null,
-      confidenceAfter: null,
-      cravingOutcome: null,
-      interventionUsed: null,
-      markAsPattern: false,
-      highRiskFlag: draft.intensity >= 8,
-      note: "",
-      useOutcome: usedSub ? "used" : (draft.useOutcome || undefined),
-    });
-    setSavedLog(saved);
-    setSaving(false);
-    if (usedSub) {
-      reg.clearSession();
-      navigate("/relapse");
-    } else {
+    const completedAt = Date.now();
+    const startedAt = reg.session?.startedAt ?? completedAt;
+    try {
+      const saved = await logCraving({
+        cravingType: "passive",
+        timestamp: startedAt,
+        occurredAt: startedAt,
+        startedAt,
+        completedAt,
+        dataVersion: 2,
+        contentVersion: "registration-v2",
+        answers: {
+          onsetType: toStableOptionId(draft.onsetType),
+          intensity: draft.intensity,
+          confidenceBefore: draft.confidenceBefore,
+          situations: toStableOptionIds(draft.situationPresets),
+          physicalSensations: toStableOptionIds(draft.physicalSensations),
+          buildupDuration: draft.buildupDuration,
+          location: toStableOptionId(draft.location),
+          emotions: toStableOptionIds(draft.emotions),
+          thoughts: toStableOptionIds(draft.thoughtPresets),
+          targets: toStableOptionIds(draft.substances),
+          chosenAction: draft.chosenAction,
+          actionAttempted: draft.actionAttempted,
+          useOutcome: draft.useOutcome,
+        },
+        status: "completed",
+        onsetType: draft.onsetType,
+        intensity: draft.intensity,
+        distressLevel: null,
+        riskLevel: "",
+        situationPresets: draft.situationPresets,
+        situationOther: removeHiddenOtherText(draft.situationPresets, draft.triggerOther),
+        emotions: draft.emotions,
+        emotionOther: draft.emotionOther.trim(),
+        physicalSensations: draft.physicalSensations,
+        thoughtPresets: draft.thoughtPresets,
+        thoughtFreeText: draft.thoughtFreeText.trim(),
+        onsetOther: removeHiddenOtherText(draft.onsetType, draft.onsetOther),
+        location: draft.location,
+        locationOther: "",
+        socialContext: [],
+        substances: draft.substances,
+        primarySubstance: "",
+        buildupDuration: draft.buildupDuration,
+        chosenAction: draft.chosenAction,
+        chosenActionOther: "",
+        actionAttempted: draft.actionAttempted,
+        toolUsed: draft.actionAttempted && OUTCOME_ACTIONS.some((a) => a.value === draft.chosenAction && a.tool)
+          ? draft.chosenAction
+          : null,
+        confidenceBefore: draft.confidenceBefore,
+        intensityAfter: null,
+        confidenceAfter: null,
+        cravingOutcome: null,
+        interventionUsed: draft.actionAttempted,
+        markAsPattern: false,
+        highRiskFlag: draft.intensity != null && draft.intensity >= 8,
+        note: "",
+        useOutcome: draft.useOutcome || undefined,
+      });
+      setSavedLog(saved);
       reg.patchSession({ savedLogId: saved.id, step: "done" });
       setStep("done");
+    } catch {
+      toast({ title: t("common.save_error"), variant: "destructive" });
+    } finally {
+      setSaving(false);
     }
   };
 
-  const applyOutcome = useCallback(async (outcome: string, intensityAfter: number) => {
+  const applyOutcome = useCallback(async (outcome: string, intensityAfter: number | null) => {
     if (!savedLog) return;
-    const real = (["decreased", "same", "increased"] as const).find((o) => o === outcome) ?? null;
-    const updated: CravingLog = { ...savedLog, cravingOutcome: real, intensityAfter: real ? intensityAfter : null };
+    const real = (["decreased", "same", "increased", "unknown"] as const).find((o) => o === (outcome === "dont-know" ? "unknown" : outcome)) ?? null;
+    const updated: CravingLog = { ...savedLog, cravingOutcome: real, intensityAfter: real && real !== "unknown" ? intensityAfter : null };
     setSavedLog(updated);
-    await updateCravingLog(updated);
-  }, [savedLog]);
+    try {
+      await updateCravingLog(updated);
+      reg.patchSession({ draft: { ...draft, cravingOutcome: outcome, intensityAfter } });
+    } catch {
+      toast({ title: t("common.save_error"), variant: "destructive" });
+    }
+  }, [draft, reg, savedLog, t, toast]);
+
+  const openHelpPath = async (path: string) => {
+    const switchesRegistration = path === "/anxiety" || path === "/boredom";
+    if (switchesRegistration) {
+      // Preserve this unfinished craving draft before opening another tracker.
+      // It will be restored after the linked registration is completed.
+      if (await reg.suspendSession()) navigate(path);
+      return;
+    }
+    reg.patchSession({ pendingReturn: { returnRoute: "/craving", returnStep: step } });
+    navigate(path);
+  };
 
   // ── Done screen ───────────────────────────────────────────
   if (step === "done") {
+    const usedSafetyWarnings = draft.useOutcome === "used"
+      ? getSubstanceSafetyWarnings(draft.substances, language)
+      : [];
     const outcomeMsg =
-      draft.cravingOutcome === "decreased" ? t("craving.msg.decreased")
-      : draft.cravingOutcome === "same" ? t("craving.msg.same")
-      : draft.cravingOutcome === "increased" ? t("craving.msg.increased")
-      : t("craving.done.sub");
+      draft.useOutcome === "used" ? t("tracker.done.used")
+      : draft.useOutcome === "not_used" && draft.cravingOutcome === "decreased" ? t("craving.msg.decreased")
+      : draft.useOutcome === "not_used" && draft.cravingOutcome === "same" ? t("craving.msg.same")
+      : draft.useOutcome === "not_used" && draft.cravingOutcome === "increased" ? t("craving.msg.increased")
+      : draft.useOutcome === "not_used" ? t("tracker.done.not_used")
+      : t("tracker.done.unsure");
 
     const chosenDef = OUTCOME_ACTIONS.find((a) => a.value === draft.chosenAction);
-    const showMethod = chosenDef && draft.chosenAction !== "used" && draft.chosenAction !== "just-observed";
+    const showMethod = Boolean(chosenDef);
 
     return (
       <div className="flex flex-col min-h-dvh bg-background">
@@ -317,13 +371,40 @@ export function CravingTracker() {
             <p className="text-muted-foreground leading-relaxed max-w-xs">{outcomeMsg}</p>
           </div>
 
+          {draft.useOutcome === "used" && (
+            <div className="w-full max-w-xs space-y-3 text-left">
+              <div className="rounded-2xl border border-amber-500/50 bg-card p-4">
+                <div className="mb-2 flex items-start gap-2">
+                  <AlertTriangle size={18} className="mt-0.5 shrink-0 text-amber-500" />
+                  <p className="text-sm font-semibold text-foreground">{safetyCopy.title}</p>
+                </div>
+                <div className="space-y-2 text-sm leading-relaxed text-muted-foreground">
+                  <p>{safetyCopy.assessmentLimit}</p>
+                  <p>{safetyCopy.emergency}</p>
+                  <p>{safetyCopy.humanHelp}</p>
+                </div>
+                <a href="tel:112" className="mt-3 inline-flex min-h-11 items-center text-sm font-semibold text-primary">
+                  {safetyCopy.call112}
+                </a>
+              </div>
+              {usedSafetyWarnings.map((warning) => (
+                <div key={warning.key} className="rounded-2xl border border-amber-500/40 bg-amber-500/10 p-4">
+                  <p className="text-sm font-semibold text-foreground">{warning.title}</p>
+                  <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{warning.body}</p>
+                </div>
+              ))}
+            </div>
+          )}
+
           {/* Chosen method card */}
           {showMethod && chosenDef && (
             <div className="w-full max-w-xs bg-primary/8 border border-primary/25 rounded-2xl p-4 flex flex-col gap-2 text-left">
               <p className="text-[11px] text-muted-foreground uppercase tracking-widest">{t("craving.action.chosen")}</p>
               <p className="text-sm font-semibold text-foreground">{tOpt(chosenDef.label)}</p>
-              <p className="text-xs text-muted-foreground leading-relaxed">{t("craving.action.go_do_it")}</p>
-              {chosenDef.tool && (
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                {draft.actionAttempted ? t("tracker.action.reported_tried") : t("tracker.action.reported_not_yet")}
+              </p>
+              {chosenDef.tool && draft.actionAttempted === false && (
                 <button
                   onClick={() => {
                     reg.patchSession({ pendingReturn: { returnRoute: "/craving", returnStep: "done" } });
@@ -387,6 +468,14 @@ export function CravingTracker() {
 
           {/* Navigation */}
           <div className="flex flex-col gap-3 w-full max-w-xs">
+            {draft.useOutcome === "used" && (
+              <button
+                onClick={() => navigate("/relapse")}
+                className="w-full bg-primary text-primary-foreground rounded-2xl py-3.5 font-semibold touch-target hover:opacity-90 active:scale-95 transition-all"
+              >
+                {t("tracker.done.open_relapse")}
+              </button>
+            )}
             <button
               onClick={() => {
                 reg.patchSession({ pendingReturn: { returnRoute: "/craving", returnStep: "done" } });
@@ -396,7 +485,7 @@ export function CravingTracker() {
             >
               {t("common.browse_tools")}
             </button>
-            <button onClick={() => { reg.clearSession(); navigate("/"); }}
+            <button onClick={async () => { if (await reg.completeSession()) navigate("/"); }}
               className="w-full border border-border rounded-2xl py-3 font-medium text-muted-foreground touch-target">
               {t("common.done_home")}
             </button>
@@ -411,6 +500,7 @@ export function CravingTracker() {
     <StepLayout
       title={t("craving.title")}
       back
+      backDisabled={saving}
       subtitle={STEP_LABELS[step]}
       step={{ current: stepIdx + 1, total: STEP_ORDER.length }}
       showStepCounter
@@ -455,7 +545,7 @@ export function CravingTracker() {
                 ].map(({ label, path, sub }) => (
                   <button
                     key={path}
-                    onClick={() => navigate(path)}
+                    onClick={() => { void openHelpPath(path); }}
                     className="w-full text-left bg-background border border-border rounded-xl px-3.5 py-3 hover:border-primary/40 transition-colors touch-target"
                   >
                     <p className="text-sm font-medium text-foreground">{label}</p>
@@ -550,6 +640,8 @@ export function CravingTracker() {
               value={draft.physicalSensations}
               onToggle={(v) => toggleArr("physicalSensations", v)}
               translate={tOpt}
+              maxSelections={3}
+              selectionLabel={t("tracker.selection_limit")}
             />
             <div className="h-px bg-border my-1" />
             <p className="text-base font-medium text-foreground">{t("craving.q.buildup")}</p>
@@ -590,6 +682,8 @@ export function CravingTracker() {
               value={draft.emotions}
               onToggle={toggleEmotion}
               translate={tOpt}
+              maxSelections={3}
+              selectionLabel={t("tracker.selection_limit")}
             />
             <textarea
               value={draft.emotionOther}
@@ -606,6 +700,8 @@ export function CravingTracker() {
               value={draft.thoughtPresets}
               onToggle={toggleThought}
               translate={tOpt}
+              maxSelections={2}
+              selectionLabel={t("tracker.selection_limit")}
             />
             <textarea
               value={draft.thoughtFreeText}
@@ -638,7 +734,10 @@ export function CravingTracker() {
             <div className="flex flex-col gap-2">
               {OUTCOME_ACTIONS.map(({ value, label }) => (
                 <button key={value}
-                  onClick={() => update("chosenAction", draft.chosenAction === value ? "" : value)}
+                  onClick={() => {
+                    const next = draft.chosenAction === value ? "" : value;
+                    setDraft((prev) => ({ ...prev, chosenAction: next, actionAttempted: null }));
+                  }}
                   aria-pressed={draft.chosenAction === value}
                   className={`w-full text-left px-4 py-3.5 rounded-2xl border text-sm font-medium transition-all touch-target flex items-center justify-between ${
                     draft.chosenAction === value
@@ -652,6 +751,46 @@ export function CravingTracker() {
                 </button>
               ))}
             </div>
+            {draft.chosenAction && (() => {
+              const selected = OUTCOME_ACTIONS.find((item) => item.value === draft.chosenAction);
+              return (
+                <div className="rounded-2xl border border-border bg-card p-4 flex flex-col gap-3">
+                  {selected?.tool && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        reg.patchSession({ pendingReturn: { returnRoute: "/craving", returnStep: "action" } });
+                        navigate(selected.tool!);
+                      }}
+                      className="w-full rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground touch-target"
+                    >
+                      {t("tracker.action.open_tool")}
+                    </button>
+                  )}
+                  <p className="text-sm font-medium text-foreground">{t("tracker.action.attempted_q")}</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {[
+                      { value: true, label: t("tracker.action.tried") },
+                      { value: false, label: t("tracker.action.not_yet") },
+                    ].map((item) => (
+                      <button
+                        type="button"
+                        key={String(item.value)}
+                        onClick={() => update("actionAttempted", item.value)}
+                        aria-pressed={draft.actionAttempted === item.value}
+                        className={`rounded-xl border px-3 py-3 text-sm font-medium touch-target ${
+                          draft.actionAttempted === item.value
+                            ? "border-primary bg-primary/10 text-foreground"
+                            : "border-border bg-background text-muted-foreground"
+                        }`}
+                      >
+                        {item.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
           </>
         )}
 
@@ -679,6 +818,28 @@ export function CravingTracker() {
                 </button>
               ))}
             </div>
+            {draft.useOutcome === "used" && (
+              <div role="alert" className="space-y-3 rounded-2xl border border-amber-500/50 bg-card p-4">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle size={18} className="mt-0.5 shrink-0 text-amber-500" />
+                  <p className="text-sm font-semibold text-foreground">{safetyCopy.title}</p>
+                </div>
+                <div className="space-y-2 text-sm leading-relaxed text-muted-foreground">
+                  <p>{safetyCopy.assessmentLimit}</p>
+                  <p>{safetyCopy.emergency}</p>
+                  <p>{safetyCopy.humanHelp}</p>
+                </div>
+                <a href="tel:112" className="inline-flex min-h-11 items-center text-sm font-semibold text-primary">
+                  {safetyCopy.call112}
+                </a>
+                {getSubstanceSafetyWarnings(draft.substances, language).map((warning) => (
+                  <div key={warning.key} className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-3">
+                    <p className="text-sm font-semibold text-foreground">{warning.title}</p>
+                    <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{warning.body}</p>
+                  </div>
+                ))}
+              </div>
+            )}
           </>
         )}
     </StepLayout>

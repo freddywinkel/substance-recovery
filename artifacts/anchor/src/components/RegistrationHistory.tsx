@@ -6,6 +6,7 @@ import { useT } from "@/hooks/useTranslation";
 import { CATEGORY_META } from "@/lib/constants";
 import type { AnxietyLog, BoredomLog, CigaretteLog, CravingLog, RelapseLog } from "@/db";
 import { CigaretteDayDrawer } from "./CigaretteDayDrawer";
+import { logicalTimestamp } from "@/lib/registrationIds";
 
 type RegistrationEntry =
   | (CravingLog & { _type: "trek" | "craving" })
@@ -54,16 +55,130 @@ function fmtDayDate(ts: number, locale: string) {
 
 function textValue(value: unknown): string {
   if (Array.isArray(value)) return value.filter(Boolean).join(", ");
-  if (typeof value === "string") return value.trim();
+  if (typeof value === "string") return value === "unanswered" ? "" : value.trim();
   if (typeof value === "number") return String(value);
   return "";
 }
 
-function DetailRow({ label, value, translate }: { label: string; value: unknown; translate?: (value: string) => string }) {
+function unique(values: Array<string | undefined>): string[] {
+  return [...new Set(values.filter((value): value is string => Boolean(value?.trim())))];
+}
+
+type Detail = { labelKey: string; value: unknown; translate?: boolean };
+
+function detailsFor(entry: RegistrationEntry): Detail[] {
+  if (entry._type === "trek" || entry._type === "craving") {
+    const common: Detail[] = [
+      { labelKey: "logs.detail.intensity", value: entry.intensity },
+      { labelKey: "logs.detail.confidence_before", value: entry.confidenceBefore },
+      { labelKey: "logs.detail.location", value: unique([entry.location, entry.locationOther]), translate: true },
+      { labelKey: "logs.detail.emotions", value: unique([...(entry.emotions ?? []), entry.emotionOther]), translate: true },
+      { labelKey: "logs.detail.physical", value: entry.physicalSensations, translate: true },
+      { labelKey: "logs.detail.thoughts", value: unique([...(entry.thoughtPresets ?? []), entry.thoughtFreeText]), translate: true },
+      { labelKey: "logs.detail.substances", value: entry.substances, translate: true },
+      { labelKey: "logs.detail.action", value: entry.chosenAction, translate: true },
+      { labelKey: "logs.detail.action_attempted", value: entry.actionAttempted == null ? "" : entry.actionAttempted ? "Yes" : "No", translate: true },
+      { labelKey: "logs.detail.use_outcome", value: entry.useOutcome, translate: true },
+      { labelKey: "logs.detail.symptom_outcome", value: entry.cravingOutcome, translate: true },
+      { labelKey: "logs.detail.intensity_after", value: entry.intensityAfter },
+      { labelKey: "logs.detail.confidence_after", value: entry.confidenceAfter },
+    ];
+    if (entry._type === "trek") {
+      return [
+        { labelKey: "logs.detail.type", value: entry.trekTypes, translate: true },
+        { labelKey: "logs.detail.planning", value: entry.planningStage, translate: true },
+        { labelKey: "logs.detail.trigger", value: unique([...(entry.triggers ?? []), entry.triggerNote]), translate: true },
+        { labelKey: "logs.detail.need", value: unique([...(entry.needTypes ?? []), entry.needOther]), translate: true },
+        ...common,
+      ];
+    }
+    return [
+      { labelKey: "logs.detail.onset", value: unique([entry.onsetType, entry.onsetOther]), translate: true },
+      { labelKey: "logs.detail.situation", value: unique([...(entry.situationPresets ?? []), entry.situationOther]), translate: true },
+      { labelKey: "logs.detail.buildup", value: entry.buildupDuration, translate: true },
+      ...common,
+    ];
+  }
+
+  if (entry._type === "anxiety") {
+    return [
+      { labelKey: "logs.detail.type", value: entry.anxietyTypes, translate: true },
+      { labelKey: "logs.detail.intensity", value: entry.intensity },
+      { labelKey: "logs.detail.body_location", value: entry.bodyLocations?.length ? entry.bodyLocations : entry.bodySensations, translate: true },
+      { labelKey: "logs.detail.prediction", value: entry.bodyPrediction },
+      { labelKey: "logs.detail.urgency", value: entry.urgencyHigh == null ? "" : entry.urgencyHigh ? "Needs help now" : "Can stay with this", translate: true },
+      { labelKey: "logs.detail.context", value: entry.context, translate: true },
+      { labelKey: "logs.detail.reassurance", value: entry.reassuranceSeeking, translate: true },
+      { labelKey: "logs.detail.linked_state", value: entry.linkedStates?.length ? entry.linkedStates : entry.linkedState ? [entry.linkedState] : [], translate: true },
+      { labelKey: "logs.detail.trigger", value: entry.triggers?.length ? entry.triggers : entry.trigger ? [entry.trigger] : [], translate: true },
+      { labelKey: "logs.detail.action", value: entry.reaction, translate: true },
+      { labelKey: "logs.detail.symptom_outcome", value: entry.outcomeAfter, translate: true },
+    ];
+  }
+
+  if (entry._type === "boredom") {
+    return [
+      { labelKey: "logs.detail.type", value: entry.restlessnessTypes?.length ? entry.restlessnessTypes : entry.feelingTypes, translate: true },
+      { labelKey: "logs.detail.intensity", value: entry.intensity },
+      { labelKey: "logs.detail.need", value: entry.stimulationNeeds?.length ? entry.stimulationNeeds : entry.stimulationNeed ? [entry.stimulationNeed] : [], translate: true },
+      { labelKey: "logs.detail.classification", value: entry.convertCheck, translate: true },
+      { labelKey: "logs.detail.situation", value: unique([entry.situation, entry.situationOther]), translate: true },
+      { labelKey: "logs.detail.urge", value: unique([entry.urge, entry.urgeOther]), translate: true },
+      { labelKey: "logs.detail.rescue", value: entry.rescueMenu, translate: true },
+      { labelKey: "logs.detail.action", value: entry.action, translate: true },
+      { labelKey: "logs.detail.delay", value: entry.delayDuration },
+      { labelKey: "logs.detail.symptom_outcome", value: entry.outcomeAfter, translate: true },
+    ];
+  }
+
+  if (entry._type === "relapse") {
+    const helped = unique([
+      ...(entry.couldHaveHelpedEarly ?? []),
+      ...(entry.couldHaveHelpedMiddle ?? []),
+      ...(entry.couldHaveHelpedLast ?? []),
+    ]);
+    return [
+      { labelKey: "logs.detail.label", value: entry.label, translate: true },
+      { labelKey: "logs.detail.when", value: entry.when, translate: true },
+      { labelKey: "logs.detail.duration", value: entry.episodeDuration, translate: true },
+      { labelKey: "logs.detail.substances", value: entry.substances, translate: true },
+      { labelKey: "logs.detail.amount", value: entry.amountCategory, translate: true },
+      { labelKey: "logs.detail.trigger", value: unique([entry.firstTriggerType, entry.firstTriggerText]), translate: true },
+      { labelKey: "logs.detail.lead_up", value: unique([...(entry.preUseFactors ?? []), entry.context]), translate: true },
+      { labelKey: "logs.detail.warning_signs", value: entry.missedWarnings, translate: true },
+      { labelKey: "logs.detail.thoughts", value: unique([...(entry.preUseThoughtPresets ?? []), entry.preUseThoughtPreset, entry.preUseThoughtFreeText]), translate: true },
+      { labelKey: "logs.detail.could_help", value: helped, translate: true },
+      { labelKey: "logs.detail.support", value: unique([entry.supportContact, entry.supportContactOther]), translate: true },
+      { labelKey: "logs.detail.next_step", value: unique([entry.nextStep, entry.nextStepOther]), translate: true },
+      { labelKey: "logs.detail.risk", value: entry.acuteRisk, translate: true },
+      { labelKey: "logs.detail.need", value: entry.whatNeeded, translate: true },
+      { labelKey: "logs.detail.repair", value: entry.repairActions, translate: true },
+    ];
+  }
+
+  return [];
+}
+
+function DetailRow({
+  label,
+  value,
+  translate,
+  unansweredLabel,
+}: {
+  label: string;
+  value: unknown;
+  translate?: (value: string) => string;
+  unansweredLabel?: string;
+}) {
+  const display = (item: unknown) => {
+    const raw = String(item).trim();
+    if (raw === "unanswered") return unansweredLabel ?? "";
+    return translate ? translate(raw) : raw;
+  };
   const text = Array.isArray(value)
-    ? value.filter(Boolean).map((item) => translate ? translate(String(item)) : String(item)).join(", ")
-    : translate && typeof value === "string"
-      ? translate(value.trim())
+    ? value.filter(Boolean).map(display).filter(Boolean).join(", ")
+    : typeof value === "string"
+      ? display(value)
       : textValue(value);
   if (!text) return null;
   return (
@@ -137,7 +252,11 @@ export function RegistrationHistory() {
       ...boredomLogs.map((log) => ({ ...log, _type: "boredom" as const })),
       ...cigaretteDays,
     ];
-    return merged.sort((a, b) => b.timestamp - a.timestamp);
+    return merged.sort((a, b) => {
+      const bTime = b._type === "cigarette-day" ? b.timestamp : logicalTimestamp(b);
+      const aTime = a._type === "cigarette-day" ? a.timestamp : logicalTimestamp(a);
+      return bTime - aTime;
+    });
   }, [anxietyLogs, boredomLogs, cigaretteLogs, cravingLogs, relapseLogs]);
 
   const handleDelete = async (entry: HistoryItem) => {
@@ -223,6 +342,7 @@ export function RegistrationHistory() {
         const isEditing = editing?.id === entry.id;
         const isConfirm = deleteConfirm === entry.id;
         const contentId = `registration-details-${entry.id}`;
+        const details = isCigaretteDay ? [] : detailsFor(entry as RegistrationEntry);
         const intensity =
           !isCigaretteDay && "intensity" in entry && typeof entry.intensity === "number"
             ? entry.intensity
@@ -246,7 +366,7 @@ export function RegistrationHistory() {
                 <p className="text-[10px] text-muted-foreground">
                   {isCigaretteDay
                     ? `${entry.count} ${entry.count === 1 ? t("cigarette.day_single") : t("cigarette.day_plural")}`
-                    : fmtDate(entry.timestamp, language)}
+                    : fmtDate(logicalTimestamp(entry as RegistrationEntry), language)}
                 </p>
               </div>
               {intensity !== null && (
@@ -310,12 +430,21 @@ export function RegistrationHistory() {
                     ) : (
                       <DetailRow label={t("logs.detail.note")} value={(entry as RegistrationEntry).note} />
                     )}
-                    <DetailRow label={t("logs.detail.situation")} value={"situationPresets" in entry ? entry.situationPresets : "situation" in entry ? entry.situation : ""} translate={tOpt} />
-                    <DetailRow label={t("logs.detail.trigger")} value={"triggers" in entry ? entry.triggers : "trigger" in entry ? entry.trigger : "firstTriggerText" in entry ? entry.firstTriggerText : ""} translate={tOpt} />
-                    <DetailRow label={t("logs.detail.emotions")} value={"emotions" in entry ? entry.emotions : ""} translate={tOpt} />
-                    <DetailRow label={t("logs.detail.substances")} value={"substances" in entry ? entry.substances : ""} translate={tOpt} />
-                    <DetailRow label={t("logs.detail.action")} value={"chosenAction" in entry && entry.chosenAction ? entry.chosenAction : "action" in entry ? entry.action : ""} translate={tOpt} />
-                    <DetailRow label={t("logs.detail.outcome")} value={"cravingOutcome" in entry ? entry.cravingOutcome : "outcomeAfter" in entry ? entry.outcomeAfter : ""} translate={tOpt} />
+                    {details.map((detail) => (
+                      <DetailRow
+                        key={detail.labelKey}
+                        label={t(detail.labelKey)}
+                        value={detail.value}
+                        translate={detail.translate ? tOpt : undefined}
+                        unansweredLabel={t("logs.detail.unanswered")}
+                      />
+                    ))}
+                    {(entry as RegistrationEntry).startedAt && (entry as RegistrationEntry).completedAt && (
+                      <p className="text-[10px] text-muted-foreground/70">
+                        {t("logs.detail.form_timing")}: {fmtDate((entry as RegistrationEntry).startedAt!, language)} → {fmtDate((entry as RegistrationEntry).completedAt!, language)}
+                      </p>
+                    )}
+                    <p className="text-[10px] text-muted-foreground/70">{t("logs.detail.read_only_policy")}</p>
 
                     <div className="mt-1 flex flex-wrap justify-end gap-2">
                       {isEditing ? (

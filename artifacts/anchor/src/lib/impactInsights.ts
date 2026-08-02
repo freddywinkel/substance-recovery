@@ -2,7 +2,6 @@ import {
   computeAnxietyStats,
   computeBoredomStats,
   computeCravingStats,
-  computeRelapseStats,
   filterByRange,
   type TimeRange,
 } from "@/lib/analytics";
@@ -36,12 +35,10 @@ export function buildImpactInsights(
   range: TimeRange,
 ): ImpactInsight[] {
   const filteredCravings = filterByRange(logs.cravingLogs, range);
-  const filteredRelapses = filterByRange(logs.relapseLogs, range);
   const filteredAnxiety = filterByRange(logs.anxietyLogs, range);
   const filteredBoredom = filterByRange(logs.boredomLogs, range);
 
   const cStats = computeCravingStats(filteredCravings);
-  const rStats = computeRelapseStats(filteredRelapses);
   const aStats = computeAnxietyStats(filteredAnxiety);
   const bStats = computeBoredomStats(filteredBoredom);
 
@@ -57,9 +54,6 @@ export function buildImpactInsights(
       : null,
     bStats.total > 0 && bStats.avgIntensity != null
       ? { kind: "boredom", score: bStats.avgIntensity, count: bStats.total, ...IMPACT_META.boredom }
-      : null,
-    rStats.total > 0
-      ? { kind: "relapse", score: 10, count: rStats.total, ...IMPACT_META.relapse }
       : null,
   ];
 

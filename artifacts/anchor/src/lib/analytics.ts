@@ -1,15 +1,16 @@
 import type { CravingLog, RelapseLog, AnxietyLog, BoredomLog } from "@/db";
+import { logicalTimestamp } from "@/lib/registrationIds";
 
 export type TimeRange = "7d" | "30d" | "90d" | "all";
 
-export function filterByRange<T extends { timestamp: number }>(
+export function filterByRange<T extends { timestamp: number; occurredAt?: number | null }>(
   items: T[],
   range: TimeRange
 ): T[] {
   if (range === "all") return items;
   const days = range === "7d" ? 7 : range === "30d" ? 30 : 90;
   const cutoff = Date.now() - days * 86_400_000;
-  return items.filter((i) => i.timestamp >= cutoff);
+  return items.filter((i) => logicalTimestamp(i) >= cutoff);
 }
 
 export interface FreqItem {
@@ -17,10 +18,10 @@ export interface FreqItem {
   count: number;
 }
 
-export function topFrequencies(items: string[], n = 5): FreqItem[] {
+export function topFrequencies(items: unknown[], n = 5): FreqItem[] {
   const counts: Record<string, number> = {};
   for (const item of items) {
-    const t = item?.trim();
+    const t = typeof item === "string" ? item.trim() : "";
     if (t) counts[t] = (counts[t] ?? 0) + 1;
   }
   return Object.entries(counts)
@@ -45,7 +46,7 @@ export interface StrategyOutcome {
   notUsed: number;
   used: number;
   unsure: number;
-  successRate: number | null;
+  notUsedPct: number | null;
 }
 
 export interface CravingStats {
@@ -68,8 +69,8 @@ export interface CravingStats {
   notUsedCount: number;
   unsureCount: number;
   withUseOutcomeCount: number;
-  successRate: number | null;
-  outcomeByStrategy: StrategyOutcome[];
+  reportedNotUsedPct: number | null;
+  reportedOutcomesByAttemptedAction: StrategyOutcome[];
   topSituations: FreqItem[];
   topEmotions: FreqItem[];
   topPhysical: FreqItem[];
@@ -95,16 +96,16 @@ export function computeCravingStats(logs: CravingLog[]): CravingStats {
     .map((l) => l.confidenceBefore)
     .filter((v): v is number => v != null && v >= 0);
 
-  const pairedIntensity = done.filter((l) => l.intensityAfter != null);
+  const pairedIntensity = done.filter((l) => l.intensity != null && l.intensityAfter != null);
   const drops = pairedIntensity.map(
-    (l) => l.intensity - (l.intensityAfter as number)
+    (l) => (l.intensity as number) - (l.intensityAfter as number)
   );
 
   const pairedConf = done.filter(
     (l) => l.confidenceAfter != null && l.confidenceBefore != null
   );
   const lifts = pairedConf.map(
-    (l) => (l.confidenceAfter as number) - l.confidenceBefore
+    (l) => (l.confidenceAfter as number) - (l.confidenceBefore as number)
   );
 
   const decreasedCount = done.filter(
@@ -124,15 +125,15 @@ export function computeCravingStats(logs: CravingLog[]): CravingStats {
     .map((l) => l.intensity)
     .filter((v): v is number => v != null && v >= 0);
 
-  // Behavioral outcome ("did you end up using?") — the headline success signal.
+  // Behavioral outcome is self-reported. It is not an effectiveness or causal signal.
   const withUseOutcome = done.filter((l) => l.useOutcome);
   const usedCount = done.filter((l) => l.useOutcome === "used").length;
   const notUsedCount = done.filter((l) => l.useOutcome === "not_used").length;
   const unsureCount = done.filter((l) => l.useOutcome === "unsure").length;
 
-  // Per-coping-strategy breakdown: of logs that recorded an outcome, how did each action fare?
+  // Descriptive correlation only, and only where the action was explicitly attempted.
   const strategyMap: Record<string, { notUsed: number; used: number; unsure: number }> = {};
-  for (const l of withUseOutcome) {
+  for (const l of withUseOutcome.filter((entry) => entry.actionAttempted === true)) {
     const key = l.chosenAction || "";
     if (!key) continue;
     const bucket = strategyMap[key] ?? { notUsed: 0, used: 0, unsure: 0 };
@@ -141,7 +142,7 @@ export function computeCravingStats(logs: CravingLog[]): CravingStats {
     else bucket.unsure += 1;
     strategyMap[key] = bucket;
   }
-  const outcomeByStrategy: StrategyOutcome[] = Object.entries(strategyMap)
+  const reportedOutcomesByAttemptedAction: StrategyOutcome[] = Object.entries(strategyMap)
     .map(([strategy, b]) => {
       const stratTotal = b.notUsed + b.used + b.unsure;
       return {
@@ -150,7 +151,7 @@ export function computeCravingStats(logs: CravingLog[]): CravingStats {
         notUsed: b.notUsed,
         used: b.used,
         unsure: b.unsure,
-        successRate: stratTotal > 0 ? (b.notUsed / stratTotal) * 100 : null,
+        notUsedPct: stratTotal > 0 ? (b.notUsed / stratTotal) * 100 : null,
       };
     })
     .sort((a, b) => b.total - a.total);
@@ -175,9 +176,10 @@ export function computeCravingStats(logs: CravingLog[]): CravingStats {
     notUsedCount,
     unsureCount,
     withUseOutcomeCount: withUseOutcome.length,
-    successRate: withUseOutcome.length > 0 ? (notUsedCount / withUseOutcome.length) * 100 : null,
-    outcomeByStrategy,
-    topSituations: topFrequencies(done.flatMap((l) => l.situationPresets ?? [])),
+    reportedNotUsedPct: withUseOutcome.length > 0 ? (notUsedCount / withUseOutcome.length) * 100 : null,
+    reportedOutcomesByAttemptedAction,
+    topSituations: topFrequencies(done.flatMap((l) =>
+      l.cravingType === "active" ? (l.triggers ?? []) : (l.situationPresets ?? []))),
     topEmotions: topFrequencies(done.flatMap((l) => l.emotions ?? [])),
     topPhysical: topFrequencies(done.flatMap((l) => l.physicalSensations ?? [])),
     topThoughts: topFrequencies(done.flatMap((l) => l.thoughtPresets ?? [])),
@@ -225,14 +227,14 @@ export function computeRelapseStats(logs: RelapseLog[]): RelapseStats {
     n === 0
       ? null
       : Math.floor(
-          (Date.now() - Math.max(...done.map((l) => l.timestamp))) / 86_400_000
+          (Date.now() - Math.max(...done.map((l) => logicalTimestamp(l)))) / 86_400_000
         );
 
-  const allHelped = done.flatMap((l) => [
+  const allHelped = done.flatMap((l) => [...new Set([
     ...(l.couldHaveHelpedEarly ?? []),
     ...(l.couldHaveHelpedMiddle ?? []),
     ...(l.couldHaveHelpedLast ?? []),
-  ]);
+  ])]);
 
   const labelCounts: Record<string, number> = {};
   done.forEach((l) => {
@@ -253,7 +255,9 @@ export function computeRelapseStats(logs: RelapseLog[]): RelapseStats {
       done.flatMap((l) => pluralOr(l.preUseThoughtPresets, l.preUseThoughtPreset))
     ),
     topCouldHaveHelped: topFrequencies(allHelped, 5),
-    noSupportContactCount: done.filter((l) => !l.supportContact).length,
+    noSupportContactCount: done.filter((l) =>
+      l.supportContact === "No one right now" ||
+      (!l.supportContact?.trim() && !l.supportContactOther?.trim())).length,
     labelCounts,
   };
 }
@@ -279,15 +283,15 @@ export function computeAnxietyStats(logs: AnxietyLog[]): AnxietyStats {
   const n = logs.length;
   const satWithIt = logs.filter((l) => l.reaction === "Sat with it — didn't react");
   const avoided = logs.filter((l) => l.reaction === "Avoided or left");
-  const withOutcome = logs.filter((l) => l.outcomeAfter != null);
+  const withOutcome = logs.filter((l) => l.outcomeAfter != null && l.outcomeAfter !== "unknown");
   const improved = logs.filter((l) => l.outcomeAfter === "decreased");
   return {
     total: n,
-    avgIntensity: avgOf(logs.map((l) => l.intensity)),
+    avgIntensity: avgOf(logs.map((l) => l.intensity).filter((value): value is number => value != null)),
     topContexts: topFrequencies(logs.map((l) => l.context).filter(Boolean)),
     topTriggers: topFrequencies(logs.flatMap((l) => pluralOr(l.triggers, l.trigger))),
     topReactions: topFrequencies(logs.map((l) => l.reaction).filter(Boolean)),
-    topBodySensations: topFrequencies(logs.flatMap((l) => l.bodySensations ?? [])),
+    topBodySensations: topFrequencies(logs.flatMap((l) => l.bodyLocations?.length ? l.bodyLocations : l.bodySensations ?? [])),
     satWithItCount: satWithIt.length,
     satWithItPct: n > 0 ? (satWithIt.length / n) * 100 : null,
     avoidedCount: avoided.length,
@@ -326,12 +330,12 @@ export function computeBoredomStats(logs: BoredomLog[]): BoredomStats {
     (l) => l.action === "Delayed action" || l.action === "Sat with it — didn't react"
   );
 
-  const withOutcome = logs.filter((l) => l.outcomeAfter != null);
+  const withOutcome = logs.filter((l) => l.outcomeAfter != null && l.outcomeAfter !== "unknown");
   const improved = logs.filter((l) => l.outcomeAfter === "decreased");
 
   return {
     total: n,
-    avgIntensity: avgOf(logs.map((l) => l.intensity)),
+    avgIntensity: avgOf(logs.map((l) => l.intensity).filter((value): value is number => value != null)),
     topFeelingTypes: topFrequencies(logs.flatMap((l) => l.feelingTypes ?? [])),
     topStimulationNeeds: topFrequencies(
       logs.flatMap((l) => pluralOr(l.stimulationNeeds, l.stimulationNeed))
@@ -369,15 +373,17 @@ export function computeWeeklyTrend(
     const wStart = wEnd - 7 * 86_400_000;
     const week = logs.filter(
       (l) =>
-        l.timestamp >= wStart &&
-        l.timestamp < wEnd &&
+        logicalTimestamp(l) >= wStart &&
+        logicalTimestamp(l) < wEnd &&
         l.status === "completed"
     );
     const d = new Date(wStart);
     const weekLabel = d.toLocaleDateString(locale, { day: "numeric", month: "numeric" });
     return {
       weekLabel,
-      avgIntensity: avgOf(week.map((l) => l.intensity)),
+      avgIntensity: avgOf(
+        week.map((l) => l.intensity).filter((value): value is number => value != null)
+      ),
       avgConfidence: avgOf(
         week
           .map((l) => l.confidenceBefore)

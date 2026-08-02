@@ -75,7 +75,7 @@ function milestoneLabel(days: number, t: (key: string) => string): string {
 export function Home() {
   const { cravingLogs, relapseLogs, anxietyLogs, boredomLogs, journal, sobrietyStartDate, loading, cigaretteLogs, logCigarette, updateCigarette, removeCigarette } = useStore();
   const { t, language } = useT();
-  const { session, clearSession } = useActiveRegistration();
+  const { session, discardSession } = useActiveRegistration();
   const [, navigate] = useLocation();
   const { pinned } = usePinnedTools();
   const { openRegistrationLauncher } = useRegistrationLauncher();
@@ -154,7 +154,7 @@ export function Home() {
       <div className="flex-1 overflow-y-auto scroll-smooth-ios px-4 flex flex-col gap-4 pb-safe">
 
         {/* Resume in-progress log entry */}
-        {session && !session.pendingReturn && (
+        {session && (
           <section aria-label={t("resume.card_title")} className="animate-fade-up">
             <div className="bg-primary/10 border border-primary/30 rounded-[1.5rem] p-4 flex flex-col gap-3">
               <div className="flex items-start gap-3">
@@ -171,7 +171,7 @@ export function Home() {
               </div>
               <div className="flex gap-2">
                 <button onClick={() => navigate(session.route)} className="flex-1 bg-primary text-primary-foreground rounded-xl py-2.5 text-sm font-semibold active:scale-95 transition-transform touch-target">{t("common.continue")}</button>
-                <button onClick={() => clearSession()} className="px-4 border border-border rounded-xl py-2.5 text-sm font-medium text-muted-foreground active:scale-95 transition-transform touch-target">{t("resume.discard")}</button>
+                <button onClick={() => { void discardSession({ restoreSuspended: true }); }} className="px-4 border border-border rounded-xl py-2.5 text-sm font-medium text-muted-foreground active:scale-95 transition-transform touch-target">{t("resume.discard")}</button>
               </div>
             </div>
           </section>

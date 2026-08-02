@@ -78,7 +78,7 @@
   --destructive:  0 62% 55%;
   --destructive-foreground: 0 0% 98%;
 
-  --app-font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --app-font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
   --bottom-nav-h: calc(5rem + env(safe-area-inset-bottom, 0px));
   --bottom-nav-shadow: 0 0% 0% / 0.18;
   --modal-overlay: 0 0% 0% / 0.60;
@@ -188,7 +188,9 @@
     min-height: 0;
     overflow: hidden;
     background-color: hsl(var(--background));
-    padding-bottom: calc(var(--bottom-nav-h) + var(--return-banner-h, 0px));
+    padding-bottom: calc(
+      var(--bottom-nav-h) + var(--return-banner-h, 0px) + var(--storage-banner-h, 0px) + var(--data-warning-h, 0px)
+    );
   }
 
   .app-main > * {

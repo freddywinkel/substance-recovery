@@ -23,6 +23,7 @@ import {
   type TimeRange,
 } from "@/lib/analytics";
 import { buildImpactInsights } from "@/lib/impactInsights";
+import { logicalTimestamp } from "@/lib/registrationIds";
 import { BarChart3, TrendingUp } from "lucide-react";
 
 function StatCard({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
@@ -92,8 +93,8 @@ export function Insights() {
     const start = new Date(`${sobrietyStartDate}T00:00:00`).getTime();
     if (!Number.isFinite(start) || start > Date.now()) return null;
     const latestRelapse = relapseLogs
-      .filter((entry) => entry.timestamp >= start)
-      .reduce((latest, entry) => Math.max(latest, entry.timestamp), start);
+      .filter((entry) => logicalTimestamp(entry) >= start)
+      .reduce((latest, entry) => Math.max(latest, logicalTimestamp(entry)), start);
     return Math.max(0, Math.floor((Date.now() - latestRelapse) / 86_400_000));
   }, [relapseLogs, sobrietyStartDate]);
 
@@ -136,7 +137,7 @@ export function Insights() {
       night: t("insights.night"),
     };
     for (const entry of allPatternEntries) {
-      const h = new Date(entry.timestamp).getHours();
+      const h = new Date(logicalTimestamp(entry)).getHours();
       if (h >= 6 && h < 12) buckets.morning++;
       else if (h >= 12 && h < 18) buckets.afternoon++;
       else if (h >= 18 && h < 22) buckets.evening++;
@@ -230,6 +231,8 @@ export function Insights() {
               <StatCard label={t("progress.stat.cravings")} value={cStats.total} />
               <StatCard label={t("progress.stat.lapses")} value={rStats.total} sub={t("progress.stat.in_period")} />
               <StatCard label={t("progress.stat.avg_intensity")} value={cStats.avgIntensity?.toFixed(1) ?? "-"} sub={t("progress.stat.avg_intensity_sub")} />
+              <StatCard label={t("progress.stat.anxiety")} value={aStats.total} sub={t("progress.stat.in_period")} />
+              <StatCard label={t("progress.stat.boredom")} value={bStats.total} sub={t("progress.stat.in_period")} />
             </div>
 
             <div className="rounded-[1.5rem] border border-border/50 bg-card/50 p-4">
@@ -314,6 +317,42 @@ export function Insights() {
               <div className="rounded-[1.5rem] border border-border/50 bg-card/50 p-4">
                 <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground mb-3">{t("progress.section.deescalation")}</p>
                 <FreqBars items={cStats.topActions} translate={tOpt} />
+              </div>
+            )}
+            {aStats.topTriggers.length > 0 && (
+              <div className="rounded-[1.5rem] border border-border/50 bg-card/50 p-4">
+                <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground mb-3">{t("progress.patterns.anxiety_triggers")}</p>
+                <FreqBars items={aStats.topTriggers} translate={tOpt} />
+              </div>
+            )}
+            {aStats.topBodySensations.length > 0 && (
+              <div className="rounded-[1.5rem] border border-border/50 bg-card/50 p-4">
+                <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground mb-3">{t("progress.patterns.body_locations")}</p>
+                <FreqBars items={aStats.topBodySensations} translate={tOpt} />
+              </div>
+            )}
+            {bStats.topFeelingTypes.length > 0 && (
+              <div className="rounded-[1.5rem] border border-border/50 bg-card/50 p-4">
+                <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground mb-3">{t("progress.patterns.restlessness")}</p>
+                <FreqBars items={bStats.topFeelingTypes} translate={tOpt} />
+              </div>
+            )}
+            {bStats.topStimulationNeeds.length > 0 && (
+              <div className="rounded-[1.5rem] border border-border/50 bg-card/50 p-4">
+                <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground mb-3">{t("progress.patterns.needs")}</p>
+                <FreqBars items={bStats.topStimulationNeeds} translate={tOpt} />
+              </div>
+            )}
+            {rStats.topFirstTriggerTypes.length > 0 && (
+              <div className="rounded-[1.5rem] border border-border/50 bg-card/50 p-4">
+                <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground mb-3">{t("progress.patterns.relapse_triggers")}</p>
+                <FreqBars items={rStats.topFirstTriggerTypes} translate={tOpt} />
+              </div>
+            )}
+            {rStats.topMissedWarnings.length > 0 && (
+              <div className="rounded-[1.5rem] border border-border/50 bg-card/50 p-4">
+                <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground mb-3">{t("progress.patterns.warning_signs")}</p>
+                <FreqBars items={rStats.topMissedWarnings} translate={tOpt} />
               </div>
             )}
           </TabsContent>

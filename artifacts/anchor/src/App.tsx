@@ -7,6 +7,8 @@ import { useT } from "@/hooks/useTranslation";
 import { BottomNav } from "@/components/BottomNav";
 import { PwaUpdatePrompt } from "@/components/PwaUpdatePrompt";
 import { RegistrationReturnBanner } from "@/components/RegistrationReturnBanner";
+import { RegistrationStorageBanner } from "@/components/RegistrationStorageBanner";
+import { DataIntegrityBanner } from "@/components/DataIntegrityBanner";
 import { PWAProvider } from "@/hooks/usePWA";
 import { AtmosphericBackground } from "@/components/AtmosphericBackground";
 import { ScrollToTop } from "@/components/ScrollToTop";
@@ -90,6 +92,8 @@ function AppShell() {
           <main className="app-main min-h-0 flex-1 overflow-hidden">
             <AppRoutes />
           </main>
+          <DataIntegrityBanner />
+          <RegistrationStorageBanner />
           <RegistrationReturnBanner />
           <BottomNav />
         </div>

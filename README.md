@@ -7,8 +7,8 @@ A mobile-first Progressive Web App (PWA) for addiction recovery support, built a
 Substance Recovery is an offline-first application that helps users track their recovery journey with tools for:
 - **Journal** — Mood and craving logging with notes
 - **Progress** — Sobriety streak tracking and daily check-ins
-- **Tools** — Clinically-informed interventions (Box Breathing, 5-4-3-2-1 Grounding, Urge Surfing, Cold Water Reset, etc.)
-- **Trackers** — Multi-step flows for Cravings, Relapse, Anxiety, and Boredom
+- **Tools** — Common self-help exercises (paced breathing, 5-4-3-2-1 grounding, urge surfing, sensory reset, etc.); these are not clinical treatment or validated assessment tools
+- **Trackers** — Multi-step flows for planned/active urges, cravings, relapse, anxiety, and boredom
 - **Crisis Support** — Immediate help-now resources
 - **Local backups** — Export and import a JSON backup file from Settings
 

@@ -13,7 +13,7 @@ import {
   importAllData,
 } from "@/db";
 import { useJournal } from "./useJournal";
-import { useLogs } from "./useLogs";
+import { useLogs, type CommittedReadbackIssue } from "./useLogs";
 import { useSettings } from "./useSettings";
 import { useUI } from "./useUI";
 
@@ -31,6 +31,8 @@ interface StoreState {
   crisisService: CrisisService | null;
   emergencyContacts: EmergencyContact[];
   loading: boolean;
+  loadError: Error | null;
+  readbackIssue: CommittedReadbackIssue | null;
 }
 
 interface StoreActions {
@@ -61,6 +63,7 @@ interface StoreActions {
   importData: (
     payload: Record<string, unknown>
   ) => Promise<{ imported: number; skipped: number; errors: string[] }>;
+  clearReadbackIssue: () => void;
 }
 
 export function useStore(): StoreState & StoreActions {
@@ -122,6 +125,8 @@ export function useStore(): StoreState & StoreActions {
     crisisService: settingsHook.crisisService,
     emergencyContacts: settingsHook.emergencyContacts,
     loading,
+    loadError: logsHook.loadError,
+    readbackIssue: logsHook.readbackIssue,
     logEntry: journalHook.logEntry,
     removeEntry: journalHook.removeEntry,
     logCigarette: logsHook.logCigarette,
@@ -147,6 +152,7 @@ export function useStore(): StoreState & StoreActions {
     refresh,
     exportData,
     importData,
+    clearReadbackIssue: logsHook.clearReadbackIssue,
   };
 }
 

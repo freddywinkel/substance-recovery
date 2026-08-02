@@ -24,7 +24,7 @@ export function PwaUpdatePrompt() {
       className="fixed left-3 right-3 z-[60] mx-auto max-w-lg rounded-2xl border border-border bg-card p-3 shadow-xl shadow-black/25"
       style={{
         bottom:
-          "calc(var(--bottom-nav-h) + var(--return-banner-h, 0px) + 0.75rem)",
+          "calc(var(--bottom-nav-h) + var(--return-banner-h, 0px) + var(--storage-banner-h, 0px) + var(--data-warning-h, 0px) + 0.75rem)",
       }}
       role="status"
       aria-live="polite"

@@ -10,9 +10,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { useStore } from "@/hooks/useStore";
-import { updateAnxietyLog, type AnxietyLog } from "@/db";
+import { type AnxietyLog } from "@/db";
 import { useActiveRegistration } from "@/contexts/ActiveRegistrationContext";
 import { useT } from "@/hooks/useTranslation";
+import { toStableOptionId, toStableOptionIds } from "@/lib/registrationIds";
+import { getUrgentSafetyCopy, phoneHref } from "@/lib/registrationSafety";
 import { IntensitySlider } from "@/components/tracker/IntensitySlider";
 import { ChipCol } from "@/components/tracker/ChipCol";
 import { MultiSelectGrid } from "@/components/tracker/MultiSelectGrid";
@@ -22,6 +24,7 @@ import {
   CheckCircle2, Timer, Zap, Wind, Waves, AlertCircle,
   ArrowRight,
   Check,
+  Phone,
 } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────────
@@ -109,10 +112,10 @@ const OUTCOMES = [
 // ─────────────────────────────────────────────────────────────
 interface AnxietyDraft {
   anxietyTypes: string[];
-  intensity: number;
+  intensity: number | null;
   bodyLocations: string[];
   bodyPrediction: string;
-  urgencyHigh: boolean;
+  urgencyHigh: boolean | null;
   context: string;
   triggers: string[];
   reassuranceSeeking: string[];
@@ -120,12 +123,19 @@ interface AnxietyDraft {
   reaction: string;
   showNote: boolean;
   note: string;
+  outcome: string;
 }
 
 export function AnxietyTracker() {
   const [, navigate] = useLocation();
-  const { logAnxiety } = useStore();
-  const { t, tOpt } = useT();
+  const {
+    logAnxiety,
+    updateAnxiety,
+    anxietyLogs,
+    crisisService,
+  } = useStore();
+  const { t, tOpt, language } = useT();
+  const safetyCopy = getUrgentSafetyCopy(language);
 
   const reg = useActiveRegistration();
   const matchedRef = useRef(
@@ -136,17 +146,23 @@ export function AnxietyTracker() {
 
   const [step, setStep] = useState<Step>(() => (m ? (m.step as Step) : "type"));
   const [saving, setSaving] = useState(false);
+  const [outcomeWriting, setOutcomeWriting] = useState(false);
+  const [leavingHome, setLeavingHome] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const saveLock = useRef(false);
+  const outcomeLock = useRef(false);
+  const isWriting = saving || outcomeWriting || leavingHome;
 
   // Step 1 — type + intensity
   const [anxietyTypes, setAnxietyTypes] = useState<string[]>(() => md?.anxietyTypes ?? []);
-  const [intensity, setIntensity] = useState(() => md?.intensity ?? 5);
+  const [intensity, setIntensity] = useState<number | null>(() => md?.intensity ?? null);
 
   // Step 2 — body
   const [bodyLocations, setBodyLocations] = useState<string[]>(() => md?.bodyLocations ?? []);
   const [bodyPrediction, setBodyPrediction] = useState(() => md?.bodyPrediction ?? "");
 
   // Step 3 — urgency + context + reassurance
-  const [urgencyHigh, setUrgencyHigh] = useState(() => md?.urgencyHigh ?? false);
+  const [urgencyHigh, setUrgencyHigh] = useState<boolean | null>(() => md?.urgencyHigh ?? null);
   const [context, setContext] = useState(() => md?.context ?? "");
   const [triggers, setTriggers] = useState<string[]>(() => md?.triggers ?? []);
   const [reassuranceSeeking, setReassuranceSeeking] = useState<string[]>(() => md?.reassuranceSeeking ?? []);
@@ -158,17 +174,20 @@ export function AnxietyTracker() {
   const [note, setNote] = useState(() => md?.note ?? "");
 
   // Done — outcome follow-up
-  const [savedLog, setSavedLog] = useState<AnxietyLog | null>(null);
-  const [outcome, setOutcome] = useState("");
+  const [savedLog, setSavedLog] = useState<AnxietyLog | null>(() => {
+    const id = m?.savedLogId;
+    return id ? anxietyLogs.find((log) => log.id === id) ?? null : null;
+  });
+  const [outcome, setOutcome] = useState(() => md?.outcome ?? "");
 
   // Persisted draft snapshot — resume after tab switch / reload.
   const draft = useMemo<AnxietyDraft>(
     () => ({
       anxietyTypes, intensity, bodyLocations, bodyPrediction, urgencyHigh,
-      context, triggers, reassuranceSeeking, linkedStates, reaction, showNote, note,
+      context, triggers, reassuranceSeeking, linkedStates, reaction, showNote, note, outcome,
     }),
     [anxietyTypes, intensity, bodyLocations, bodyPrediction, urgencyHigh,
-     context, triggers, reassuranceSeeking, linkedStates, reaction, showNote, note],
+     context, triggers, reassuranceSeeking, linkedStates, reaction, showNote, note, outcome],
   );
 
   useEffect(() => {
@@ -181,6 +200,8 @@ export function AnxietyTracker() {
         stepIndex: STEP_ORDER.indexOf(step) + 1 || STEP_ORDER.length,
         stepCount: STEP_ORDER.length,
       });
+    } else if (matchedRef.current.pendingReturn) {
+      reg.patchSession({ pendingReturn: undefined });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -199,6 +220,19 @@ export function AnxietyTracker() {
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step, draft]);
+
+  useEffect(() => {
+    const id = m?.savedLogId;
+    if (!savedLog && id) {
+      const restored = anxietyLogs.find((log) => log.id === id);
+      if (restored) {
+        setSavedLog(restored);
+        if (!outcome && restored.outcomeAfter) {
+          setOutcome(restored.outcomeAfter === "unknown" ? "dont-know" : restored.outcomeAfter);
+        }
+      }
+    }
+  }, [anxietyLogs, m?.savedLogId, outcome, savedLog]);
 
   // Completion messages keyed by stored English reaction value
   const MESSAGES: Record<string, string> = {
@@ -231,47 +265,141 @@ export function AnxietyTracker() {
     switch (step) {
       case "type":     return anxietyTypes.length > 0;
       case "body":     return bodyLocations.length > 0;
-      case "urgency":  return true;
+      case "urgency":  return urgencyHigh !== null;
       case "reaction": return reaction !== "";
       default:         return true;
     }
-  }, [step, anxietyTypes, bodyLocations, reaction]);
+  }, [step, anxietyTypes, bodyLocations, urgencyHigh, reaction]);
 
   async function handleSave() {
+    if (saveLock.current || urgencyHigh === null) return;
+    saveLock.current = true;
     setSaving(true);
-    const saved = await logAnxiety({
-      timestamp: Date.now(),
-      intensity,
-      context,
-      trigger: triggers[0] ?? "",
-      bodySensations: bodyLocations,
-      reaction,
-      note,
-      anxietyTypes,
-      bodyLocations,
-      bodyPrediction,
-      urgencyHigh,
-      reassuranceSeeking,
-      linkedState: linkedStates[0] ?? "",
-      triggers,
-      linkedStates,
-      outcomeAfter: null,
-    });
-    setSavedLog(saved);
-    setSaving(false);
-    reg.clearSession();
-    setStep("done");
+    setError(null);
+    try {
+      const completedAt = Date.now();
+      const startedAt = reg.session?.startedAt ?? completedAt;
+      const saved = await logAnxiety({
+        timestamp: startedAt,
+        occurredAt: startedAt,
+        startedAt,
+        completedAt,
+        dataVersion: 2,
+        contentVersion: "registration-v2",
+        answers: {
+          anxietyTypes: toStableOptionIds(anxietyTypes),
+          intensity,
+          bodyLocations: toStableOptionIds(bodyLocations),
+          urgencyHigh,
+          context: toStableOptionId(context),
+          triggers: toStableOptionIds(triggers),
+          reassuranceSeeking: toStableOptionIds(reassuranceSeeking),
+          linkedStates: toStableOptionIds(linkedStates),
+          reaction: toStableOptionId(reaction),
+        },
+        intensity,
+        context,
+        trigger: triggers[0] ?? "",
+        bodySensations: bodyLocations,
+        reaction,
+        note,
+        anxietyTypes,
+        bodyLocations,
+        bodyPrediction,
+        urgencyHigh,
+        reassuranceSeeking,
+        linkedState: linkedStates[0] ?? "",
+        triggers,
+        linkedStates,
+        outcomeAfter: null,
+      });
+      setSavedLog(saved);
+      reg.patchSession({ savedLogId: saved.id, step: "done", draft });
+      setStep("done");
+    } catch {
+      setError(
+        language === "nl"
+          ? "Opslaan is niet gelukt. Probeer het opnieuw."
+          : "Saving failed. Please try again.",
+      );
+    } finally {
+      saveLock.current = false;
+      setSaving(false);
+    }
   }
 
   const applyOutcome = useCallback(async (next: string) => {
-    if (!savedLog) return;
-    const real = (["decreased", "same", "increased"] as const).find((o) => o === next) ?? null;
-    const updated: AnxietyLog = { ...savedLog, outcomeAfter: real };
-    setSavedLog(updated);
-    await updateAnxietyLog(updated);
-  }, [savedLog]);
+    if (!savedLog || outcomeLock.current) return;
+    outcomeLock.current = true;
+    setOutcomeWriting(true);
+    setError(null);
+    try {
+      const real = next === "dont-know"
+        ? "unknown"
+        : (["decreased", "same", "increased"] as const).find((item) => item === next) ?? null;
+      const updated: AnxietyLog = { ...savedLog, outcomeAfter: real };
+      await updateAnxiety(updated);
+      setSavedLog(updated);
+      setOutcome(next);
+    } catch {
+      setError(
+        language === "nl"
+          ? "De uitkomst kon niet worden opgeslagen. Probeer het opnieuw."
+          : "The outcome could not be saved. Please try again.",
+      );
+    } finally {
+      outcomeLock.current = false;
+      setOutcomeWriting(false);
+    }
+  }, [language, savedLog, updateAnxiety]);
+
+  const openSupportRoute = useCallback(async (path: string) => {
+    if (isWriting) return;
+    if (path === "/craving" || path === "/boredom") {
+      setLeavingHome(true);
+      setError(null);
+      try {
+        // The Anxiety record is already saved on the done screen. Close its
+        // resumable session before starting a different registration type so
+        // the destination cannot silently replace a pending Anxiety return.
+        await reg.clearSession();
+        navigate(path);
+      } catch {
+        setError(
+          language === "nl"
+            ? "De registratie is opgeslagen, maar de volgende registratie kon niet worden gestart. Probeer opnieuw."
+            : "The log is saved, but the next registration could not be started. Please try again.",
+        );
+        setLeavingHome(false);
+      }
+      return;
+    }
+    reg.patchSession({ pendingReturn: { returnRoute: "/anxiety", returnStep: step } });
+    navigate(path);
+  }, [isWriting, language, navigate, reg, step]);
+
+  const goHome = useCallback(async () => {
+    if (isWriting) return;
+    setLeavingHome(true);
+    setError(null);
+    try {
+      if (!(await reg.completeSession())) {
+        throw new Error("Anxiety registration could not be completed.");
+      }
+      navigate("/");
+    } catch {
+      setError(
+        language === "nl"
+          ? "De registratie is opgeslagen, maar afsluiten lukte niet. Probeer opnieuw."
+          : "The log is saved, but closing it failed. Please try again.",
+      );
+    } finally {
+      setLeavingHome(false);
+    }
+  }, [isWriting, language, navigate, reg]);
 
   function goNext() {
+    if (isWriting) return;
     if (step === "type") setStep("body");
     else if (step === "body") setStep("urgency");
     else if (step === "urgency") setStep("details");
@@ -279,19 +407,50 @@ export function AnxietyTracker() {
     else if (step === "reaction") handleSave();
   }
   function goBack() {
+    if (isWriting) return;
     if (step === "body") setStep("type");
     else if (step === "urgency") setStep("body");
     else if (step === "details") setStep("urgency");
     else if (step === "reaction") setStep("details");
   }
 
-  const completionMsg = MESSAGES[reaction] ?? t("anxiety.msg.default");
+  const completionMsg = urgencyHigh === true
+    ? (language === "nl"
+        ? "Je registratie is opgeslagen. Omdat je dit als dringend hebt gemarkeerd, is beoordeling of ondersteuning door een persoon belangrijk."
+        : "Your log is saved. Because you marked this as urgent, assessment or support from a person is important.")
+    : MESSAGES[reaction] ?? t("anxiety.msg.default");
+
+  const urgentSupportPanel = (
+    <div className="w-full max-w-xs rounded-2xl border border-amber-500/50 bg-card p-4 text-left">
+      <div className="mb-2 flex items-center gap-2">
+        <Phone size={16} className="text-amber-500" />
+        <p className="text-sm font-semibold text-foreground">{safetyCopy.title}</p>
+      </div>
+      <div className="space-y-2 text-sm leading-relaxed text-muted-foreground">
+        <p>{safetyCopy.assessmentLimit}</p>
+        <p>{safetyCopy.emergency}</p>
+        <p>{safetyCopy.selfHarm}</p>
+        <p>{safetyCopy.humanHelp}</p>
+      </div>
+      <div className="mt-3 flex flex-col gap-2">
+        <a href="tel:112" className="text-sm font-semibold text-primary">{safetyCopy.call112}</a>
+        <a href="tel:113" className="text-sm font-semibold text-primary">{safetyCopy.call113}</a>
+        <a href="tel:08000113" className="text-sm font-semibold text-primary">{safetyCopy.call0800}</a>
+        <a href="https://www.113.nl" target="_blank" rel="noreferrer" className="text-sm font-semibold text-primary">{safetyCopy.visit113}</a>
+        {crisisService?.number && (
+          <a href={phoneHref(crisisService.number)} className="text-sm font-semibold text-primary">
+            {safetyCopy.configuredService}: {crisisService.name} ({crisisService.number})
+          </a>
+        )}
+      </div>
+    </div>
+  );
 
   return (
     <StepLayout
       title={t("anxiety.title")}
       subtitle={step !== "done" ? t("common.step_of").replace("{n}", String(stepIdx + 1)).replace("{total}", String(totalSteps)) : undefined}
-      back
+      back={!isWriting}
       step={step !== "done" ? { current: stepIdx + 1, total: totalSteps } : undefined}
       actionBar={
         step !== "done" ? (
@@ -381,10 +540,11 @@ export function AnxietyTracker() {
             {/* Urgency toggle */}
             <div className="grid grid-cols-2 gap-3">
               <button
-                onClick={() => setUrgencyHigh(true)}
-                aria-pressed={urgencyHigh}
+                type="button"
+                onClick={() => setUrgencyHigh(urgencyHigh === true ? null : true)}
+                aria-pressed={urgencyHigh === true}
                 className={`flex flex-col items-center gap-2 p-4 rounded-2xl border transition-all touch-target ${
-                  urgencyHigh
+                  urgencyHigh === true
                     ? "bg-primary border-primary text-primary-foreground"
                     : "bg-card border-border text-muted-foreground hover:border-primary/30"
                 }`}
@@ -392,14 +552,15 @@ export function AnxietyTracker() {
                 <AlertCircle size={22} />
                 <span className="text-sm font-medium text-center leading-tight flex items-center gap-1">
                   {t("anxiety.urgency.high")}
-                  {urgencyHigh && <Check size={14} strokeWidth={3} />}
+                  {urgencyHigh === true && <Check size={14} strokeWidth={3} />}
                 </span>
               </button>
               <button
-                onClick={() => setUrgencyHigh(false)}
-                aria-pressed={!urgencyHigh}
+                type="button"
+                onClick={() => setUrgencyHigh(urgencyHigh === false ? null : false)}
+                aria-pressed={urgencyHigh === false}
                 className={`flex flex-col items-center gap-2 p-4 rounded-2xl border transition-all touch-target ${
-                  !urgencyHigh
+                  urgencyHigh === false
                     ? "bg-primary border-primary text-primary-foreground"
                     : "bg-card border-border text-muted-foreground hover:border-primary/30"
                 }`}
@@ -407,13 +568,15 @@ export function AnxietyTracker() {
                 <Wind size={22} />
                 <span className="text-sm font-medium text-center leading-tight flex items-center gap-1">
                   {t("anxiety.urgency.low")}
-                  {!urgencyHigh && <Check size={14} strokeWidth={3} />}
+                  {urgencyHigh === false && <Check size={14} strokeWidth={3} />}
                 </span>
               </button>
             </div>
 
-            {/* Panic shortcuts (if urgent) */}
-            {urgencyHigh && (
+            {urgencyHigh === true && urgentSupportPanel}
+
+            {/* Coping shortcuts complement, but do not replace, human help. */}
+            {urgencyHigh === true && (
               <div className="bg-card border border-border rounded-2xl p-4 flex flex-col gap-3">
                 <p className="text-sm font-medium text-foreground">{t("anxiety.quick_tools")}</p>
                 {[
@@ -423,9 +586,11 @@ export function AnxietyTracker() {
                   { labelKey: "common.delay_timer", path: "/delay", icon: <Timer size={15} /> },
                 ].map(({ labelKey, path, icon }) => (
                   <button
+                    type="button"
                     key={path}
-                    onClick={() => navigate(path)}
-                    className="flex items-center gap-3 text-sm text-foreground bg-muted rounded-xl px-4 py-3 hover:bg-muted/80 transition-colors touch-target text-left"
+                    disabled={isWriting}
+                    onClick={() => openSupportRoute(path)}
+                    className="flex items-center gap-3 text-sm text-foreground bg-muted rounded-xl px-4 py-3 hover:bg-muted/80 transition-colors touch-target text-left disabled:opacity-50"
                   >
                     <span className="text-primary">{icon}</span>
                     <span className="font-medium">{t(labelKey)}</span>
@@ -444,8 +609,10 @@ export function AnxietyTracker() {
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-semibold text-foreground">{t("anxiety.q.details")}</h2>
               <button
+                type="button"
+                disabled={isWriting}
                 onClick={() => setStep("reaction")}
-                className="text-sm text-primary hover:opacity-75 transition-opacity touch-target"
+                className="text-sm text-primary hover:opacity-75 transition-opacity touch-target disabled:opacity-50"
               >
                 {t("common.skip")}
               </button>
@@ -518,6 +685,12 @@ export function AnxietyTracker() {
           </>
         )}
 
+        {step !== "done" && error && (
+          <p role="alert" className="rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+            {error}
+          </p>
+        )}
+
         {/* ── Done ──────────────────────────────────────────── */}
         {step === "done" && (
           <div className="flex flex-col items-center text-center gap-6 pt-8">
@@ -531,11 +704,15 @@ export function AnxietyTracker() {
               </p>
             </div>
 
+            {urgencyHigh === true && urgentSupportPanel}
+
             {/* Routing based on linked state */}
             {linkedStates.includes("This is triggering a craving") && (
               <button
-                onClick={() => navigate("/craving")}
-                className="flex items-center gap-2 bg-primary/10 border border-primary/30 rounded-2xl px-5 py-3.5 text-sm font-medium text-foreground hover:bg-primary/15 transition-colors touch-target"
+                type="button"
+                disabled={isWriting}
+                onClick={() => openSupportRoute("/craving")}
+                className="flex items-center gap-2 bg-primary/10 border border-primary/30 rounded-2xl px-5 py-3.5 text-sm font-medium text-foreground hover:bg-primary/15 transition-colors touch-target disabled:opacity-50"
               >
                 <Zap size={16} className="text-primary" />
                 {t("craving.title")} →
@@ -543,8 +720,10 @@ export function AnxietyTracker() {
             )}
             {linkedStates.includes("This started from restlessness") && (
               <button
-                onClick={() => navigate("/boredom")}
-                className="flex items-center gap-2 bg-card border border-border rounded-2xl px-5 py-3.5 text-sm font-medium text-foreground hover:border-primary/40 transition-colors touch-target"
+                type="button"
+                disabled={isWriting}
+                onClick={() => openSupportRoute("/boredom")}
+                className="flex items-center gap-2 bg-card border border-border rounded-2xl px-5 py-3.5 text-sm font-medium text-foreground hover:border-primary/40 transition-colors touch-target disabled:opacity-50"
               >
                 {t("boredom.title")} →
               </button>
@@ -563,9 +742,10 @@ export function AnxietyTracker() {
                 {OUTCOMES.map(({ value, label }) => (
                   <button
                     key={value}
+                    type="button"
+                    disabled={isWriting || !savedLog}
                     onClick={() => {
                       const next = outcome === value ? "" : value;
-                      setOutcome(next);
                       applyOutcome(next);
                     }}
                     aria-pressed={outcome === value}
@@ -573,7 +753,7 @@ export function AnxietyTracker() {
                       outcome === value
                         ? "bg-primary/10 border-primary text-foreground"
                         : "bg-card border-border text-muted-foreground"
-                    }`}
+                    } disabled:opacity-50`}
                   >
                     {tOpt(label)}
                   </button>
@@ -581,23 +761,35 @@ export function AnxietyTracker() {
               </div>
             </div>
 
+            {error && (
+              <p role="alert" className="w-full max-w-xs rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-left text-sm text-destructive">
+                {error}
+              </p>
+            )}
+
             <div className="flex flex-col gap-3 w-full max-w-xs">
               <button
-                onClick={() => navigate("/delay")}
-                className="flex items-center justify-center gap-2 bg-card border border-border rounded-2xl px-5 py-3.5 text-sm font-medium text-foreground hover:border-primary/40 transition-colors touch-target"
+                type="button"
+                disabled={isWriting}
+                onClick={() => openSupportRoute("/delay")}
+                className="flex items-center justify-center gap-2 bg-card border border-border rounded-2xl px-5 py-3.5 text-sm font-medium text-foreground hover:border-primary/40 transition-colors touch-target disabled:opacity-50"
               >
                 <Timer size={16} className="text-primary" />
                 {t("common.delay_timer")}
               </button>
               <button
-                onClick={() => navigate("/tools")}
-                className="flex items-center justify-center gap-2 bg-card border border-border rounded-2xl px-5 py-3.5 text-sm font-medium text-foreground hover:border-primary/40 transition-colors touch-target"
+                type="button"
+                disabled={isWriting}
+                onClick={() => openSupportRoute("/tools")}
+                className="flex items-center justify-center gap-2 bg-card border border-border rounded-2xl px-5 py-3.5 text-sm font-medium text-foreground hover:border-primary/40 transition-colors touch-target disabled:opacity-50"
               >
                 {t("common.browse_tools")}
               </button>
               <button
-                onClick={() => navigate("/")}
-                className="text-sm text-muted-foreground hover:text-foreground transition-colors touch-target"
+                type="button"
+                disabled={isWriting}
+                onClick={goHome}
+                className="text-sm text-muted-foreground hover:text-foreground transition-colors touch-target disabled:opacity-50"
               >
                 {t("common.done_home")}
               </button>

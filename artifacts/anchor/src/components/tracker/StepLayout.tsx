@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { useLocation } from "wouter";
 import { ArrowLeft } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -11,6 +12,7 @@ interface StepLayoutProps {
   showStepCounter?: boolean;
   contentClassName?: string;
   actionBar?: React.ReactNode;
+  backDisabled?: boolean;
   children: React.ReactNode;
 }
 
@@ -22,10 +24,18 @@ export function StepLayout({
   showStepCounter,
   contentClassName,
   actionBar,
+  backDisabled = false,
   children,
 }: StepLayoutProps) {
   const [, navigate] = useLocation();
   const { t } = useT();
+  const contentRef = useRef<HTMLDivElement>(null);
+
+  // The content panel, not `window`, owns scrolling in the app shell. Reset it
+  // whenever a wizard advances so every new question starts at its heading.
+  useEffect(() => {
+    contentRef.current?.scrollTo({ top: 0, behavior: "auto" });
+  }, [step?.current]);
   const goBack = () => {
     if (window.history.length > 1) {
       window.history.back();
@@ -45,7 +55,8 @@ export function StepLayout({
           {back && (
             <button
               onClick={goBack}
-              className="p-2 -ml-2 rounded-full hover:bg-muted transition-colors touch-target"
+              disabled={backDisabled}
+              className="p-2 -ml-2 rounded-full hover:bg-muted transition-colors touch-target disabled:cursor-not-allowed disabled:opacity-40"
               aria-label={t("common.back")}
             >
               <ArrowLeft size={20} className="text-foreground" />
@@ -78,7 +89,10 @@ export function StepLayout({
       </div>
 
       {/* Content */}
-      <div className={cn("flex-1 overflow-y-auto scroll-smooth-ios px-4 py-4 flex flex-col gap-5", contentClassName)}>
+      <div
+        ref={contentRef}
+        className={cn("flex-1 overflow-y-auto scroll-smooth-ios px-4 py-4 flex flex-col gap-5", contentClassName)}
+      >
         {children}
         {actionBar && (
           <div className="mt-auto border-t border-border/70 pb-1 pt-3">

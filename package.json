@@ -5,15 +5,19 @@
   "scripts": {
     "preinstall": "node scripts/ensure-pnpm.cjs",
     "build": "pnpm run typecheck && pnpm -r --if-present run build",
+    "test": "pnpm --filter @workspace/anchor run test",
+    "verify:pwa": "node scripts/verify-built-pwa.mjs",
     "typecheck:libs": "node ./node_modules/typescript/lib/tsc.js --build",
     "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck"
   },
+  "packageManager": "pnpm@11.9.0",
   "private": true,
   "devDependencies": {
     "@rollup/rollup-win32-x64-msvc": "^4.62.2",
     "@tailwindcss/oxide-win32-x64-msvc": "^4.3.1",
     "lightningcss-win32-x64-msvc": "^1.32.0",
     "prettier": "^3.8.1",
-    "typescript": "~5.9.2"
+    "typescript": "~5.9.2",
+    "vitest": "4.1.10"
   }
 }

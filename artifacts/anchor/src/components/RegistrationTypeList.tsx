@@ -1,7 +1,9 @@
-import { Link } from "wouter";
+import { useState } from "react";
+import { useLocation } from "wouter";
 import { useStore } from "@/hooks/useStore";
 import { useT } from "@/hooks/useTranslation";
 import { CATEGORY_META } from "@/lib/constants";
+import { useActiveRegistration } from "@/contexts/ActiveRegistrationContext";
 
 type RegistrationType = "trek" | "craving" | "boredom" | "anxiety" | "relapse";
 
@@ -12,6 +14,35 @@ type RegistrationTypeListProps = {
 export function RegistrationTypeList({ onSelect }: RegistrationTypeListProps) {
   const { cravingLogs, relapseLogs, anxietyLogs, boredomLogs } = useStore();
   const { t } = useT();
+  const regSession = useActiveRegistration();
+  const [, navigate] = useLocation();
+  const [pendingSelection, setPendingSelection] = useState<{
+    to: string;
+    type: RegistrationType;
+    label: string;
+  } | null>(null);
+  const [switching, setSwitching] = useState(false);
+
+  const selectRegistration = async (next: { to: string; type: RegistrationType }) => {
+    const active = regSession.session;
+    if (active && active.type !== next.type) {
+      // A completed record is already durable, so it does not need to be kept
+      // as a resumable draft when another registration starts.
+      if (active.savedLogId || active.step === "done") {
+        try {
+          await regSession.clearSession();
+        } catch {
+          return;
+        }
+      } else {
+        const selected = registrations.find((registration) => registration.type === next.type);
+        setPendingSelection({ ...next, label: selected?.label ?? next.type });
+        return;
+      }
+    }
+    onSelect?.();
+    navigate(next.to);
+  };
 
   const lastActiveCraving = cravingLogs.find((log) => log.cravingType === "active");
   const lastPassiveCraving = cravingLogs.find((log) => log.cravingType !== "active");
@@ -71,15 +102,94 @@ export function RegistrationTypeList({ onSelect }: RegistrationTypeListProps) {
     return t("registrations.days_ago").replace("{n}", String(days));
   };
 
+  const resolveDraftSwitch = async (choice: "resume" | "preserve" | "discard") => {
+    const active = regSession.session;
+    const next = pendingSelection;
+    if (!next || switching) return;
+
+    if (choice === "resume") {
+      if (active) navigate(active.route);
+      onSelect?.();
+      return;
+    }
+
+    setSwitching(true);
+    try {
+      const persisted = choice === "preserve"
+        ? await regSession.suspendSession()
+        : await regSession.discardSession({ restoreSuspended: false });
+      if (!persisted) return;
+      onSelect?.();
+      navigate(next.to);
+    } finally {
+      setSwitching(false);
+    }
+  };
+
+  if (pendingSelection) {
+    return (
+      <section
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="registration-switch-title"
+        aria-describedby="registration-switch-description"
+        className="rounded-[1.5rem] border border-primary/30 bg-card p-4 shadow-xl"
+      >
+        <h2 id="registration-switch-title" className="text-base font-semibold text-foreground">
+          {t("registration.switch_title")}
+        </h2>
+        <p id="registration-switch-description" className="mt-2 text-sm leading-relaxed text-muted-foreground">
+          {t("registration.switch_body").replace("{next}", pendingSelection.label)}
+        </p>
+        <div className="mt-4 flex flex-col gap-2">
+          <button
+            type="button"
+            disabled={switching}
+            onClick={() => { void resolveDraftSwitch("resume"); }}
+            className="min-h-12 rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+          >
+            {t("registration.switch_resume")}
+          </button>
+          <button
+            type="button"
+            disabled={switching}
+            onClick={() => { void resolveDraftSwitch("preserve"); }}
+            className="min-h-12 rounded-xl border border-primary/40 bg-primary/10 px-4 py-3 text-sm font-semibold text-foreground disabled:opacity-60"
+          >
+            {t("registration.switch_preserve")}
+          </button>
+          <button
+            type="button"
+            disabled={switching}
+            onClick={() => { void resolveDraftSwitch("discard"); }}
+            className="min-h-12 rounded-xl border border-border px-4 py-3 text-sm font-medium text-muted-foreground disabled:opacity-60"
+          >
+            {t("registration.switch_discard")}
+          </button>
+          <button
+            type="button"
+            disabled={switching}
+            onClick={() => setPendingSelection(null)}
+            className="min-h-11 px-4 py-2 text-sm font-medium text-muted-foreground disabled:opacity-60"
+          >
+            {t("common.cancel")}
+          </button>
+        </div>
+      </section>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-3">
       {registrations.map((reg, i) => {
         const meta = CATEGORY_META[reg.type];
         const lastText = formatLastLog(reg.lastLog);
         return (
-          <Link key={reg.to} href={reg.to} onClick={onSelect} asChild>
-            <a
-              className="block animate-fade-up focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+          <button
+              type="button"
+              key={reg.to}
+              onClick={() => { void selectRegistration(reg); }}
+              className="block w-full animate-fade-up text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
               style={{ animationDelay: `${i * 0.03}s` }}
             >
               <div className="group min-h-[112px] rounded-[1.5rem] border border-border/50 bg-card/70 p-4 shadow-lg shadow-black/10 transition-all duration-300 hover:bg-card/85 active:scale-[0.98] flex items-center gap-4">
@@ -100,8 +210,7 @@ export function RegistrationTypeList({ onSelect }: RegistrationTypeListProps) {
                   )}
                 </div>
               </div>
-            </a>
-          </Link>
+          </button>
         );
       })}
     </div>

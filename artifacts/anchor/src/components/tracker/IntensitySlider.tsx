@@ -1,5 +1,20 @@
 import { CSSProperties } from "react";
 
+const RANGE_INTERACTION_KEYS = new Set([
+  "ArrowLeft",
+  "ArrowRight",
+  "ArrowUp",
+  "ArrowDown",
+  "Home",
+  "End",
+  "PageUp",
+  "PageDown",
+]);
+
+export function isRangeInteractionKey(key: string): boolean {
+  return RANGE_INTERACTION_KEYS.has(key);
+}
+
 export function IntensitySlider({
   value,
   onChange,
@@ -9,8 +24,9 @@ export function IntensitySlider({
   lowLabel,
   highLabel,
   ariaLabel,
+  unsetLabel = "—",
 }: {
-  value: number;
+  value: number | null;
   onChange: (v: number) => void;
   min?: number;
   max?: number;
@@ -18,12 +34,15 @@ export function IntensitySlider({
   lowLabel?: string;
   highLabel?: string;
   ariaLabel?: string;
+  unsetLabel?: string;
 }) {
-  const pct = ((value - min) / (max - min)) * 100;
+  const midpoint = Math.round((min + max) / 2);
+  const inputValue = value ?? midpoint;
+  const pct = ((inputValue - min) / (max - min)) * 100;
   return (
     <div className="flex flex-col gap-4">
       <div className="text-center">
-        <span className="text-7xl font-light text-primary tabular-nums">{value}</span>
+        <span className="text-7xl font-light text-primary tabular-nums">{value ?? unsetLabel}</span>
         {label && <p className="text-sm text-muted-foreground mt-1">{label}</p>}
       </div>
       <input
@@ -31,8 +50,23 @@ export function IntensitySlider({
         min={min}
         max={max}
         step={1}
-        value={value}
+        value={inputValue}
         aria-label={ariaLabel ?? label ?? [lowLabel, highLabel].filter(Boolean).join(" – ")}
+        aria-valuetext={value == null ? unsetLabel : String(value)}
+        onPointerDown={() => {
+          if (value == null) onChange(midpoint);
+        }}
+        onKeyDown={(event) => {
+          // Focusing or tabbing past an unanswered slider is not an answer.
+          // Only keys that intentionally operate a native range control may
+          // initialize it.
+          if (
+            value == null &&
+            isRangeInteractionKey(event.key)
+          ) {
+            onChange(midpoint);
+          }
+        }}
         onChange={(e) => onChange(Number(e.target.value))}
         className="intensity-slider w-full"
         style={{ "--thumb-pct": `${pct}%` } as CSSProperties}

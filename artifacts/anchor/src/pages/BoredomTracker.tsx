@@ -10,7 +10,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { useStore } from "@/hooks/useStore";
-import { updateBoredomLog, type BoredomLog } from "@/db";
+import { getBoredomLogs, type BoredomLog } from "@/db";
 import { useActiveRegistration } from "@/contexts/ActiveRegistrationContext";
 import { useT } from "@/hooks/useTranslation";
 import { IntensitySlider } from "@/components/tracker/IntensitySlider";
@@ -19,6 +19,8 @@ import { MultiSelectGrid } from "@/components/tracker/MultiSelectGrid";
 import { StepLayout } from "@/components/tracker/StepLayout";
 import { ActionBar } from "@/components/tracker/ActionBar";
 import { CheckCircle2, Timer, Zap, Wind, ArrowRight } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { removeHiddenOtherText, toStableOptionId, toStableOptionIds } from "@/lib/registrationIds";
 
 // ─────────────────────────────────────────────────────────────
 // Step types
@@ -52,7 +54,7 @@ const STIMULATION_NEEDS = [
 ];
 
 const CONVERT_CHECKS = [
-  "No — this is restlessness",
+  "Yes — this feels like restlessness",
   "Maybe a craving",
   "Maybe anxiety",
   "Maybe loneliness",
@@ -83,7 +85,8 @@ const RESCUE_CALM = ["Shower", "Tea or water", "Cold water on face", "Breathe sl
 const RESCUE_MOVE = ["Short walk", "Stretch", "Shake tension out", "Paced steps", "2-minute movement"];
 const RESCUE_HANDS = ["Fold laundry", "Tidy one area", "Doodle", "Snack prep", "Organize a drawer"];
 const RESCUE_MENTAL = ["Simple reading", "Podcast", "Low-intensity game", "Recipe browsing", "Light admin task"];
-const RESCUE_ENV = ["Open a window", "Softer lights", "Leave the room", "Change clothes", "Sit somewhere else"];
+const RESCUE_SENSORY = ["Hold something textured", "Notice one scent", "Cold or warm water on hands", "Listen to one sound", "Fresh air or softer light"];
+const RESCUE_SOCIAL = ["Call or text someone", "Sit near other people", "Ask someone to join a short walk", "Send a simple check-in message"];
 
 const MAIN_ACTIONS = [
   "Sat with it — didn't react",
@@ -139,11 +142,13 @@ function RescueSection({
 // ─────────────────────────────────────────────────────────────
 interface BoredomDraft {
   restlessnessTypes: string[];
-  intensity: number;
+  intensity: number | null;
   stimulationNeeds: string[];
   convertCheck: string;
   situation: string;
+  situationOther: string;
   urge: string;
+  urgeOther: string;
   rescueMenu: string[];
   action: string;
   showNote: boolean;
@@ -152,8 +157,9 @@ interface BoredomDraft {
 
 export function BoredomTracker() {
   const [, navigate] = useLocation();
-  const { logBoredom } = useStore();
+  const { logBoredom, updateBoredom } = useStore();
   const { t, tOpt } = useT();
+  const { toast } = useToast();
 
   const reg = useActiveRegistration();
   const matchedRef = useRef(
@@ -167,7 +173,7 @@ export function BoredomTracker() {
 
   // Step 1 — type + intensity
   const [restlessnessTypes, setRestlessnessTypes] = useState<string[]>(() => md?.restlessnessTypes ?? []);
-  const [intensity, setIntensity] = useState(() => md?.intensity ?? 5);
+  const [intensity, setIntensity] = useState<number | null>(() => md?.intensity ?? null);
 
   // Step 2 — need + convert check
   const [stimulationNeeds, setStimulationNeeds] = useState<string[]>(() => md?.stimulationNeeds ?? []);
@@ -175,7 +181,9 @@ export function BoredomTracker() {
 
   // Step 3 — situation + urge
   const [situation, setSituation] = useState(() => md?.situation ?? "");
+  const [situationOther, setSituationOther] = useState(() => md?.situationOther ?? "");
   const [urge, setUrge] = useState(() => md?.urge ?? "");
+  const [urgeOther, setUrgeOther] = useState(() => md?.urgeOther ?? "");
 
   // Step 4 — rescue menu + main action + note
   const [rescueMenu, setRescueMenu] = useState<string[]>(() => md?.rescueMenu ?? []);
@@ -186,20 +194,24 @@ export function BoredomTracker() {
   // Done — outcome follow-up
   const [savedLog, setSavedLog] = useState<BoredomLog | null>(null);
   const [outcome, setOutcome] = useState("");
+  const [outcomeSaving, setOutcomeSaving] = useState(false);
+  const [navigationSaving, setNavigationSaving] = useState(false);
+  const outcomeWriteLock = useRef(false);
+  const navigationWriteLock = useRef(false);
 
   // Persisted draft snapshot — resume after tab switch / reload.
   const draft = useMemo<BoredomDraft>(
     () => ({
       restlessnessTypes, intensity, stimulationNeeds, convertCheck, situation,
-      urge, rescueMenu, action, showNote, note,
+      situationOther, urge, urgeOther, rescueMenu, action, showNote, note,
     }),
     [restlessnessTypes, intensity, stimulationNeeds, convertCheck, situation,
-     urge, rescueMenu, action, showNote, note],
+     situationOther, urge, urgeOther, rescueMenu, action, showNote, note],
   );
 
   useEffect(() => {
     if (!matchedRef.current) {
-      reg.startSession({
+      void reg.startSession({
         type: "boredom",
         route: "/boredom",
         step,
@@ -207,6 +219,8 @@ export function BoredomTracker() {
         stepIndex: STEP_ORDER.indexOf(step) + 1 || STEP_ORDER.length,
         stepCount: STEP_ORDER.length,
       });
+    } else if (matchedRef.current.pendingReturn) {
+      void reg.patchSession({ pendingReturn: undefined });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -217,7 +231,7 @@ export function BoredomTracker() {
       firstSync.current = false;
       return;
     }
-    reg.patchSession({
+    void reg.patchSession({
       step,
       draft,
       stepIndex: STEP_ORDER.indexOf(step) + 1 || STEP_ORDER.length,
@@ -225,6 +239,19 @@ export function BoredomTracker() {
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step, draft]);
+
+  useEffect(() => {
+    const id = reg.session?.savedLogId;
+    if (!id || step !== "done") return;
+    void getBoredomLogs().then((logs) => {
+      const found = logs.find((log) => log.id === id);
+      if (found) {
+        setSavedLog(found);
+        setOutcome(found.outcomeAfter === "unknown" ? "dont-know" : found.outcomeAfter ?? "");
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Completion messages keyed by stored English action value
   const MESSAGES: Record<string, string> = {
@@ -234,10 +261,34 @@ export function BoredomTracker() {
     "Escaped immediately": t("boredom.msg.escaped"),
   };
 
-  const toggle = (set: React.Dispatch<React.SetStateAction<string[]>>, val: string) =>
-    set((prev) => prev.includes(val) ? prev.filter((x) => x !== val) : [...prev, val]);
+  const toggle = (
+    set: React.Dispatch<React.SetStateAction<string[]>>,
+    val: string,
+    max?: number,
+  ) => set((prev) => prev.includes(val)
+    ? prev.filter((x) => x !== val)
+    : max != null && prev.length >= max ? prev : [...prev, val]);
 
   const toggleRescue = (val: string) => toggle(setRescueMenu, val);
+
+  const toggleStimulationNeed = (value: string) => {
+    const groupByNeed: Record<string, string[]> = {
+      calming: RESCUE_CALM,
+      movement: RESCUE_MOVE,
+      hands: RESCUE_HANDS,
+      mental: RESCUE_MENTAL,
+      "sensory-reset": RESCUE_SENSORY,
+      social: RESCUE_SOCIAL,
+    };
+    const removing = stimulationNeeds.includes(value);
+    setStimulationNeeds((previous) => removing
+      ? previous.filter((item) => item !== value)
+      : [...previous, value]);
+    if (removing) {
+      const hidden = new Set(groupByNeed[value] ?? []);
+      setRescueMenu((previous) => previous.filter((item) => !hidden.has(item)));
+    }
+  };
 
   const stepIdx = STEP_ORDER.indexOf(step);
   const totalSteps = STEP_ORDER.length;
@@ -247,51 +298,130 @@ export function BoredomTracker() {
     switch (step) {
       case "type":      return restlessnessTypes.length > 0;
       case "need":      return stimulationNeeds.length > 0 && convertCheck !== "";
-      case "situation": return situation !== "";
+      case "situation": return situation !== "" && (situation !== "Other" || situationOther.trim() !== "");
       case "action":    return action !== "";
       default:          return true;
     }
-  }, [step, restlessnessTypes, stimulationNeeds, convertCheck, situation, action]);
+  }, [step, restlessnessTypes, stimulationNeeds, convertCheck, situation, situationOther, action]);
 
   async function handleSave() {
+    if (saving) return;
     setSaving(true);
-    const saved = await logBoredom({
-      timestamp: Date.now(),
-      intensity,
-      feelingTypes: restlessnessTypes,
-      situation,
-      urge,
-      action,
-      delayDuration: "",
-      note,
-      restlessnessTypes,
-      stimulationNeed: stimulationNeeds[0] ?? "",
-      stimulationNeeds,
-      rescueMenu,
-      convertCheck,
-      outcomeAfter: null,
-    });
-    setSavedLog(saved);
-    setSaving(false);
-    reg.clearSession();
-    setStep("done");
+    const completedAt = Date.now();
+    const startedAt = reg.session?.startedAt ?? completedAt;
+    try {
+      const saved = await logBoredom({
+        timestamp: startedAt,
+        occurredAt: startedAt,
+        startedAt,
+        completedAt,
+        dataVersion: 2,
+        contentVersion: "registration-v2",
+        answers: {
+          restlessnessTypes: toStableOptionIds(restlessnessTypes),
+          intensity,
+          stimulationNeeds,
+          convertCheck: toStableOptionId(convertCheck),
+          situation: toStableOptionId(situation),
+          urge: toStableOptionId(urge),
+          rescueMenu: toStableOptionIds(rescueMenu),
+          action: toStableOptionId(action),
+        },
+        intensity,
+        feelingTypes: restlessnessTypes,
+        situation,
+        situationOther: removeHiddenOtherText(situation, situationOther),
+        urge,
+        urgeOther: removeHiddenOtherText(urge === "Other stimulation" ? "Other" : urge, urgeOther),
+        action,
+        delayDuration: null,
+        note: note.trim(),
+        restlessnessTypes,
+        stimulationNeed: stimulationNeeds[0] ?? "",
+        stimulationNeeds,
+        rescueMenu,
+        convertCheck,
+        environmentReset: [],
+        outcomeAfter: null,
+      });
+      setSavedLog(saved);
+      void reg.patchSession({ savedLogId: saved.id, step: "done" });
+      setStep("done");
+    } catch {
+      toast({ title: t("common.save_error"), variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
   }
 
   const applyOutcome = useCallback(async (next: string) => {
-    if (!savedLog) return;
-    const real = (["decreased", "same", "increased"] as const).find((o) => o === next) ?? null;
+    if (!savedLog || outcomeWriteLock.current || navigationWriteLock.current) return;
+    outcomeWriteLock.current = true;
+    setOutcomeSaving(true);
+    const normalized = next === "dont-know" ? "unknown" : next;
+    const real = (["decreased", "same", "increased", "unknown"] as const).find((o) => o === normalized) ?? null;
     const updated: BoredomLog = { ...savedLog, outcomeAfter: real };
-    setSavedLog(updated);
-    await updateBoredomLog(updated);
-  }, [savedLog]);
+    try {
+      await updateBoredom(updated);
+      setSavedLog(updated);
+      setOutcome(next);
+    } catch {
+      toast({ title: t("common.save_error"), variant: "destructive" });
+    } finally {
+      outcomeWriteLock.current = false;
+      setOutcomeSaving(false);
+    }
+  }, [savedLog, t, toast, updateBoredom]);
+
+  const openDelay = useCallback(async () => {
+    if (!savedLog || navigationWriteLock.current || outcomeWriteLock.current) {
+      if (!savedLog) toast({ title: t("common.save_error"), variant: "destructive" });
+      return;
+    }
+    navigationWriteLock.current = true;
+    setNavigationSaving(true);
+    try {
+      const updated: BoredomLog = { ...savedLog, delayDuration: "10" };
+      await updateBoredom(updated);
+      setSavedLog(updated);
+      const returnSaved = await reg.patchSession({
+        pendingReturn: { returnRoute: "/boredom", returnStep: "done" },
+      });
+      if (!returnSaved) {
+        toast({ title: t("common.save_error"), variant: "destructive" });
+        return;
+      }
+      navigate("/delay");
+    } catch {
+      toast({ title: t("common.save_error"), variant: "destructive" });
+    } finally {
+      navigationWriteLock.current = false;
+      setNavigationSaving(false);
+    }
+  }, [navigate, reg, savedLog, t, toast, updateBoredom]);
+
+  const openTools = useCallback(async () => {
+    if (navigationWriteLock.current || outcomeWriteLock.current) return;
+    navigationWriteLock.current = true;
+    setNavigationSaving(true);
+    try {
+      const returnSaved = await reg.patchSession({
+        pendingReturn: { returnRoute: "/boredom", returnStep: "done" },
+      });
+      if (!returnSaved) {
+        toast({ title: t("common.save_error"), variant: "destructive" });
+        return;
+      }
+      navigate("/tools");
+    } finally {
+      navigationWriteLock.current = false;
+      setNavigationSaving(false);
+    }
+  }, [navigate, reg, t, toast]);
 
   function goNext() {
     if (step === "type") setStep("need");
-    else if (step === "need") {
-      if (convertCheck === "Maybe a craving") { navigate("/craving"); return; }
-      if (convertCheck === "Maybe anxiety") { navigate("/anxiety"); return; }
-      setStep("situation");
-    }
+    else if (step === "need") setStep("situation");
     else if (step === "situation") setStep("action");
     else if (step === "action") handleSave();
   }
@@ -308,6 +438,7 @@ export function BoredomTracker() {
       title={t("boredom.title")}
       subtitle={step !== "done" ? t("common.step_of").replace("{n}", String(stepIdx + 1)).replace("{total}", String(totalSteps)) : undefined}
       back
+      backDisabled={saving}
       step={step !== "done" ? { current: stepIdx + 1, total: totalSteps } : undefined}
       actionBar={
         step !== "done" ? (
@@ -337,8 +468,10 @@ export function BoredomTracker() {
             <MultiSelectGrid
               options={RESTLESSNESS_TYPES}
               value={restlessnessTypes}
-              onToggle={(v) => toggle(setRestlessnessTypes, v)}
+              onToggle={(v) => toggle(setRestlessnessTypes, v, 2)}
               translate={tOpt}
+              maxSelections={2}
+              selectionLabel={t("tracker.selection_limit")}
             />
 
             <div className="h-px bg-border" />
@@ -369,7 +502,7 @@ export function BoredomTracker() {
               {STIMULATION_NEEDS.map(({ value: val, label, sub }) => (
                 <button
                   key={val}
-                  onClick={() => toggle(setStimulationNeeds, val)}
+                  onClick={() => toggleStimulationNeed(val)}
                   aria-pressed={stimulationNeeds.includes(val)}
                   className={`flex flex-col p-4 rounded-2xl border text-left transition-all touch-target ${
                     stimulationNeeds.includes(val)
@@ -391,35 +524,35 @@ export function BoredomTracker() {
               <ChipCol options={CONVERT_CHECKS} value={convertCheck} onChange={setConvertCheck} translate={tOpt} />
             </div>
 
-            {/* Inline routing suggestions */}
+            {/* Classification suggestions are logged before another tracker starts. */}
             {convertCheck === "Maybe a craving" && (
-              <div className="bg-card border border-border rounded-2xl p-4 flex items-center gap-3">
+              <div className="bg-card border border-border rounded-2xl p-4 flex items-start gap-3">
                 <Zap size={18} className="text-primary shrink-0" />
                 <div className="flex-1">
                   <p className="text-sm font-medium text-foreground">{t("boredom.route.craving_title")}</p>
                   <p className="text-xs text-muted-foreground">{t("boredom.route.craving_sub")}</p>
+                  <p className="text-xs text-muted-foreground mt-1">{t("boredom.route.after_save")}</p>
                 </div>
-                <button
-                  onClick={() => navigate("/craving")}
-                  className="text-xs text-primary font-medium whitespace-nowrap"
-                >
-                  {t("common.switch")} <ArrowRight size={12} className="inline" />
-                </button>
               </div>
             )}
             {convertCheck === "Maybe anxiety" && (
-              <div className="bg-card border border-border rounded-2xl p-4 flex items-center gap-3">
+              <div className="bg-card border border-border rounded-2xl p-4 flex items-start gap-3">
                 <Wind size={18} className="text-primary shrink-0" />
                 <div className="flex-1">
                   <p className="text-sm font-medium text-foreground">{t("boredom.route.anxiety_title")}</p>
                   <p className="text-xs text-muted-foreground">{t("boredom.route.anxiety_sub")}</p>
+                  <p className="text-xs text-muted-foreground mt-1">{t("boredom.route.after_save")}</p>
                 </div>
-                <button
-                  onClick={() => navigate("/anxiety")}
-                  className="text-xs text-primary font-medium whitespace-nowrap"
-                >
-                  {t("common.switch")} <ArrowRight size={12} className="inline" />
-                </button>
+              </div>
+            )}
+            {convertCheck === "Maybe loneliness" && (
+              <div className="bg-card border border-border rounded-2xl p-4 text-sm text-muted-foreground">
+                {t("boredom.route.loneliness")}
+              </div>
+            )}
+            {convertCheck === "Maybe exhaustion" && (
+              <div className="bg-card border border-border rounded-2xl p-4 text-sm text-muted-foreground">
+                {t("boredom.route.exhaustion")}
               </div>
             )}
           </>
@@ -431,7 +564,24 @@ export function BoredomTracker() {
             <div>
               <h2 className="text-xl font-semibold text-foreground mb-1">{t("boredom.q.situation")}</h2>
             </div>
-            <ChipCol options={SITUATIONS} value={situation} onChange={setSituation} translate={tOpt} />
+            <ChipCol
+              options={SITUATIONS}
+              value={situation}
+              onChange={(value) => {
+                setSituation(value);
+                if (value !== "Other") setSituationOther("");
+              }}
+              translate={tOpt}
+            />
+            {situation === "Other" && (
+              <textarea
+                value={situationOther}
+                onChange={(event) => setSituationOther(event.target.value)}
+                placeholder={t("boredom.other_situation")}
+                rows={2}
+                className="w-full rounded-2xl border border-input bg-card px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+            )}
 
             <div className="h-px bg-border" />
 
@@ -440,7 +590,24 @@ export function BoredomTracker() {
                 {t("boredom.q.urge")}{" "}
                 <span className="text-muted-foreground font-normal text-sm">({t("common.optional")})</span>
               </h3>
-              <ChipCol options={URGES} value={urge} onChange={setUrge} translate={tOpt} />
+              <ChipCol
+                options={URGES}
+                value={urge}
+                onChange={(value) => {
+                  setUrge(value);
+                  if (value !== "Other stimulation") setUrgeOther("");
+                }}
+                translate={tOpt}
+              />
+              {urge === "Other stimulation" && (
+                <textarea
+                  value={urgeOther}
+                  onChange={(event) => setUrgeOther(event.target.value)}
+                  placeholder={t("boredom.other_urge")}
+                  rows={2}
+                  className="w-full rounded-2xl border border-input bg-card px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-ring"
+                />
+              )}
             </div>
           </>
         )}
@@ -460,13 +627,16 @@ export function BoredomTracker() {
               <RescueSection title={t("boredom.rescue.move")} items={RESCUE_MOVE} value={rescueMenu} onToggle={toggleRescue} translate={tOpt} />
             )}
             {stimulationNeeds.includes("hands") && (
-              <RescueSection title={t("boredom.rescue.hands")} items={RESCUE_HANDS} value={rescueMenu} onToggle={toggleRescue} translate={tOpt} />
+              <RescueSection title={t("boredom.rescue.hands")} items={RESCUE_HANDS.filter((item) => urge !== "Eat" || item !== "Snack prep")} value={rescueMenu} onToggle={toggleRescue} translate={tOpt} />
             )}
             {stimulationNeeds.includes("mental") && (
-              <RescueSection title={t("boredom.rescue.mental")} items={RESCUE_MENTAL} value={rescueMenu} onToggle={toggleRescue} translate={tOpt} />
+              <RescueSection title={t("boredom.rescue.mental")} items={RESCUE_MENTAL.filter((item) => urge !== "Gaming" || item !== "Low-intensity game")} value={rescueMenu} onToggle={toggleRescue} translate={tOpt} />
             )}
             {stimulationNeeds.includes("sensory-reset") && (
-              <RescueSection title={t("boredom.rescue.env")} items={RESCUE_ENV} value={rescueMenu} onToggle={toggleRescue} translate={tOpt} />
+              <RescueSection title={t("boredom.rescue.sensory")} items={RESCUE_SENSORY} value={rescueMenu} onToggle={toggleRescue} translate={tOpt} />
+            )}
+            {stimulationNeeds.includes("social") && (
+              <RescueSection title={t("boredom.rescue.social")} items={RESCUE_SOCIAL} value={rescueMenu} onToggle={toggleRescue} translate={tOpt} />
             )}
 
             <div className="h-px bg-border" />
@@ -521,13 +691,14 @@ export function BoredomTracker() {
                 {OUTCOMES.map(({ value, label }) => (
                   <button
                     key={value}
+                    type="button"
+                    disabled={outcomeSaving || navigationSaving}
                     onClick={() => {
                       const next = outcome === value ? "" : value;
-                      setOutcome(next);
-                      applyOutcome(next);
+                      void applyOutcome(next);
                     }}
                     aria-pressed={outcome === value}
-                    className={`py-3 px-3 rounded-2xl border text-sm font-medium transition-all touch-target ${
+                    className={`py-3 px-3 rounded-2xl border text-sm font-medium transition-all touch-target disabled:opacity-60 ${
                       outcome === value
                         ? "bg-primary/10 border-primary text-foreground"
                         : "bg-card border-border text-muted-foreground"
@@ -540,22 +711,67 @@ export function BoredomTracker() {
             </div>
 
             <div className="flex flex-col gap-3 w-full max-w-xs">
+              {(convertCheck === "Maybe a craving" || convertCheck === "Maybe anxiety") && (
+                <button
+                  type="button"
+                  disabled={navigationSaving || outcomeSaving}
+                  onClick={async () => {
+                    if (navigationWriteLock.current || outcomeWriteLock.current) return;
+                    navigationWriteLock.current = true;
+                    setNavigationSaving(true);
+                    try {
+                      await reg.clearSession();
+                      navigate(convertCheck === "Maybe a craving" ? "/craving" : "/anxiety");
+                    } catch {
+                      toast({ title: t("common.save_error"), variant: "destructive" });
+                    } finally {
+                      navigationWriteLock.current = false;
+                      setNavigationSaving(false);
+                    }
+                  }}
+                  className="flex items-center justify-center gap-2 bg-primary text-primary-foreground rounded-2xl px-5 py-3.5 text-sm font-semibold touch-target disabled:opacity-60"
+                >
+                  {convertCheck === "Maybe a craving" ? t("boredom.route.craving_title") : t("boredom.route.anxiety_title")}
+                  <ArrowRight size={15} />
+                </button>
+              )}
               <button
-                onClick={() => navigate("/delay")}
-                className="flex items-center justify-center gap-2 bg-card border border-border rounded-2xl px-5 py-3.5 text-sm font-medium text-foreground hover:border-primary/40 transition-colors touch-target"
+                type="button"
+                disabled={navigationSaving || outcomeSaving || !savedLog}
+                onClick={() => { void openDelay(); }}
+                className="flex items-center justify-center gap-2 bg-card border border-border rounded-2xl px-5 py-3.5 text-sm font-medium text-foreground hover:border-primary/40 transition-colors touch-target disabled:opacity-60"
               >
                 <Timer size={16} className="text-primary" />
                 {t("common.delay_timer")}
               </button>
               <button
-                onClick={() => navigate("/tools")}
-                className="flex items-center justify-center gap-2 bg-card border border-border rounded-2xl px-5 py-3.5 text-sm font-medium text-foreground hover:border-primary/40 transition-colors touch-target"
+                type="button"
+                disabled={navigationSaving || outcomeSaving}
+                onClick={() => { void openTools(); }}
+                className="flex items-center justify-center gap-2 bg-card border border-border rounded-2xl px-5 py-3.5 text-sm font-medium text-foreground hover:border-primary/40 transition-colors touch-target disabled:opacity-60"
               >
                 {t("common.browse_tools")}
               </button>
               <button
-                onClick={() => navigate("/")}
-                className="text-sm text-muted-foreground hover:text-foreground transition-colors touch-target"
+                type="button"
+                disabled={navigationSaving || outcomeSaving}
+                onClick={async () => {
+                  if (navigationWriteLock.current || outcomeWriteLock.current) return;
+                  navigationWriteLock.current = true;
+                  setNavigationSaving(true);
+                  try {
+                    if (!(await reg.completeSession())) {
+                      throw new Error("Boredom registration could not be completed.");
+                    }
+                    navigate("/");
+                  } catch {
+                    toast({ title: t("common.save_error"), variant: "destructive" });
+                  } finally {
+                    navigationWriteLock.current = false;
+                    setNavigationSaving(false);
+                  }
+                }}
+                className="text-sm text-muted-foreground hover:text-foreground transition-colors touch-target disabled:opacity-60"
               >
                 {t("common.done_home")}
               </button>

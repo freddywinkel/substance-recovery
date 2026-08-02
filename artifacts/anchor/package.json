@@ -7,6 +7,7 @@
     "dev": "vite --config vite.config.ts --host 0.0.0.0",
     "build": "vite build --config vite.config.ts",
     "serve": "vite preview --config vite.config.ts --host 0.0.0.0",
+    "test": "vitest run --config vitest.config.ts",
     "typecheck": "node ../../node_modules/typescript/lib/tsc.js -p tsconfig.json --noEmit"
   },
   "devDependencies": {
@@ -50,6 +51,7 @@
     "clsx": "catalog:",
     "cmdk": "^1.1.1",
     "embla-carousel-react": "^8.6.0",
+    "fake-indexeddb": "6.2.5",
     "input-otp": "^1.4.2",
     "lucide-react": "catalog:",
     "next-themes": "^0.4.6",

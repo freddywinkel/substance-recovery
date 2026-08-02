@@ -9,7 +9,10 @@ import { ChipCol } from "@/components/tracker/ChipCol";
 import { MultiSelectGrid } from "@/components/tracker/MultiSelectGrid";
 import { StepLayout } from "@/components/tracker/StepLayout";
 import { ActionBar } from "@/components/tracker/ActionBar";
-import { Flame, Info } from "lucide-react";
+import { AlertTriangle, Flame, Info } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { removeHiddenOtherText, toStableOptionId, toStableOptionIds } from "@/lib/registrationIds";
+import { getSubstanceSafetyWarnings, getUrgentSafetyCopy } from "@/lib/registrationSafety";
 
 // ── Step type ────────────────────────────────────────────────
 type Step = "type" | "planning" | "inner" | "need" | "substance" | "action" | "outcome" | "done";
@@ -91,8 +94,8 @@ const USE_OUTCOMES: { value: "not_used" | "used" | "unsure"; labelKey: string }[
 // ── Draft state ───────────────────────────────────────────────
 interface TrekDraft {
   trekTypes: string[];
-  intensity: number;
-  confidenceBefore: number;
+  intensity: number | null;
+  confidenceBefore: number | null;
   planningStage: string;
   location: string;
   locationOther: string;
@@ -107,15 +110,16 @@ interface TrekDraft {
   needOther: string;
   substances: string[];
   chosenAction: string;
-  confidenceAfter: number;
+  actionAttempted: boolean | null;
+  confidenceAfter: number | null;
   useOutcome: "" | "used" | "not_used" | "unsure";
 }
 
 function blankDraft(): TrekDraft {
   return {
     trekTypes: [],
-    intensity: 5,
-    confidenceBefore: 5,
+    intensity: null,
+    confidenceBefore: null,
     planningStage: "",
     location: "",
     locationOther: "",
@@ -130,7 +134,8 @@ function blankDraft(): TrekDraft {
     needOther: "",
     substances: [],
     chosenAction: "",
-    confidenceAfter: 5,
+    actionAttempted: null,
+    confidenceAfter: null,
     useOutcome: "",
   };
 }
@@ -147,7 +152,9 @@ export function TrekTracker() {
   const [saving, setSaving] = useState(false);
   const { logCraving } = useStore();
   const [, navigate] = useLocation();
-  const { t, tOpt } = useT();
+  const { t, tOpt, language } = useT();
+  const { toast } = useToast();
+  const safetyCopy = getUrgentSafetyCopy(language);
 
   const STEP_LABELS: Record<Step, string> = {
     type: t("trek.step.type"),
@@ -167,7 +174,9 @@ export function TrekTracker() {
   const toggleType = useCallback((v: string) => {
     setDraft((prev) => {
       const arr = prev.trekTypes;
-      const next = arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v].slice(-2);
+      const next = arr.includes(v)
+        ? arr.filter((x) => x !== v)
+        : arr.length < 2 ? [...arr, v] : arr;
       return { ...prev, trekTypes: next };
     });
   }, []);
@@ -182,12 +191,16 @@ export function TrekTracker() {
   }, []);
 
   const toggleTrigger = useCallback((v: string) => {
-    setDraft((prev) => ({
-      ...prev,
-      triggers: prev.triggers.includes(v)
+    setDraft((prev) => {
+      const triggers = prev.triggers.includes(v)
         ? prev.triggers.filter((x) => x !== v)
-        : [...prev.triggers, v],
-    }));
+        : [...prev.triggers, v];
+      return {
+        ...prev,
+        triggers,
+        triggerNote: triggers.includes("Other") ? prev.triggerNote : "",
+      };
+    });
   }, []);
 
   const toggleNeed = useCallback((v: string) => {
@@ -199,26 +212,26 @@ export function TrekTracker() {
     }));
   }, []);
 
-  // Inner-experience toggles — capped (emotions/physical 3, thoughts 2) via drop-oldest,
-  // mirroring the trekTypes slice pattern above.
+  // Selection limits are visible in the UI. Reaching a cap never removes an
+  // earlier answer without the person explicitly deselecting it.
   const toggleEmotion = useCallback((v: string) => {
     setDraft((prev) => {
       const arr = prev.emotions;
-      return { ...prev, emotions: arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v].slice(-3) };
+      return { ...prev, emotions: arr.includes(v) ? arr.filter((x) => x !== v) : arr.length < 3 ? [...arr, v] : arr };
     });
   }, []);
 
   const togglePhysical = useCallback((v: string) => {
     setDraft((prev) => {
       const arr = prev.physicalSensations;
-      return { ...prev, physicalSensations: arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v].slice(-3) };
+      return { ...prev, physicalSensations: arr.includes(v) ? arr.filter((x) => x !== v) : arr.length < 3 ? [...arr, v] : arr };
     });
   }, []);
 
   const toggleThought = useCallback((v: string) => {
     setDraft((prev) => {
       const arr = prev.thoughtPresets;
-      return { ...prev, thoughtPresets: arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v].slice(-2) };
+      return { ...prev, thoughtPresets: arr.includes(v) ? arr.filter((x) => x !== v) : arr.length < 2 ? [...arr, v] : arr };
     });
   }, []);
 
@@ -228,16 +241,24 @@ export function TrekTracker() {
       case "planning": return draft.planningStage !== "" && draft.location !== "" && (draft.location !== "Other" || draft.locationOther.trim() !== "") && draft.triggers.length > 0 && (!draft.triggers.includes("Other") || draft.triggerNote.trim() !== "");
       case "inner":    return draft.emotions.length > 0 || draft.emotionOther.trim() !== "" || draft.physicalSensations.length > 0 || draft.thoughtPresets.length > 0 || draft.thoughtFreeText.trim() !== "";
       case "need":     return draft.needTypes.length > 0 && (!draft.needTypes.includes("Other") || draft.needOther.trim() !== "");
-      case "substance": return draft.substances.length > 0;
-      case "action":   return draft.chosenAction !== "";
+      case "substance": return true;
+      case "action":   return draft.chosenAction !== "" && draft.actionAttempted !== null;
       case "outcome":  return draft.useOutcome !== "";
       default:         return true;
     }
-  }, [step, draft.trekTypes, draft.planningStage, draft.location, draft.locationOther, draft.triggers, draft.triggerNote, draft.emotions, draft.emotionOther, draft.physicalSensations, draft.thoughtPresets, draft.thoughtFreeText, draft.needTypes, draft.needOther, draft.substances, draft.chosenAction, draft.useOutcome]);
+  }, [step, draft.trekTypes, draft.planningStage, draft.location, draft.locationOther, draft.triggers, draft.triggerNote, draft.emotions, draft.emotionOther, draft.physicalSensations, draft.thoughtPresets, draft.thoughtFreeText, draft.needTypes, draft.needOther, draft.chosenAction, draft.actionAttempted, draft.useOutcome]);
 
   useEffect(() => {
     window.scrollTo(0, 0);
   }, [step]);
+
+  useEffect(() => {
+    if (reg.session?.pendingReturn) {
+      reg.patchSession({ pendingReturn: undefined });
+    }
+    // Only clear the return marker when this matching tracker is first opened.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const stepIdx = STEP_ORDER.indexOf(step);
   const progressPct = ((stepIdx + 1) / STEP_ORDER.length) * 100;
@@ -253,61 +274,100 @@ export function TrekTracker() {
   };
 
   const save = async () => {
+    if (saving) return;
     setSaving(true);
-    const highRiskFlag = draft.intensity >= 8;
-    await logCraving({
-      cravingType: "active",
-      timestamp: Date.now(),
-      status: "completed",
-      intensity: draft.intensity,
-      distressLevel: 0,
-      riskLevel: "",
-      situationPresets: draft.triggers,
-      situationOther: "",
-      emotions: draft.emotions,
-      emotionOther: draft.emotionOther,
-      physicalSensations: draft.physicalSensations,
-      thoughtPresets: draft.thoughtPresets,
-      thoughtFreeText: draft.thoughtFreeText,
-      location: draft.location,
-      locationOther: draft.location === "Other" ? draft.locationOther : "",
-      socialContext: [],
-      substances: draft.substances,
-      primarySubstance: "",
-      buildupDuration: "",
-      chosenAction: draft.chosenAction,
-      chosenActionOther: "",
-      toolUsed: null,
-      confidenceBefore: draft.confidenceBefore,
-      intensityAfter: null,
-      confidenceAfter: draft.confidenceAfter,
-      cravingOutcome: null,
-      interventionUsed: null,
-      markAsPattern: false,
-      highRiskFlag,
-      note: "",
-      planningStage: draft.planningStage,
-      needType: draft.needTypes[0] ?? "",
-      needTypes: draft.needTypes,
-      needOther: draft.needTypes.includes("Other") ? draft.needOther : "",
-      triggers: draft.triggers,
-      triggerNote: draft.triggerNote || undefined,
-      trekTypes: draft.trekTypes,
-      useOutcome: draft.useOutcome || undefined,
-    });
-    setSaving(false);
-    reg.clearSession();
-    setStep("done");
+    const completedAt = Date.now();
+    const startedAt = reg.session?.startedAt ?? completedAt;
+    try {
+      const saved = await logCraving({
+        cravingType: "active",
+        timestamp: startedAt,
+        occurredAt: startedAt,
+        startedAt,
+        completedAt,
+        dataVersion: 2,
+        contentVersion: "registration-v2",
+        answers: {
+          trekTypes: toStableOptionIds(draft.trekTypes),
+          intensity: draft.intensity,
+          confidenceBefore: draft.confidenceBefore,
+          planningStage: toStableOptionId(draft.planningStage),
+          location: toStableOptionId(draft.location),
+          triggers: toStableOptionIds(draft.triggers),
+          emotions: toStableOptionIds(draft.emotions),
+          physicalSensations: toStableOptionIds(draft.physicalSensations),
+          thoughts: toStableOptionIds(draft.thoughtPresets),
+          needs: toStableOptionIds(draft.needTypes),
+          targets: toStableOptionIds(draft.substances),
+          chosenAction: draft.chosenAction,
+          actionAttempted: draft.actionAttempted,
+          confidenceAfter: draft.confidenceAfter,
+          useOutcome: draft.useOutcome,
+        },
+        status: "completed",
+        intensity: draft.intensity,
+        distressLevel: null,
+        riskLevel: "",
+        situationPresets: [],
+        situationOther: "",
+        emotions: draft.emotions,
+        emotionOther: draft.emotionOther.trim(),
+        physicalSensations: draft.physicalSensations,
+        thoughtPresets: draft.thoughtPresets,
+        thoughtFreeText: draft.thoughtFreeText.trim(),
+        location: draft.location,
+        locationOther: removeHiddenOtherText(draft.location, draft.locationOther),
+        socialContext: [],
+        substances: draft.substances,
+        primarySubstance: "",
+        buildupDuration: "",
+        chosenAction: draft.chosenAction,
+        chosenActionOther: "",
+        actionAttempted: draft.actionAttempted,
+        toolUsed: draft.actionAttempted && TREK_ACTIONS.some((a) => a.value === draft.chosenAction && a.tool)
+          ? draft.chosenAction
+          : null,
+        confidenceBefore: draft.confidenceBefore,
+        intensityAfter: null,
+        confidenceAfter: draft.confidenceAfter,
+        cravingOutcome: null,
+        interventionUsed: draft.actionAttempted,
+        markAsPattern: false,
+        highRiskFlag: draft.intensity != null && draft.intensity >= 8,
+        note: "",
+        planningStage: draft.planningStage,
+        needType: draft.needTypes[0] ?? "",
+        needTypes: draft.needTypes,
+        needOther: removeHiddenOtherText(draft.needTypes, draft.needOther),
+        triggers: draft.triggers,
+        triggerNote: removeHiddenOtherText(draft.triggers, draft.triggerNote) || undefined,
+        trekTypes: draft.trekTypes,
+        useOutcome: draft.useOutcome || undefined,
+      });
+      reg.patchSession({ savedLogId: saved.id, step: "done" });
+      setStep("done");
+    } catch {
+      toast({ title: t("common.save_error"), variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
   };
 
   // ── Done screen ───────────────────────────────────────────
   if (step === "done") {
     const chosenDef = TREK_ACTIONS.find((a) => a.value === draft.chosenAction);
-    const msg = chosenDef ? t(chosenDef.msgKey) : "";
+    const usedSafetyWarnings = draft.useOutcome === "used"
+      ? getSubstanceSafetyWarnings(draft.substances, language)
+      : [];
+    const msg = draft.useOutcome === "used"
+      ? t("tracker.done.used")
+      : draft.useOutcome === "not_used"
+        ? t("tracker.done.not_used")
+        : t("tracker.done.unsure");
     return (
       <div className="flex flex-col min-h-dvh bg-background">
         <PageHeader title={t("trek.title")} back />
-        <div className="flex-1 overflow-y-auto scroll-smooth-ios flex flex-col items-center justify-center px-6 gap-6 text-center animate-fade-up"
+        <div className="flex-1 overflow-y-auto scroll-smooth-ios flex flex-col items-center px-6 pt-8 gap-6 text-center animate-fade-up"
           style={{ paddingBottom: "calc(5rem + env(safe-area-inset-bottom))" }}>
           <Flame size={48} strokeWidth={1.5} className="text-primary" />
           <div className="space-y-2">
@@ -316,10 +376,45 @@ export function TrekTracker() {
               <p className="text-muted-foreground leading-relaxed max-w-xs">{msg}</p>
             )}
           </div>
+          {draft.useOutcome === "used" && (
+            <div className="w-full max-w-xs space-y-3 text-left">
+              <div className="rounded-2xl border border-amber-500/50 bg-card p-4">
+                <div className="mb-2 flex items-start gap-2">
+                  <AlertTriangle size={18} className="mt-0.5 shrink-0 text-amber-500" />
+                  <p className="text-sm font-semibold text-foreground">{safetyCopy.title}</p>
+                </div>
+                <div className="space-y-2 text-sm leading-relaxed text-muted-foreground">
+                  <p>{safetyCopy.assessmentLimit}</p>
+                  <p>{safetyCopy.emergency}</p>
+                  <p>{safetyCopy.humanHelp}</p>
+                </div>
+                <a href="tel:112" className="mt-3 inline-flex min-h-11 items-center text-sm font-semibold text-primary">
+                  {safetyCopy.call112}
+                </a>
+              </div>
+              {usedSafetyWarnings.map((warning) => (
+                <div key={warning.key} className="rounded-2xl border border-amber-500/40 bg-amber-500/10 p-4">
+                  <p className="text-sm font-semibold text-foreground">{warning.title}</p>
+                  <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{warning.body}</p>
+                </div>
+              ))}
+            </div>
+          )}
           <div className="flex flex-col gap-3 w-full max-w-xs">
-            {chosenDef?.tool && (
+            {draft.useOutcome === "used" && (
               <button
-                onClick={() => navigate(chosenDef.tool!)}
+                onClick={() => navigate("/relapse")}
+                className="w-full bg-primary text-primary-foreground rounded-2xl py-4 font-semibold touch-target hover:opacity-90 active:scale-95 transition-all"
+              >
+                {t("tracker.done.open_relapse")}
+              </button>
+            )}
+            {chosenDef?.tool && draft.actionAttempted === false && (
+              <button
+                onClick={() => {
+                  reg.patchSession({ pendingReturn: { returnRoute: "/trek", returnStep: "done" } });
+                  navigate(chosenDef.tool!);
+                }}
                 className="w-full bg-primary text-primary-foreground rounded-2xl py-4 font-semibold touch-target hover:opacity-90 active:scale-95 transition-all"
               >
                 {tOpt(chosenDef.label)}
@@ -335,7 +430,7 @@ export function TrekTracker() {
             >
               {t("common.browse_tools")}
             </button>
-            <button onClick={() => navigate("/")}
+            <button onClick={async () => { if (await reg.completeSession()) navigate("/"); }}
               className="w-full border border-border rounded-2xl py-3 font-medium text-muted-foreground touch-target">
               {t("common.done_home")}
             </button>
@@ -350,6 +445,7 @@ export function TrekTracker() {
     <StepLayout
       title={t("trek.title")}
       back
+      backDisabled={saving}
       subtitle={STEP_LABELS[step]}
       step={{ current: stepIdx + 1, total: STEP_ORDER.length }}
       showStepCounter
@@ -379,6 +475,8 @@ export function TrekTracker() {
               value={draft.trekTypes}
               onToggle={toggleType}
               translate={tOpt}
+              maxSelections={2}
+              selectionLabel={t("tracker.selection_limit")}
             />
             <div className="h-px bg-border my-1" />
             <p className="text-sm font-medium text-foreground">{t("trek.q.intensity")}</p>
@@ -464,6 +562,8 @@ export function TrekTracker() {
               value={draft.emotions}
               onToggle={toggleEmotion}
               translate={tOpt}
+              maxSelections={3}
+              selectionLabel={t("tracker.selection_limit")}
             />
             <textarea
               value={draft.emotionOther}
@@ -480,6 +580,8 @@ export function TrekTracker() {
               value={draft.physicalSensations}
               onToggle={togglePhysical}
               translate={tOpt}
+              maxSelections={3}
+              selectionLabel={t("tracker.selection_limit")}
             />
             <div className="h-px bg-border my-1" />
             <p className="text-base font-medium text-foreground">{t("craving.q.thoughts")}</p>
@@ -489,6 +591,8 @@ export function TrekTracker() {
               value={draft.thoughtPresets}
               onToggle={toggleThought}
               translate={tOpt}
+              maxSelections={2}
+              selectionLabel={t("tracker.selection_limit")}
             />
             <textarea
               value={draft.thoughtFreeText}
@@ -544,7 +648,10 @@ export function TrekTracker() {
               {TREK_ACTIONS.map(({ value, label }) => (
                 <button
                   key={value}
-                  onClick={() => update("chosenAction", draft.chosenAction === value ? "" : value)}
+                  onClick={() => {
+                    const next = draft.chosenAction === value ? "" : value;
+                    setDraft((prev) => ({ ...prev, chosenAction: next, actionAttempted: null }));
+                  }}
                   aria-pressed={draft.chosenAction === value}
                   className={`w-full text-left px-4 py-3.5 rounded-2xl border text-sm font-medium transition-all touch-target flex items-center justify-between ${
                     draft.chosenAction === value
@@ -559,6 +666,46 @@ export function TrekTracker() {
                 </button>
               ))}
             </div>
+            {draft.chosenAction && (() => {
+              const selected = TREK_ACTIONS.find((item) => item.value === draft.chosenAction);
+              return (
+                <div className="rounded-2xl border border-border bg-card p-4 flex flex-col gap-3">
+                  <p className="text-sm font-medium text-foreground">{t("tracker.action.attempted_q")}</p>
+                  {selected?.tool && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        reg.patchSession({ pendingReturn: { returnRoute: "/trek", returnStep: "action" } });
+                        navigate(selected.tool!);
+                      }}
+                      className="w-full rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground touch-target"
+                    >
+                      {t("tracker.action.open_tool")}
+                    </button>
+                  )}
+                  <div className="grid grid-cols-2 gap-2">
+                    {[
+                      { value: true, label: t("tracker.action.tried") },
+                      { value: false, label: t("tracker.action.not_yet") },
+                    ].map((item) => (
+                      <button
+                        type="button"
+                        key={String(item.value)}
+                        onClick={() => update("actionAttempted", item.value)}
+                        aria-pressed={draft.actionAttempted === item.value}
+                        className={`rounded-xl border px-3 py-3 text-sm font-medium touch-target ${
+                          draft.actionAttempted === item.value
+                            ? "border-primary bg-primary/10 text-foreground"
+                            : "border-border bg-background text-muted-foreground"
+                        }`}
+                      >
+                        {item.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
             <div className="h-px bg-border my-1" />
             <p className="text-sm font-medium text-foreground">{t("trek.q.confidence_after")}</p>
             <IntensitySlider
@@ -596,6 +743,28 @@ export function TrekTracker() {
                 </button>
               ))}
             </div>
+            {draft.useOutcome === "used" && (
+              <div role="alert" className="space-y-3 rounded-2xl border border-amber-500/50 bg-card p-4">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle size={18} className="mt-0.5 shrink-0 text-amber-500" />
+                  <p className="text-sm font-semibold text-foreground">{safetyCopy.title}</p>
+                </div>
+                <div className="space-y-2 text-sm leading-relaxed text-muted-foreground">
+                  <p>{safetyCopy.assessmentLimit}</p>
+                  <p>{safetyCopy.emergency}</p>
+                  <p>{safetyCopy.humanHelp}</p>
+                </div>
+                <a href="tel:112" className="inline-flex min-h-11 items-center text-sm font-semibold text-primary">
+                  {safetyCopy.call112}
+                </a>
+                {getSubstanceSafetyWarnings(draft.substances, language).map((warning) => (
+                  <div key={warning.key} className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-3">
+                    <p className="text-sm font-semibold text-foreground">{warning.title}</p>
+                    <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{warning.body}</p>
+                  </div>
+                ))}
+              </div>
+            )}
           </>
         )}
     </StepLayout>

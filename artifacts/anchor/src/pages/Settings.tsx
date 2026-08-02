@@ -28,7 +28,7 @@ export function Settings() {
   const { t } = useT();
   const [, navigate] = useLocation();
   const { toast } = useToast();
-  const { clearSession } = useActiveRegistration();
+  const { resetSessions } = useActiveRegistration();
 
   const [confirmReset, setConfirmReset] = useState(false);
   const [dateInput, setDateInput] = useState(sobrietyStartDate ?? "");
@@ -70,11 +70,16 @@ export function Settings() {
   }, [crisisService]);
 
   const handleReset = async () => {
-    await clearSession();
-    await resetAllData();
-    localStorage.removeItem("anchor-pinned-tools");
-    localStorage.removeItem(LAST_EXPORTED_KEY);
-    window.location.reload();
+    try {
+      const sessionsCleared = await resetSessions();
+      if (!sessionsCleared) throw new Error("Registration drafts could not be cleared.");
+      await resetAllData();
+      localStorage.removeItem("anchor-pinned-tools");
+      localStorage.removeItem(LAST_EXPORTED_KEY);
+      window.location.reload();
+    } catch {
+      toast({ title: t("settings.reset.error"), variant: "destructive" });
+    }
   };
 
   const handleExport = async () => {
