@@ -52,6 +52,17 @@ describe("parseActiveRegistration", () => {
     expect(result.value.draft).toEqual(expect.any(Object));
   });
 
+  it.each(legacySessions)("migrates a deployed v2 %s session to v3", (type, route, step) => {
+    const current = parseActiveRegistration(legacySession(type, route, step));
+    if (!current.ok || !current.value) throw new Error("Expected v1 migration to succeed");
+    const result = parseActiveRegistration({ ...current.value, version: 2 });
+    expect(result).toMatchObject({
+      ok: true,
+      migrated: true,
+      value: { version: ACTIVE_REGISTRATION_VERSION, type, route, step },
+    });
+  });
+
   it("uses explicit unanswered values when migrating formerly preselected drafts", () => {
     const anxiety = parseActiveRegistration(legacySession("anxiety", "/anxiety", "type"));
     const relapse = parseActiveRegistration(legacySession("relapse", "/relapse", "label"));
@@ -64,6 +75,8 @@ describe("parseActiveRegistration", () => {
       episodeDuration: "unanswered",
       amountCategory: "unanswered",
       emotionAfter: null,
+      acuteRisks: [],
+      acuteRisk: "unanswered",
     });
   });
 
@@ -119,6 +132,48 @@ describe("parseActiveRegistration", () => {
     expect(result.value.draft).toEqual(migrated.value.draft);
   });
 
+  it("marks an early-v2 Boredom draft as migrated when timer fields are backfilled", () => {
+    const base = parseActiveRegistration(legacySession("boredom", "/boredom", "type"));
+    if (!base.ok || !base.value) throw new Error("Expected migration to succeed");
+    const draft = { ...(base.value.draft as Record<string, unknown>) };
+    delete draft.delayTimerStartedAt;
+    delete draft.delayDuration;
+
+    const result = parseActiveRegistration({ ...base.value, version: 2, draft });
+    expect(result).toMatchObject({
+      ok: true,
+      migrated: true,
+      value: { draft: { delayTimerStartedAt: null, delayDuration: null } },
+    });
+  });
+
+  it("rejects current v3 drafts with missing canonical fields instead of legacy-backfilling them", () => {
+    const boredom = parseActiveRegistration(legacySession("boredom", "/boredom", "type"));
+    const relapse = parseActiveRegistration(legacySession("relapse", "/relapse", "label"));
+    if (!boredom.ok || !boredom.value || !relapse.ok || !relapse.value) {
+      throw new Error("Expected current fixtures");
+    }
+    const boredomDraft = { ...(boredom.value.draft as Record<string, unknown>) };
+    delete boredomDraft.delayDuration;
+    expect(parseActiveRegistration({ ...boredom.value, draft: boredomDraft })).toMatchObject({ ok: false });
+
+    const relapseDraft = { ...(relapse.value.draft as Record<string, unknown>) };
+    delete relapseDraft.acuteRisks;
+    expect(parseActiveRegistration({ ...relapse.value, draft: relapseDraft })).toMatchObject({ ok: false });
+  });
+
+  it("rejects an unknown Trek form stored together with a specific form", () => {
+    const trek = parseActiveRegistration(legacySession("trek", "/trek", "type"));
+    if (!trek.ok || !trek.value) throw new Error("Expected current Trek fixture");
+    expect(parseActiveRegistration({
+      ...trek.value,
+      draft: {
+        ...(trek.value.draft as Record<string, unknown>),
+        trekTypes: ["approach-not-sure", "approach-mental-rehearsal"],
+      },
+    })).toMatchObject({ ok: false });
+  });
+
   it("uses a saved log ID as the stable record ID when migrating legacy state", () => {
     const result = parseActiveRegistration({
       ...legacySession("relapse", "/relapse", "label"),
@@ -148,7 +203,6 @@ describe("parseActiveRegistration", () => {
 
   it.each([
     ["anxiety", "/anxiety", "type", "urgencyHigh", false],
-    ["relapse", "/relapse", "label", "acuteRisk", "none"],
   ] as const)(
     "preserves an explicit v2 %s safety answer",
     (type, route, step, field, explicitValue) => {
@@ -167,6 +221,383 @@ describe("parseActiveRegistration", () => {
       expect((result.value.draft as Record<string, unknown>)[field]).toBe(explicitValue);
     },
   );
+
+  it.each([
+    ["none", ["none"], "none"],
+    ["unsafe", ["unsafe"], "unsafe"],
+    ["withdrawal", ["withdrawal"], "withdrawal"],
+  ] as const)(
+    "migrates a pre-array v2 Relapse %s answer without losing it",
+    (acuteRisk, expected, expectedAlias) => {
+      const migrated = parseActiveRegistration(legacySession("relapse", "/relapse", "label"));
+      if (!migrated.ok || !migrated.value) throw new Error("Expected migration to succeed");
+      const draft = {
+        ...(migrated.value.draft as Record<string, unknown>),
+        acuteRisk,
+      };
+      delete draft.acuteRisks;
+
+      const result = parseActiveRegistration({ ...migrated.value, version: 2, draft });
+      if (!result.ok || !result.value) throw new Error("Expected v2 safety migration to succeed");
+      expect(result.migrated).toBe(true);
+      expect(result.value.draft).toMatchObject({ acuteRisks: expected, acuteRisk: expectedAlias });
+    },
+  );
+
+  it("preserves only an explicit canonical no-concern answer across prior and partial versions", () => {
+    const priorVersion = parseActiveRegistration({
+      ...legacySession("relapse", "/relapse", "label"),
+      draft: { acuteRisks: ["none"], acuteRisk: "none" },
+    });
+    expect(priorVersion).toMatchObject({
+      ok: true,
+      value: { draft: { acuteRisks: ["none"], acuteRisk: "none" } },
+    });
+
+    const base = parseActiveRegistration(legacySession("relapse", "/relapse", "label"));
+    if (!base.ok || !base.value) throw new Error("Expected migration to succeed");
+    const draft = {
+      ...(base.value.draft as Record<string, unknown>),
+      acuteRisks: ["none"],
+    };
+    delete draft.acuteRisk;
+    expect(parseActiveRegistration({ ...base.value, draft })).toMatchObject({
+      ok: true,
+      migrated: true,
+      value: { draft: { acuteRisks: ["none"], acuteRisk: "none" } },
+    });
+  });
+
+  it("migrates the deployed v2 Relapse defaults conservatively while preserving its deliberate none", () => {
+    const current = parseActiveRegistration(legacySession("relapse", "/relapse", "label"));
+    if (!current.ok || !current.value) throw new Error("Expected migration to succeed");
+    const occurrence = new Date();
+    const localOccurrence = new Date(
+      occurrence.getTime() - occurrence.getTimezoneOffset() * 60_000,
+    ).toISOString().slice(0, 16);
+    const draft = {
+      ...(current.value.draft as Record<string, unknown>),
+      label: "no-label",
+      when: "just-now",
+      occurrenceDateTime: localOccurrence,
+      acuteRisk: "none",
+    };
+    delete draft.acuteRisks;
+
+    expect(parseActiveRegistration({ ...current.value, version: 2, draft })).toMatchObject({
+      ok: true,
+      migrated: true,
+      value: {
+        version: ACTIVE_REGISTRATION_VERSION,
+        draft: {
+          label: "",
+          when: "",
+          occurrenceDateTime: "",
+          acuteRisks: ["none"],
+          acuteRisk: "none",
+        },
+      },
+    });
+  });
+
+  it("preserves the same label/time choices when current v3 stores them explicitly", () => {
+    const current = parseActiveRegistration(legacySession("relapse", "/relapse", "label"));
+    if (!current.ok || !current.value) throw new Error("Expected migration to succeed");
+    const occurrence = new Date(Date.now() - 10 * 60 * 1000);
+    const localOccurrence = new Date(
+      occurrence.getTime() - occurrence.getTimezoneOffset() * 60_000,
+    ).toISOString().slice(0, 16);
+    expect(parseActiveRegistration({
+      ...current.value,
+      draft: {
+        ...(current.value.draft as Record<string, unknown>),
+        label: "no-label",
+        when: "just-now",
+        occurrenceDateTime: localOccurrence,
+        acuteRisks: ["none"],
+        acuteRisk: "none",
+      },
+    })).toMatchObject({
+      ok: true,
+      migrated: false,
+      value: {
+        draft: {
+          label: "no-label",
+          when: "just-now",
+          occurrenceDateTime: localOccurrence,
+          acuteRisks: ["none"],
+        },
+      },
+    });
+  });
+
+  it("uses a canonical concern array even when its compatibility alias is missing or malformed", () => {
+    const base = parseActiveRegistration(legacySession("relapse", "/relapse", "label"));
+    if (!base.ok || !base.value) throw new Error("Expected migration to succeed");
+    const baseDraft = base.value.draft as Record<string, unknown>;
+
+    for (const acuteRisk of [undefined, null, "__stale__"] as const) {
+      const draft = {
+        ...baseDraft,
+        acuteRisks: ["unsafe", "withdrawal"],
+        acuteRisk,
+      };
+      if (acuteRisk === undefined) delete draft.acuteRisk;
+      expect(parseActiveRegistration({ ...base.value, draft })).toMatchObject({
+        ok: true,
+        value: {
+          draft: {
+            acuteRisks: ["unsafe", "withdrawal"],
+            acuteRisk: "withdrawal",
+          },
+        },
+      });
+    }
+  });
+
+  it.each([
+    ["first trigger", { firstTriggerType: "External event", firstTriggerText: "A message" }],
+    ["support contact", { supportContact: "Friend", supportContactOther: "My neighbour" }],
+    ["next step", { nextStep: "Water, food, rest first", nextStepOther: "Take a shower" }],
+  ] as const)("rejects a restored Relapse draft with conflicting canned and custom %s answers", (_label, changes) => {
+    const base = parseActiveRegistration(legacySession("relapse", "/relapse", "label"));
+    if (!base.ok || !base.value) throw new Error("Expected migration to succeed");
+    expect(parseActiveRegistration({
+      ...base.value,
+      draft: { ...(base.value.draft as Record<string, unknown>), ...changes },
+    })).toMatchObject({
+      ok: false,
+      error: "Active-registration draft has an invalid shape.",
+    });
+
+    expect(parseActiveRegistration({
+      ...legacySession("relapse", "/relapse", "label"),
+      draft: changes,
+    })).toMatchObject({
+      ok: false,
+      error: "Active-registration draft has an invalid shape.",
+    });
+  });
+
+  it("does not restore an amount category without a substance or behavior target", () => {
+    const base = parseActiveRegistration(legacySession("relapse", "/relapse", "label"));
+    if (!base.ok || !base.value) throw new Error("Expected migration to succeed");
+    const baseDraft = base.value.draft as Record<string, unknown>;
+    expect(parseActiveRegistration({
+      ...base.value,
+      draft: { ...baseDraft, amountCategory: "moderate" },
+    })).toMatchObject({ ok: false });
+    expect(parseActiveRegistration({
+      ...base.value,
+      draft: {
+        ...baseDraft,
+        primarySubstance: "Alcohol",
+        amountCategory: "moderate",
+      },
+    })).toMatchObject({ ok: false });
+
+    expect(parseActiveRegistration({
+      ...base.value,
+      version: 2,
+      draft: {
+        ...baseDraft,
+        primarySubstance: "Alcohol",
+        amountCategory: "moderate",
+      },
+    })).toMatchObject({
+      ok: true,
+      migrated: true,
+      value: {
+        draft: {
+          substances: ["Alcohol"],
+          primarySubstance: "",
+          amountCategory: "moderate",
+        },
+      },
+    });
+  });
+
+  it("migrates only legacy Relapse primary-thought scalars into the canonical plural answer", () => {
+    const base = parseActiveRegistration(legacySession("relapse", "/relapse", "label"));
+    if (!base.ok || !base.value) throw new Error("Expected migration to succeed");
+    const baseDraft = base.value.draft as Record<string, unknown>;
+
+    expect(parseActiveRegistration({
+      ...base.value,
+      draft: {
+        ...baseDraft,
+        preUseThoughtPreset: "One time won't matter",
+      },
+    })).toMatchObject({ ok: false });
+
+    expect(parseActiveRegistration({
+      ...base.value,
+      version: 2,
+      draft: {
+        ...baseDraft,
+        preUseThoughtPreset: "One time won't matter",
+        preUseThoughtPresets: ["I can't handle this"],
+      },
+    })).toMatchObject({
+      ok: true,
+      migrated: true,
+      value: {
+        draft: {
+          preUseThoughtPreset: "",
+          preUseThoughtPresets: ["I can't handle this", "One time won't matter"],
+        },
+      },
+    });
+  });
+
+  it("regenerates a restored Relapse when bucket from the exact occurrence", () => {
+    const base = parseActiveRegistration(legacySession("relapse", "/relapse", "when"));
+    if (!base.ok || !base.value) throw new Error("Expected migration to succeed");
+    const occurrence = new Date(Date.now() - 30 * 60 * 1000);
+    const localOccurrence = new Date(
+      occurrence.getTime() - occurrence.getTimezoneOffset() * 60_000,
+    ).toISOString().slice(0, 16);
+    const result = parseActiveRegistration({
+      ...base.value,
+      draft: {
+        ...(base.value.draft as Record<string, unknown>),
+        occurrenceDateTime: localOccurrence,
+        when: "few-days",
+      },
+    });
+    expect(result).toMatchObject({
+      ok: true,
+      migrated: true,
+      value: { draft: { occurrenceDateTime: localOccurrence, when: "just-now" } },
+    });
+  });
+
+  it("clears hidden Craving other-text while preserving text with a visible controller", () => {
+    const base = parseActiveRegistration(legacySession("craving", "/craving", "onset"));
+    if (!base.ok || !base.value) throw new Error("Expected migration to succeed");
+    const baseDraft = base.value.draft as Record<string, unknown>;
+    expect(parseActiveRegistration({
+      ...base.value,
+      draft: {
+        ...baseDraft,
+        onsetType: "Physical sensation",
+        onsetOther: "hidden onset",
+        situationPresets: ["Home alone"],
+        triggerOther: "hidden situation",
+      },
+    })).toMatchObject({
+      ok: true,
+      value: { draft: { onsetOther: "", triggerOther: "" } },
+    });
+    expect(parseActiveRegistration({
+      ...base.value,
+      draft: {
+        ...baseDraft,
+        onsetType: "Other",
+        onsetOther: "visible onset",
+        situationPresets: ["Other"],
+        triggerOther: "visible situation",
+      },
+    })).toMatchObject({
+      ok: true,
+      value: {
+        draft: { onsetOther: "visible onset", triggerOther: "visible situation" },
+      },
+    });
+  });
+
+  it("clears hidden Trek other-text and outcome confidence on restore", () => {
+    const base = parseActiveRegistration(legacySession("trek", "/trek", "planning"));
+    if (!base.ok || !base.value) throw new Error("Expected migration to succeed");
+    const baseDraft = base.value.draft as Record<string, unknown>;
+    expect(parseActiveRegistration({
+      ...base.value,
+      draft: {
+        ...baseDraft,
+        location: "Home",
+        locationOther: "hidden location",
+        triggers: ["Stress"],
+        triggerNote: "hidden trigger",
+        needTypes: ["Relief"],
+        needOther: "hidden need",
+        actionAttempted: false,
+        confidenceAfter: 8,
+      },
+    })).toMatchObject({
+      ok: true,
+      value: {
+        draft: {
+          locationOther: "",
+          triggerNote: "",
+          needOther: "",
+          confidenceAfter: null,
+        },
+      },
+    });
+  });
+
+  it("clears hidden and conversion-inapplicable Boredom answers on restore", () => {
+    const base = parseActiveRegistration(legacySession("boredom", "/boredom", "situation"));
+    if (!base.ok || !base.value) throw new Error("Expected migration to succeed");
+    expect(parseActiveRegistration({
+      ...base.value,
+      draft: {
+        ...(base.value.draft as Record<string, unknown>),
+        convertCheck: "Maybe anxiety",
+        situation: "Doing nothing",
+        situationOther: "hidden situation",
+        urge: "Gaming",
+        urgeOther: "hidden urge",
+        rescueMenu: ["Short walk"],
+        action: "Delayed action",
+        showNote: true,
+        note: "hidden note",
+      },
+    })).toMatchObject({
+      ok: true,
+      value: {
+        draft: {
+          situationOther: "",
+          urgeOther: "",
+          rescueMenu: [],
+          action: "",
+          showNote: false,
+          note: "",
+        },
+      },
+    });
+  });
+
+  it("round-trips simultaneous Relapse concerns and rejects none combined with a concern", () => {
+    const migrated = parseActiveRegistration(legacySession("relapse", "/relapse", "label"));
+    if (!migrated.ok || !migrated.value) throw new Error("Expected migration to succeed");
+    const baseDraft = migrated.value.draft as Record<string, unknown>;
+
+    const valid = parseActiveRegistration({
+      ...migrated.value,
+      draft: {
+        ...baseDraft,
+        acuteRisks: ["unsafe", "withdrawal"],
+        acuteRisk: "withdrawal",
+      },
+    });
+    expect(valid).toMatchObject({
+      ok: true,
+      value: { draft: { acuteRisks: ["unsafe", "withdrawal"], acuteRisk: "withdrawal" } },
+    });
+
+    expect(parseActiveRegistration({
+      ...migrated.value,
+      draft: {
+        ...baseDraft,
+        acuteRisks: ["none", "unsafe"],
+        acuteRisk: "unsafe",
+      },
+    })).toMatchObject({
+      ok: false,
+      error: "Active-registration draft has an invalid shape.",
+    });
+  });
 
   it.each([
     ["invalid JSON", "{", "Active registration is not valid JSON."],

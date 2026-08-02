@@ -26,6 +26,7 @@ import {
   updateBoredomLog,
   deleteBoredomLog,
 } from "@/db";
+import { cravingRegistrationKind } from "@/lib/canonicalRegistration";
 import {
   useActiveRegistration,
   type RegistrationType,
@@ -196,7 +197,10 @@ export function useLogs() {
 
   const logCraving = useCallback(
     async (entry: Omit<CravingLog, "id">) => {
-      const expectedType = entry.cravingType === "active" ? "trek" : "craving";
+      const expectedType = cravingRegistrationKind(entry);
+      if (!expectedType) {
+        throw new Error("Craving registration is missing its canonical registrationType answer.");
+      }
       const result = await addCravingLog(
         withSessionMetadata(entry, expectedType, session),
       );

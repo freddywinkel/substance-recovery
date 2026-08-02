@@ -11,6 +11,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { useStore } from "@/hooks/useStore";
 import { type AnxietyLog } from "@/db";
+import {
+  CURRENT_REGISTRATION_CONTENT_VERSION,
+  CURRENT_REGISTRATION_DATA_VERSION,
+} from "@/db/migrations";
 import { useActiveRegistration } from "@/contexts/ActiveRegistrationContext";
 import { useT } from "@/hooks/useTranslation";
 import { toStableOptionId, toStableOptionIds } from "@/lib/registrationIds";
@@ -30,7 +34,8 @@ import {
 // ─────────────────────────────────────────────────────────────
 // Step types
 // ─────────────────────────────────────────────────────────────
-type Step = "type" | "body" | "urgency" | "details" | "reaction" | "done";
+export type AnxietyTrackerStep = "type" | "body" | "urgency" | "details" | "reaction" | "done";
+type Step = AnxietyTrackerStep;
 const STEP_ORDER: Step[] = ["type", "body", "urgency", "details", "reaction"];
 
 // ─────────────────────────────────────────────────────────────
@@ -50,8 +55,118 @@ const ANXIETY_TYPES = [
 
 const BODY_LOCATIONS = [
   "Chest", "Stomach", "Throat", "Head",
-  "Arms", "Legs", "Whole body",
+  "Arms", "Legs", "Whole body", "Not in one place / not sure",
 ];
+const WHOLE_BODY = "Whole body";
+const NO_SPECIFIC_BODY_LOCATION = "Not in one place / not sure";
+const ANXIETY_TYPE_MAX_SELECTIONS = 2;
+
+/** Exact selection behavior used by the Anxiety type grid. */
+export function toggleAnxietyTypeSelection(values: string[], value: string): string[] {
+  if (values.includes(value)) return values.filter((item) => item !== value);
+  if (values.length >= ANXIETY_TYPE_MAX_SELECTIONS) return values;
+  return [...values, value];
+}
+
+/** Keep broad or uncertain answers from contradicting specific locations. */
+export function normalizeAnxietyBodyLocations(values: string[]): string[] {
+  let unique = [...new Set(values)];
+  if (unique.length > 1 && unique.includes(NO_SPECIFIC_BODY_LOCATION)) {
+    unique = unique.filter((value) => value !== NO_SPECIFIC_BODY_LOCATION);
+  }
+  if (unique.length > 1 && unique.includes(WHOLE_BODY)) {
+    return unique.filter((value) => value !== WHOLE_BODY);
+  }
+  return unique;
+}
+
+export function toggleAnxietyBodyLocation(values: string[], value: string): string[] {
+  const normalized = normalizeAnxietyBodyLocations(values);
+  if (value === NO_SPECIFIC_BODY_LOCATION) {
+    return normalized.includes(NO_SPECIFIC_BODY_LOCATION) ? [] : [NO_SPECIFIC_BODY_LOCATION];
+  }
+  if (value === WHOLE_BODY) {
+    return normalized.includes(WHOLE_BODY) ? [] : [WHOLE_BODY];
+  }
+  const withoutBroadAnswer = normalized.filter((item) =>
+    item !== WHOLE_BODY && item !== NO_SPECIFIC_BODY_LOCATION);
+  return withoutBroadAnswer.includes(value)
+    ? withoutBroadAnswer.filter((item) => item !== value)
+    : [...withoutBroadAnswer, value];
+}
+
+export function canProceedAnxietyStep(
+  step: AnxietyTrackerStep,
+  anxietyTypes: string[],
+  bodyLocations: string[],
+  urgencyHigh: boolean | null,
+  reaction: string,
+): boolean {
+  switch (step) {
+    case "type":     return anxietyTypes.length > 0;
+    case "body":     return bodyLocations.length > 0;
+    case "urgency":  return urgencyHigh !== null;
+    case "reaction": return reaction !== "";
+    default:          return true;
+  }
+}
+
+export function withAnxietyOutcome(
+  log: AnxietyLog,
+  outcomeAfter: AnxietyLog["outcomeAfter"],
+): AnxietyLog {
+  return {
+    ...log,
+    outcomeAfter,
+    answers: { ...log.answers, outcomeAfter: outcomeAfter ?? null },
+  };
+}
+
+interface AnxietyAnswersInput {
+  anxietyTypes: string[];
+  intensity: number | null;
+  bodyLocations: string[];
+  bodyPrediction: string;
+  urgencyHigh: boolean;
+  context: string;
+  triggers: string[];
+  reassuranceSeeking: string[];
+  linkedStates: string[];
+  reaction: string;
+  note: string;
+}
+
+function optionalStableOptionId(value: string): string | null {
+  return value === "" ? null : toStableOptionId(value);
+}
+
+function optionalStableOptionIds(values: string[]): string[] | null {
+  return values.length === 0 ? null : toStableOptionIds(values);
+}
+
+function optionalTrimmedText(value: string): string | null {
+  const trimmed = value.trim();
+  return trimmed === "" ? null : trimmed;
+}
+
+export function buildAnxietyAnswers(
+  input: AnxietyAnswersInput,
+): NonNullable<AnxietyLog["answers"]> {
+  return {
+    anxietyTypes: toStableOptionIds(input.anxietyTypes),
+    intensity: input.intensity,
+    bodyLocations: toStableOptionIds(input.bodyLocations),
+    bodyPrediction: optionalTrimmedText(input.bodyPrediction),
+    urgencyHigh: input.urgencyHigh,
+    context: optionalStableOptionId(input.context),
+    triggers: optionalStableOptionIds(input.triggers),
+    reassuranceSeeking: optionalStableOptionIds(input.reassuranceSeeking),
+    linkedStates: optionalStableOptionIds(input.linkedStates),
+    reaction: toStableOptionId(input.reaction),
+    note: optionalTrimmedText(input.note),
+    outcomeAfter: null,
+  };
+}
 
 const CONTEXTS = [
   "Social — with unknowns",
@@ -80,7 +195,7 @@ const REASSURANCE_SEEKING = [
   "Compulsive distraction",
 ];
 
-const REACTIONS = [
+export const REACTIONS = [
   "Sat with it — didn't react",
   "Tried to fix myself",
   "Avoided or left",
@@ -88,7 +203,35 @@ const REACTIONS = [
   "Talked more / overcompensated",
   "Used a tool (breathing, grounding…)",
   "Reached out to someone",
+  "Not yet / just logging",
 ];
+
+const ANXIETY_COMPLETION_MESSAGE_KEYS: Record<string, string> = {
+  "Sat with it — didn't react": "anxiety.msg.sat_with",
+  "Used a tool (breathing, grounding…)": "anxiety.msg.used_tool",
+  "Reached out to someone": "anxiety.msg.reached_out",
+  "Tried to fix myself": "anxiety.msg.tried_fix",
+  "Avoided or left": "anxiety.msg.avoided",
+  "Searched for distraction": "anxiety.msg.distracted",
+  "Talked more / overcompensated": "anxiety.msg.overcompensated",
+};
+
+export function getAnxietyCompletionCopy(
+  reaction: string,
+  urgencyHigh: boolean,
+  language: "en" | "nl",
+  translate: (key: string) => string,
+): { message: string; medicalCaveat: string } {
+  const message = urgencyHigh
+    ? (language === "nl"
+        ? "Je registratie is opgeslagen. Omdat je dit als dringend hebt gemarkeerd, is beoordeling of ondersteuning door een persoon belangrijk."
+        : "Your log is saved. Because you marked this as urgent, assessment or support from a person is important.")
+    : translate(ANXIETY_COMPLETION_MESSAGE_KEYS[reaction] ?? "anxiety.msg.default");
+  return {
+    message,
+    medicalCaveat: translate("anxiety.medical_caveat"),
+  };
+}
 
 const LINKED_STATES = [
   "This is triggering a craving",
@@ -158,7 +301,8 @@ export function AnxietyTracker() {
   const [intensity, setIntensity] = useState<number | null>(() => md?.intensity ?? null);
 
   // Step 2 — body
-  const [bodyLocations, setBodyLocations] = useState<string[]>(() => md?.bodyLocations ?? []);
+  const [bodyLocations, setBodyLocations] = useState<string[]>(() =>
+    normalizeAnxietyBodyLocations(md?.bodyLocations ?? []));
   const [bodyPrediction, setBodyPrediction] = useState(() => md?.bodyPrediction ?? "");
 
   // Step 3 — urgency + context + reassurance
@@ -234,17 +378,6 @@ export function AnxietyTracker() {
     }
   }, [anxietyLogs, m?.savedLogId, outcome, savedLog]);
 
-  // Completion messages keyed by stored English reaction value
-  const MESSAGES: Record<string, string> = {
-    "Sat with it — didn't react": t("anxiety.msg.sat_with"),
-    "Used a tool (breathing, grounding…)": t("anxiety.msg.used_tool"),
-    "Reached out to someone": t("anxiety.msg.reached_out"),
-    "Tried to fix myself": t("anxiety.msg.tried_fix"),
-    "Avoided or left": t("anxiety.msg.avoided"),
-    "Searched for distraction": t("anxiety.msg.distracted"),
-    "Talked more / overcompensated": t("anxiety.msg.overcompensated"),
-  };
-
   const toggle = (set: React.Dispatch<React.SetStateAction<string[]>>, val: string) =>
     set((prev) => prev.includes(val) ? prev.filter((x) => x !== val) : [...prev, val]);
 
@@ -261,18 +394,19 @@ export function AnxietyTracker() {
   const totalSteps = STEP_ORDER.length;
 
   // Gate "Next": every required question on the current step must be answered.
-  const canProceed = useMemo(() => {
-    switch (step) {
-      case "type":     return anxietyTypes.length > 0;
-      case "body":     return bodyLocations.length > 0;
-      case "urgency":  return urgencyHigh !== null;
-      case "reaction": return reaction !== "";
-      default:         return true;
-    }
-  }, [step, anxietyTypes, bodyLocations, urgencyHigh, reaction]);
+  const canProceed = useMemo(
+    () => canProceedAnxietyStep(step, anxietyTypes, bodyLocations, urgencyHigh, reaction),
+    [step, anxietyTypes, bodyLocations, urgencyHigh, reaction],
+  );
 
   async function handleSave() {
-    if (saveLock.current || urgencyHigh === null) return;
+    if (
+      saveLock.current ||
+      anxietyTypes.length === 0 ||
+      bodyLocations.length === 0 ||
+      urgencyHigh === null ||
+      reaction === ""
+    ) return;
     saveLock.current = true;
     setSaving(true);
     setError(null);
@@ -284,31 +418,36 @@ export function AnxietyTracker() {
         occurredAt: startedAt,
         startedAt,
         completedAt,
-        dataVersion: 2,
-        contentVersion: "registration-v2",
-        answers: {
-          anxietyTypes: toStableOptionIds(anxietyTypes),
+        dataVersion: CURRENT_REGISTRATION_DATA_VERSION,
+        contentVersion: CURRENT_REGISTRATION_CONTENT_VERSION,
+        answers: buildAnxietyAnswers({
+          anxietyTypes,
           intensity,
-          bodyLocations: toStableOptionIds(bodyLocations),
+          bodyLocations,
+          bodyPrediction,
           urgencyHigh,
-          context: toStableOptionId(context),
-          triggers: toStableOptionIds(triggers),
-          reassuranceSeeking: toStableOptionIds(reassuranceSeeking),
-          linkedStates: toStableOptionIds(linkedStates),
-          reaction: toStableOptionId(reaction),
-        },
+          context,
+          triggers,
+          reassuranceSeeking,
+          linkedStates,
+          reaction,
+          note,
+        }),
         intensity,
         context,
-        trigger: triggers[0] ?? "",
+        // The UI asks for multiple triggers/linked states and never asks the
+        // person to nominate a primary one. Keep the legacy scalar fields
+        // empty instead of silently promoting the first selected answer.
+        trigger: "",
         bodySensations: bodyLocations,
         reaction,
-        note,
+        note: note.trim(),
         anxietyTypes,
         bodyLocations,
-        bodyPrediction,
+        bodyPrediction: bodyPrediction.trim(),
         urgencyHigh,
         reassuranceSeeking,
-        linkedState: linkedStates[0] ?? "",
+        linkedState: "",
         triggers,
         linkedStates,
         outcomeAfter: null,
@@ -337,7 +476,7 @@ export function AnxietyTracker() {
       const real = next === "dont-know"
         ? "unknown"
         : (["decreased", "same", "increased"] as const).find((item) => item === next) ?? null;
-      const updated: AnxietyLog = { ...savedLog, outcomeAfter: real };
+      const updated = withAnxietyOutcome(savedLog, real);
       await updateAnxiety(updated);
       setSavedLog(updated);
       setOutcome(next);
@@ -374,8 +513,22 @@ export function AnxietyTracker() {
       }
       return;
     }
-    reg.patchSession({ pendingReturn: { returnRoute: "/anxiety", returnStep: step } });
-    navigate(path);
+    setLeavingHome(true);
+    setError(null);
+    try {
+      const returnSaved = await reg.patchSession({
+        pendingReturn: { returnRoute: "/anxiety", returnStep: step },
+      });
+      if (!returnSaved) throw new Error("Anxiety return route could not be saved.");
+      navigate(path);
+    } catch {
+      setError(
+        language === "nl"
+          ? "Het hulpmiddel kon niet veilig worden geopend. Je blijft op deze registratie; probeer opnieuw."
+          : "The tool could not be opened safely. You are still on this log; please try again.",
+      );
+      setLeavingHome(false);
+    }
   }, [isWriting, language, navigate, reg, step]);
 
   const goHome = useCallback(async () => {
@@ -414,11 +567,7 @@ export function AnxietyTracker() {
     else if (step === "reaction") setStep("details");
   }
 
-  const completionMsg = urgencyHigh === true
-    ? (language === "nl"
-        ? "Je registratie is opgeslagen. Omdat je dit als dringend hebt gemarkeerd, is beoordeling of ondersteuning door een persoon belangrijk."
-        : "Your log is saved. Because you marked this as urgent, assessment or support from a person is important.")
-    : MESSAGES[reaction] ?? t("anxiety.msg.default");
+  const completionCopy = getAnxietyCompletionCopy(reaction, urgencyHigh === true, language, t);
 
   const urgentSupportPanel = (
     <div className="w-full max-w-xs rounded-2xl border border-amber-500/50 bg-card p-4 text-left">
@@ -474,15 +623,29 @@ export function AnxietyTracker() {
         {step === "type" && (
           <>
             <div>
-              <h2 className="text-xl font-semibold text-foreground mb-1">{t("anxiety.q.type")}</h2>
+              <h2 className="text-xl font-semibold text-foreground mb-1">
+                {t("anxiety.q.type")}{" "}
+                <span className="text-muted-foreground font-normal text-sm">({t("common.required")})</span>
+              </h2>
               <p className="text-sm text-muted-foreground">{t("anxiety.q.type_sub")}</p>
             </div>
-            <MultiSelectGrid options={ANXIETY_TYPES} value={anxietyTypes} onToggle={(v) => toggle(setAnxietyTypes, v)} translate={tOpt} />
+            <MultiSelectGrid
+              options={ANXIETY_TYPES}
+              value={anxietyTypes}
+              onToggle={(value) => setAnxietyTypes((previous) =>
+                toggleAnxietyTypeSelection(previous, value))}
+              translate={tOpt}
+              maxSelections={ANXIETY_TYPE_MAX_SELECTIONS}
+              selectionLabel={t("tracker.selection_limit")}
+            />
 
             <div className="h-px bg-border" />
 
             <div>
-              <h3 className="text-base font-medium text-foreground mb-1">{t("anxiety.q.intensity")}</h3>
+              <h3 className="text-base font-medium text-foreground mb-1">
+                {t("anxiety.q.intensity")}{" "}
+                <span className="text-muted-foreground font-normal text-sm">({t("common.optional")})</span>
+              </h3>
               <p className="text-xs text-muted-foreground mb-3">{t("anxiety.q.intensity_note")}</p>
               <IntensitySlider
                 value={intensity}
@@ -500,13 +663,17 @@ export function AnxietyTracker() {
         {step === "body" && (
           <>
             <div>
-              <h2 className="text-xl font-semibold text-foreground mb-1">{t("anxiety.q.body")}</h2>
+              <h2 className="text-xl font-semibold text-foreground mb-1">
+                {t("anxiety.q.body")}{" "}
+                <span className="text-muted-foreground font-normal text-sm">({t("common.required")})</span>
+              </h2>
               <p className="text-sm text-muted-foreground">{t("anxiety.q.body_sub")}</p>
             </div>
             <MultiSelectGrid
               options={BODY_LOCATIONS}
               value={bodyLocations}
-              onToggle={(v) => toggle(setBodyLocations, v)}
+              onToggle={(value) => setBodyLocations((previous) =>
+                toggleAnxietyBodyLocation(previous, value))}
               cols={3}
               translate={tOpt}
             />
@@ -534,7 +701,10 @@ export function AnxietyTracker() {
         {step === "urgency" && (
           <>
             <div>
-              <h2 className="text-xl font-semibold text-foreground mb-1">{t("anxiety.q.urgency")}</h2>
+              <h2 className="text-xl font-semibold text-foreground mb-1">
+                {t("anxiety.q.urgency")}{" "}
+                <span className="text-muted-foreground font-normal text-sm">({t("common.required")})</span>
+              </h2>
             </div>
 
             {/* Urgency toggle */}
@@ -661,17 +831,21 @@ export function AnxietyTracker() {
         {step === "reaction" && (
           <>
             <div>
-              <h2 className="text-xl font-semibold text-foreground mb-1">{t("anxiety.q.reaction")}</h2>
+              <h2 className="text-xl font-semibold text-foreground mb-1">
+                {t("anxiety.q.reaction")}{" "}
+                <span className="text-muted-foreground font-normal text-sm">({t("common.required")})</span>
+              </h2>
               <p className="text-sm text-muted-foreground">{t("anxiety.q.reaction_sub")}</p>
             </div>
             <ChipCol options={REACTIONS} value={reaction} onChange={setReaction} translate={tOpt} />
 
             {!showNote ? (
               <button
+                type="button"
                 onClick={() => setShowNote(true)}
                 className="text-xs text-muted-foreground hover:text-foreground transition-colors text-left"
               >
-                {t("common.add_note")}
+                {t("common.add_note")} ({t("common.optional")})
               </button>
             ) : (
               <textarea
@@ -700,9 +874,16 @@ export function AnxietyTracker() {
             <div>
               <h2 className="text-xl font-semibold text-foreground mb-2">{t("common.logged")}</h2>
               <p className="text-base text-muted-foreground leading-relaxed max-w-xs mx-auto">
-                {completionMsg}
+                {completionCopy.message}
               </p>
             </div>
+
+            <p
+              role="note"
+              className="w-full max-w-xs rounded-2xl border border-border bg-card px-4 py-3 text-left text-sm leading-relaxed text-muted-foreground"
+            >
+              {completionCopy.medicalCaveat}
+            </p>
 
             {urgencyHigh === true && urgentSupportPanel}
 
@@ -746,7 +927,7 @@ export function AnxietyTracker() {
                     disabled={isWriting || !savedLog}
                     onClick={() => {
                       const next = outcome === value ? "" : value;
-                      applyOutcome(next);
+                      void applyOutcome(next);
                     }}
                     aria-pressed={outcome === value}
                     className={`py-3 px-3 rounded-2xl border text-sm font-medium transition-all touch-target ${

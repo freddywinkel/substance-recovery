@@ -77,6 +77,42 @@ export function CrisisNow() {
 
       <div className="flex-1 overflow-y-auto scroll-smooth-ios px-4 py-4 pb-safe flex flex-col gap-3">
 
+        {/* Universal emergency routes stay visible even when no personal crisis service is configured. */}
+        <section
+          aria-labelledby="emergency-routes-title"
+          className="bg-red-950/20 border border-red-800/40 rounded-2xl p-5 flex flex-col gap-3"
+        >
+          <div className="flex items-start gap-3">
+            <div className="rounded-xl p-2.5 bg-red-600/20 text-red-400 shrink-0">
+              <Phone size={22} strokeWidth={1.8} aria-hidden="true" />
+            </div>
+            <div className="min-w-0">
+              <h2 id="emergency-routes-title" className="text-sm font-semibold text-foreground">
+                {t("help.emergency")}
+              </h2>
+              <p className="text-sm text-muted-foreground mt-1 leading-relaxed">
+                {t("crisis.emergency_text")}
+              </p>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <a
+              href="tel:112"
+              className="flex items-center justify-center gap-2 w-full bg-red-600 hover:bg-red-700 text-white rounded-xl py-3.5 px-3 font-semibold text-sm active:scale-[0.98] transition-all touch-target"
+            >
+              <Phone size={18} strokeWidth={2} aria-hidden="true" />
+              {t("crisis.112")}
+            </a>
+            <a
+              href="tel:113"
+              className="flex items-center justify-center gap-2 w-full bg-card border border-red-800/40 text-foreground rounded-xl py-3.5 px-3 font-semibold text-sm hover:bg-muted active:scale-[0.98] transition-all touch-target"
+            >
+              <Phone size={18} strokeWidth={2} aria-hidden="true" />
+              {t("crisis.113")}
+            </a>
+          </div>
+        </section>
+
         {/* ── Crisis Service (prominent) ─────────────────── */}
         {crisisService && crisisService.name && crisisService.number && (
           <div className="bg-red-950/20 border border-red-800/30 rounded-2xl p-5 flex flex-col gap-3">

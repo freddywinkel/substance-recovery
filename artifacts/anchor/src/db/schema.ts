@@ -1,8 +1,21 @@
 import { openDB, type DBSchema, type IDBPDatabase } from "idb";
 import {
+  migrateCravingRegistrationType,
   migrateCravingTo0to10,
+  migrateRelapseFollowUpAnswers,
+  migrateRelapseV2DefaultAnswers,
   migrateRegistrationRecordMetadata,
 } from "./migrations";
+import { migrateRelapseSafetyRecord } from "./relapseSafety";
+import { normalizeRelapseTimingRecord } from "./relapseTiming";
+import { migrateCompletedTrekRecord } from "@/lib/trekMigration";
+import type { AcuteRisk, AcuteRiskSelection } from "./relapseSafety";
+
+export type {
+  AcuteConcern,
+  AcuteRisk,
+  AcuteRiskSelection,
+} from "./relapseSafety";
 interface SyncMetaRecord {
   key: string;
   value: string | number;
@@ -132,7 +145,8 @@ export interface CravingLog extends SyncFields, RegistrationRecordMetadata {
   interventionUsed: boolean | null;
   markAsPattern: boolean;
 
-  // Safety
+  // Deprecated compatibility field. Earlier builds inferred this from an
+  // intensity threshold. New writes keep it false and Insights ignores it.
   highRiskFlag: boolean;
 
   // Optional catch-all note
@@ -174,14 +188,6 @@ export type AmountCategory =
   | "multiple-times"
   | "binge"
   | "prefer-not"
-  | "unanswered";
-
-export type AcuteRisk =
-  | "none"
-  | "unsafe"
-  | "fear-continued-use"
-  | "withdrawal"
-  | "self-harm-risk"
   | "unanswered";
 
 export interface RelapseLog extends SyncFields, RegistrationRecordMetadata {
@@ -226,6 +232,12 @@ export interface RelapseLog extends SyncFields, RegistrationRecordMetadata {
   // Step 9 — next step + risk
   nextStep: string;
   nextStepOther: string;
+  /** Canonical safety answer. Empty means unanswered; `none` is exclusive. */
+  acuteRisks: AcuteRiskSelection[];
+  /**
+   * Compatibility alias for older backups and consumers. It represents only
+   * one prioritized value; `acuteRisks` above is authoritative.
+   */
   acuteRisk: AcuteRisk;
 
   // Step 10 — optional note
@@ -377,7 +389,7 @@ let dbInstance: IDBPDatabase<AnchorDB> | null = null;
 export async function getDB(): Promise<IDBPDatabase<AnchorDB>> {
   if (dbInstance) return dbInstance;
 
-  dbInstance = await openDB<AnchorDB>("anchor-recovery", 7, {
+  dbInstance = await openDB<AnchorDB>("anchor-recovery", 8, {
     upgrade(db, oldVersion, _newVersion, tx) {
       if (oldVersion < 1) {
         const journalStore = db.createObjectStore("journal", { keyPath: "id" });
@@ -455,7 +467,6 @@ export async function getDB(): Promise<IDBPDatabase<AnchorDB>> {
       if (oldVersion < 7) {
         const stores = [
           "cravingLogs",
-          "relapseLogs",
           "anxietyLogs",
           "boredomLogs",
           "cigaretteLogs",
@@ -469,6 +480,37 @@ export async function getDB(): Promise<IDBPDatabase<AnchorDB>> {
             return cursor.continue().then(migrateCursor);
           });
         }
+      }
+      // v8 — make simultaneous Relapse safety concerns canonical. Keep the
+      // singular value only as a compatibility alias for older consumers.
+      if (oldVersion < 8 && db.objectStoreNames.contains("relapseLogs")) {
+        const store = tx.objectStore("relapseLogs");
+        store.openCursor().then(function migrateRelapseCursor(cursor): Promise<void> | void {
+          if (!cursor) return;
+          cursor.update(normalizeRelapseTimingRecord(migrateRelapseFollowUpAnswers(
+            migrateRelapseV2DefaultAnswers(
+              migrateRelapseSafetyRecord(
+                migrateRegistrationRecordMetadata(cursor.value),
+              ),
+            ),
+          )));
+          return cursor.continue().then(migrateRelapseCursor);
+        });
+      }
+      if (oldVersion < 8 && db.objectStoreNames.contains("cravingLogs")) {
+        const store = tx.objectStore("cravingLogs");
+        store.openCursor().then(function migrateCravingCursor(cursor): Promise<void> | void {
+          if (!cursor) return;
+          // A direct v6 -> v8 upgrade also runs the v7 cursor above. Both
+          // cursors can observe the same pre-v7 value, so this later whole-record
+          // update must carry metadata itself rather than erase the v7 result.
+          cursor.update(migrateCompletedTrekRecord(
+            migrateCravingRegistrationType(
+              migrateRegistrationRecordMetadata(cursor.value),
+            ),
+          ));
+          return cursor.continue().then(migrateCravingCursor);
+        });
       }
     },
   });

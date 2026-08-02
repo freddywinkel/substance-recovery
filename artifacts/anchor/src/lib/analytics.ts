@@ -1,7 +1,95 @@
 import type { CravingLog, RelapseLog, AnxietyLog, BoredomLog } from "@/db";
 import { logicalTimestamp } from "@/lib/registrationIds";
+import {
+  cravingRegistrationKind,
+  explicitSafetyAnswer,
+  registrationBoolean,
+  registrationNumber,
+  registrationOptionId,
+  registrationOptionIds,
+  type AttentionReason,
+} from "@/lib/canonicalRegistration";
 
 export type TimeRange = "7d" | "30d" | "90d" | "all";
+
+/** Draft Craving/Relapse records are form state, not completed registrations. */
+export function completedStatusEntries<T extends { status: "draft" | "completed" }>(
+  items: T[],
+): T[] {
+  return items.filter((item) => item.status === "completed");
+}
+
+export type SobrietyStats = {
+  totalDays: number;
+  currentStreakDays: number;
+  hasRelapse: boolean;
+  startDate: string;
+};
+
+export function computeSobrietyStats(
+  sobrietyStartDate: string | null,
+  relapseLogs: RelapseLog[],
+  now = Date.now(),
+): SobrietyStats | null {
+  if (!sobrietyStartDate) return null;
+  const start = new Date(`${sobrietyStartDate}T00:00:00`).getTime();
+  if (!Number.isFinite(start) || start > now) return null;
+  const completedRelapses = completedStatusEntries(relapseLogs)
+    .filter((entry) => logicalTimestamp(entry) >= start && logicalTimestamp(entry) <= now)
+  const latestRelapse = completedRelapses
+    .reduce((latest, entry) => Math.max(latest, logicalTimestamp(entry)), start);
+  return {
+    totalDays: Math.max(0, Math.floor((now - start) / 86_400_000)),
+    currentStreakDays: Math.max(0, Math.floor((now - latestRelapse) / 86_400_000)),
+    hasRelapse: completedRelapses.length > 0,
+    startDate: sobrietyStartDate,
+  };
+}
+
+export function computeCurrentStreakDays(
+  sobrietyStartDate: string | null,
+  relapseLogs: RelapseLog[],
+  now = Date.now(),
+): number | null {
+  return computeSobrietyStats(sobrietyStartDate, relapseLogs, now)?.currentStreakDays ?? null;
+}
+
+export type CompletedRegistrationActivity = {
+  completedCount: number;
+  lastCompletedAt: number | null;
+  daysSinceLastCompleted: number | null;
+};
+
+/** Neutral, factual Home summary. It never assigns a score or severity level. */
+export function computeCompletedRegistrationActivity(
+  logs: {
+    cravingLogs: CravingLog[];
+    relapseLogs: RelapseLog[];
+    anxietyLogs: AnxietyLog[];
+    boredomLogs: BoredomLog[];
+  },
+  now = Date.now(),
+): CompletedRegistrationActivity {
+  const completed = [
+    ...completedStatusEntries(logs.cravingLogs),
+    ...completedStatusEntries(logs.relapseLogs),
+    ...logs.anxietyLogs,
+    ...logs.boredomLogs,
+  ];
+  const timestamps = completed
+    // This card describes completion activity, not when the recorded event
+    // occurred. Legacy records predate completedAt and fall back to timestamp.
+    .map((entry) => entry.completedAt ?? entry.timestamp)
+    .filter((timestamp) => Number.isFinite(timestamp) && timestamp <= now);
+  const lastCompletedAt = timestamps.length > 0 ? Math.max(...timestamps) : null;
+  return {
+    completedCount: completed.length,
+    lastCompletedAt,
+    daysSinceLastCompleted: lastCompletedAt == null
+      ? null
+      : Math.max(0, Math.floor((now - lastCompletedAt) / 86_400_000)),
+  };
+}
 
 export function filterByRange<T extends { timestamp: number; occurredAt?: number | null }>(
   items: T[],
@@ -34,12 +122,6 @@ function avgOf(arr: number[]): number | null {
   return arr.length ? arr.reduce((s, v) => s + v, 0) / arr.length : null;
 }
 
-/** Normalize a field that may be a new plural array or a legacy singular string. */
-function pluralOr(plural: string[] | undefined, singular: string | undefined): string[] {
-  if (plural && plural.length) return plural;
-  return singular ? [singular] : [];
-}
-
 export interface StrategyOutcome {
   strategy: string;
   total: number;
@@ -61,7 +143,6 @@ export interface CravingStats {
   avgConfidenceLift: number | null;
   decreasedCount: number;
   decreasedPct: number | null;
-  highRiskCount: number;
   withActionCount: number;
   actionUsedPct: number | null;
   hasOutcomeData: boolean;
@@ -90,55 +171,63 @@ export function computeCravingStats(logs: CravingLog[]): CravingStats {
   const n = done.length;
 
   const intensities = done
-    .map((l) => l.intensity)
+    .map((l) => registrationNumber(l, "intensity", l.intensity))
     .filter((v): v is number => v != null && v >= 0);
   const confBefore = done
-    .map((l) => l.confidenceBefore)
+    .map((l) => registrationNumber(l, "confidenceBefore", l.confidenceBefore))
     .filter((v): v is number => v != null && v >= 0);
 
-  const pairedIntensity = done.filter((l) => l.intensity != null && l.intensityAfter != null);
-  const drops = pairedIntensity.map(
-    (l) => (l.intensity as number) - (l.intensityAfter as number)
-  );
+  const pairedIntensity = done
+    .map((log) => ({
+      before: registrationNumber(log, "intensity", log.intensity),
+      after: registrationNumber(log, "intensityAfter", log.intensityAfter),
+    }))
+    .filter((pair): pair is { before: number; after: number } => pair.before != null && pair.after != null);
+  const drops = pairedIntensity.map(({ before, after }) => before - after);
 
-  const pairedConf = done.filter(
-    (l) => l.confidenceAfter != null && l.confidenceBefore != null
-  );
-  const lifts = pairedConf.map(
-    (l) => (l.confidenceAfter as number) - (l.confidenceBefore as number)
-  );
+  const pairedConf = done
+    .map((log) => ({
+      before: registrationNumber(log, "confidenceBefore", log.confidenceBefore),
+      after: registrationNumber(log, "confidenceAfter", log.confidenceAfter),
+    }))
+    .filter((pair): pair is { before: number; after: number } => pair.before != null && pair.after != null);
+  const lifts = pairedConf.map(({ before, after }) => after - before);
 
   const decreasedCount = done.filter(
-    (l) => l.cravingOutcome === "decreased"
+    (l) => registrationOptionId(l, "cravingOutcome", l.cravingOutcome) === "decreased"
   ).length;
   const withAction = done.filter(
-    (l) => l.chosenAction && l.chosenAction !== "document-only"
+    (l) => {
+      const action = registrationOptionId(l, "chosenAction", l.chosenAction);
+      return action != null && action !== "document-only";
+    }
   );
 
-  const activeLogs = done.filter((l) => l.cravingType === "active");
-  const passiveLogs = done.filter((l) => l.cravingType !== "active");
+  const activeLogs = done.filter((l) => cravingRegistrationKind(l) === "trek");
+  const passiveLogs = done.filter((l) => cravingRegistrationKind(l) === "craving");
 
   const activeIntensities = activeLogs
-    .map((l) => l.intensity)
+    .map((l) => registrationNumber(l, "intensity", l.intensity))
     .filter((v): v is number => v != null && v >= 0);
   const passiveIntensities = passiveLogs
-    .map((l) => l.intensity)
+    .map((l) => registrationNumber(l, "intensity", l.intensity))
     .filter((v): v is number => v != null && v >= 0);
 
   // Behavioral outcome is self-reported. It is not an effectiveness or causal signal.
-  const withUseOutcome = done.filter((l) => l.useOutcome);
-  const usedCount = done.filter((l) => l.useOutcome === "used").length;
-  const notUsedCount = done.filter((l) => l.useOutcome === "not_used").length;
-  const unsureCount = done.filter((l) => l.useOutcome === "unsure").length;
+  const withUseOutcome = done.filter((l) => registrationOptionId(l, "useOutcome", l.useOutcome) != null);
+  const usedCount = done.filter((l) => registrationOptionId(l, "useOutcome", l.useOutcome) === "used").length;
+  const notUsedCount = done.filter((l) => registrationOptionId(l, "useOutcome", l.useOutcome) === "not_used").length;
+  const unsureCount = done.filter((l) => registrationOptionId(l, "useOutcome", l.useOutcome) === "unsure").length;
 
   // Descriptive correlation only, and only where the action was explicitly attempted.
   const strategyMap: Record<string, { notUsed: number; used: number; unsure: number }> = {};
-  for (const l of withUseOutcome.filter((entry) => entry.actionAttempted === true)) {
-    const key = l.chosenAction || "";
+  for (const l of withUseOutcome.filter((entry) => registrationBoolean(entry, "actionAttempted", entry.actionAttempted) === true)) {
+    const key = registrationOptionId(l, "chosenAction", l.chosenAction) ?? "";
     if (!key) continue;
     const bucket = strategyMap[key] ?? { notUsed: 0, used: 0, unsure: 0 };
-    if (l.useOutcome === "not_used") bucket.notUsed += 1;
-    else if (l.useOutcome === "used") bucket.used += 1;
+    const outcome = registrationOptionId(l, "useOutcome", l.useOutcome);
+    if (outcome === "not_used") bucket.notUsed += 1;
+    else if (outcome === "used") bucket.used += 1;
     else bucket.unsure += 1;
     strategyMap[key] = bucket;
   }
@@ -168,10 +257,9 @@ export function computeCravingStats(logs: CravingLog[]): CravingStats {
     avgConfidenceLift: avgOf(lifts),
     decreasedCount,
     decreasedPct: n > 0 ? (decreasedCount / n) * 100 : null,
-    highRiskCount: done.filter((l) => l.highRiskFlag).length,
     withActionCount: withAction.length,
     actionUsedPct: n > 0 ? (withAction.length / n) * 100 : null,
-    hasOutcomeData: pairedIntensity.length > 0 || done.some((l) => l.cravingOutcome),
+    hasOutcomeData: pairedIntensity.length > 0 || done.some((l) => registrationOptionId(l, "cravingOutcome", l.cravingOutcome) != null),
     usedCount,
     notUsedCount,
     unsureCount,
@@ -179,32 +267,22 @@ export function computeCravingStats(logs: CravingLog[]): CravingStats {
     reportedNotUsedPct: withUseOutcome.length > 0 ? (notUsedCount / withUseOutcome.length) * 100 : null,
     reportedOutcomesByAttemptedAction,
     topSituations: topFrequencies(done.flatMap((l) =>
-      l.cravingType === "active" ? (l.triggers ?? []) : (l.situationPresets ?? []))),
-    topEmotions: topFrequencies(done.flatMap((l) => l.emotions ?? [])),
-    topPhysical: topFrequencies(done.flatMap((l) => l.physicalSensations ?? [])),
-    topThoughts: topFrequencies(done.flatMap((l) => l.thoughtPresets ?? [])),
-    topSubstances: topFrequencies(done.flatMap((l) => l.substances ?? [])),
-    topLocations: topFrequencies(
-      done.map((l) => l.location ?? "").filter(Boolean)
-    ),
-    topSocialContexts: topFrequencies(
-      done.flatMap((l) => l.socialContext ?? [])
-    ),
-    topActions: topFrequencies(
-      done.map((l) => l.chosenAction ?? "").filter(Boolean)
-    ),
-    buildupDurations: topFrequencies(
-      done.map((l) => l.buildupDuration ?? "").filter(Boolean)
-    ),
-    topPlanningStages: topFrequencies(
-      activeLogs.map((l) => l.planningStage ?? "").filter(Boolean)
-    ),
-    topNeeds: topFrequencies(
-      activeLogs.flatMap((l) => pluralOr(l.needTypes, l.needType))
-    ),
-    topOnsetTypes: topFrequencies(
-      passiveLogs.map((l) => l.onsetType ?? "").filter(Boolean)
-    ),
+      cravingRegistrationKind(l) === "trek"
+        ? registrationOptionIds(l, "triggers", l.triggers)
+        : cravingRegistrationKind(l) === "craving"
+          ? registrationOptionIds(l, "situations", l.situationPresets)
+          : [])),
+    topEmotions: topFrequencies(done.flatMap((l) => registrationOptionIds(l, "emotions", l.emotions))),
+    topPhysical: topFrequencies(done.flatMap((l) => registrationOptionIds(l, "physicalSensations", l.physicalSensations))),
+    topThoughts: topFrequencies(done.flatMap((l) => registrationOptionIds(l, "thoughts", l.thoughtPresets))),
+    topSubstances: topFrequencies(done.flatMap((l) => registrationOptionIds(l, "targets", l.substances))),
+    topLocations: topFrequencies(done.map((l) => registrationOptionId(l, "location", l.location)).filter(Boolean)),
+    topSocialContexts: topFrequencies(done.flatMap((l) => registrationOptionIds(l, "socialContexts", l.socialContext))),
+    topActions: topFrequencies(done.map((l) => registrationOptionId(l, "chosenAction", l.chosenAction)).filter(Boolean)),
+    buildupDurations: topFrequencies(done.map((l) => registrationOptionId(l, "buildupDuration", l.buildupDuration)).filter(Boolean)),
+    topPlanningStages: topFrequencies(activeLogs.map((l) => registrationOptionId(l, "planningStage", l.planningStage)).filter(Boolean)),
+    topNeeds: topFrequencies(activeLogs.flatMap((l) => registrationOptionIds(l, "needs", l.needTypes?.length ? l.needTypes : l.needType ? [l.needType] : []))),
+    topOnsetTypes: topFrequencies(passiveLogs.map((l) => registrationOptionId(l, "onsetType", l.onsetType)).filter(Boolean)),
   };
 }
 
@@ -230,34 +308,43 @@ export function computeRelapseStats(logs: RelapseLog[]): RelapseStats {
           (Date.now() - Math.max(...done.map((l) => logicalTimestamp(l)))) / 86_400_000
         );
 
-  const allHelped = done.flatMap((l) => [...new Set([
+  const allHelped = done.flatMap((l) => registrationOptionIds(l, "couldHaveHelped", [
     ...(l.couldHaveHelpedEarly ?? []),
     ...(l.couldHaveHelpedMiddle ?? []),
     ...(l.couldHaveHelpedLast ?? []),
-  ])]);
+  ]));
 
   const labelCounts: Record<string, number> = {};
   done.forEach((l) => {
-    labelCounts[l.label] = (labelCounts[l.label] ?? 0) + 1;
+    const label = registrationOptionId(l, "label", l.label);
+    if (label) labelCounts[label] = (labelCounts[label] ?? 0) + 1;
   });
 
   return {
     total: n,
     daysSinceLast,
     topFirstTriggerTypes: topFrequencies(
-      done.map((l) => l.firstTriggerType ?? "").filter(Boolean)
+      done.map((l) => registrationOptionId(l, "firstTriggerType", l.firstTriggerType)).filter(Boolean)
     ),
     topMissedWarnings: topFrequencies(
-      done.flatMap((l) => l.missedWarnings ?? []),
+      done.flatMap((l) => registrationOptionIds(l, "missedWarnings", l.missedWarnings)),
       6
     ),
     topThoughtsBefore: topFrequencies(
-      done.flatMap((l) => pluralOr(l.preUseThoughtPresets, l.preUseThoughtPreset))
+      done.flatMap((l) => registrationOptionIds(
+        l,
+        "preUseThoughts",
+        l.preUseThoughtPresets?.length
+          ? l.preUseThoughtPresets
+          : l.preUseThoughtPreset
+            ? [l.preUseThoughtPreset]
+            : [],
+      ))
     ),
     topCouldHaveHelped: topFrequencies(allHelped, 5),
+    // A blank/missing answer is not the explicit "no one" selection.
     noSupportContactCount: done.filter((l) =>
-      l.supportContact === "No one right now" ||
-      (!l.supportContact?.trim() && !l.supportContactOther?.trim())).length,
+      registrationOptionId(l, "supportContact", l.supportContact) === "no-one-right-now").length,
     labelCounts,
   };
 }
@@ -281,17 +368,37 @@ export interface AnxietyStats {
 
 export function computeAnxietyStats(logs: AnxietyLog[]): AnxietyStats {
   const n = logs.length;
-  const satWithIt = logs.filter((l) => l.reaction === "Sat with it — didn't react");
-  const avoided = logs.filter((l) => l.reaction === "Avoided or left");
-  const withOutcome = logs.filter((l) => l.outcomeAfter != null && l.outcomeAfter !== "unknown");
-  const improved = logs.filter((l) => l.outcomeAfter === "decreased");
+  const satWithIt = logs.filter((l) =>
+    registrationOptionId(l, "reaction", l.reaction) === "sat-with-it-didnt-react");
+  const avoided = logs.filter((l) =>
+    registrationOptionId(l, "reaction", l.reaction) === "avoided-or-left");
+  const withOutcome = logs.filter((l) => {
+    const outcome = registrationOptionId(l, "outcomeAfter", l.outcomeAfter);
+    return outcome != null && outcome !== "unknown";
+  });
+  const improved = logs.filter((l) =>
+    registrationOptionId(l, "outcomeAfter", l.outcomeAfter) === "decreased");
   return {
     total: n,
-    avgIntensity: avgOf(logs.map((l) => l.intensity).filter((value): value is number => value != null)),
-    topContexts: topFrequencies(logs.map((l) => l.context).filter(Boolean)),
-    topTriggers: topFrequencies(logs.flatMap((l) => pluralOr(l.triggers, l.trigger))),
-    topReactions: topFrequencies(logs.map((l) => l.reaction).filter(Boolean)),
-    topBodySensations: topFrequencies(logs.flatMap((l) => l.bodyLocations?.length ? l.bodyLocations : l.bodySensations ?? [])),
+    avgIntensity: avgOf(logs
+      .map((l) => registrationNumber(l, "intensity", l.intensity))
+      .filter((value): value is number => value != null)),
+    topContexts: topFrequencies(logs
+      .map((l) => registrationOptionId(l, "context", l.context))
+      .filter(Boolean)),
+    topTriggers: topFrequencies(logs.flatMap((l) => registrationOptionIds(
+      l,
+      "triggers",
+      l.triggers?.length ? l.triggers : l.trigger ? [l.trigger] : [],
+    ))),
+    topReactions: topFrequencies(logs
+      .map((l) => registrationOptionId(l, "reaction", l.reaction))
+      .filter(Boolean)),
+    topBodySensations: topFrequencies(logs.flatMap((l) => registrationOptionIds(
+      l,
+      "bodyLocations",
+      l.bodyLocations?.length ? l.bodyLocations : l.bodySensations ?? [],
+    ))),
     satWithItCount: satWithIt.length,
     satWithItPct: n > 0 ? (satWithIt.length / n) * 100 : null,
     avoidedCount: avoided.length,
@@ -324,25 +431,52 @@ export interface BoredomStats {
 
 export function computeBoredomStats(logs: BoredomLog[]): BoredomStats {
   const n = logs.length;
-  const satWith = logs.filter((l) => l.action === "Sat with it — didn't react");
-  const escaped = logs.filter((l) => l.action === "Escaped immediately");
+  const satWith = logs.filter((l) =>
+    registrationOptionId(l, "action", l.action) === "sat-with-it-didnt-react");
+  const escaped = logs.filter((l) =>
+    registrationOptionId(l, "action", l.action) === "escaped-immediately");
   const delayed = logs.filter(
-    (l) => l.action === "Delayed action" || l.action === "Sat with it — didn't react"
+    (l) => {
+      const action = registrationOptionId(l, "action", l.action);
+      return action === "delayed-action" || action === "sat-with-it-didnt-react";
+    }
   );
 
-  const withOutcome = logs.filter((l) => l.outcomeAfter != null && l.outcomeAfter !== "unknown");
-  const improved = logs.filter((l) => l.outcomeAfter === "decreased");
+  const withOutcome = logs.filter((l) => {
+    const outcome = registrationOptionId(l, "outcomeAfter", l.outcomeAfter);
+    return outcome != null && outcome !== "unknown";
+  });
+  const improved = logs.filter((l) =>
+    registrationOptionId(l, "outcomeAfter", l.outcomeAfter) === "decreased");
 
   return {
     total: n,
-    avgIntensity: avgOf(logs.map((l) => l.intensity).filter((value): value is number => value != null)),
-    topFeelingTypes: topFrequencies(logs.flatMap((l) => l.feelingTypes ?? [])),
-    topStimulationNeeds: topFrequencies(
-      logs.flatMap((l) => pluralOr(l.stimulationNeeds, l.stimulationNeed))
-    ),
-    topSituations: topFrequencies(logs.map((l) => l.situation).filter(Boolean)),
-    topUrges: topFrequencies(logs.map((l) => l.urge).filter(Boolean)),
-    topActions: topFrequencies(logs.map((l) => l.action).filter(Boolean)),
+    avgIntensity: avgOf(logs
+      .map((l) => registrationNumber(l, "intensity", l.intensity))
+      .filter((value): value is number => value != null)),
+    topFeelingTypes: topFrequencies(logs.flatMap((l) => registrationOptionIds(
+      l,
+      "restlessnessTypes",
+      l.restlessnessTypes?.length ? l.restlessnessTypes : l.feelingTypes,
+    ))),
+    topStimulationNeeds: topFrequencies(logs.flatMap((l) => registrationOptionIds(
+      l,
+      "stimulationNeeds",
+      l.stimulationNeeds?.length
+        ? l.stimulationNeeds
+        : l.stimulationNeed
+          ? [l.stimulationNeed]
+          : [],
+    ))),
+    topSituations: topFrequencies(logs
+      .map((l) => registrationOptionId(l, "situation", l.situation))
+      .filter(Boolean)),
+    topUrges: topFrequencies(logs
+      .map((l) => registrationOptionId(l, "urge", l.urge))
+      .filter(Boolean)),
+    topActions: topFrequencies(logs
+      .map((l) => registrationOptionId(l, "action", l.action))
+      .filter(Boolean)),
     satWithItCount: satWith.length,
     satWithItPct: n > 0 ? (satWith.length / n) * 100 : null,
     escapedCount: escaped.length,
@@ -352,6 +486,48 @@ export function computeBoredomStats(logs: BoredomLog[]): BoredomStats {
     hasOutcomeData: withOutcome.length > 0,
     improvedCount: improved.length,
     improvedPct: withOutcome.length > 0 ? (improved.length / withOutcome.length) * 100 : null,
+  };
+}
+
+export interface AttentionStats {
+  answeredCount: number;
+  needsAttentionCount: number;
+  reasons: Record<AttentionReason, number>;
+}
+
+/**
+ * Count only explicit answers to dedicated safety questions. The function does
+ * not inspect intensity, legacy highRiskFlag, outcomes, or chosen actions.
+ */
+export function computeAttentionStats(logs: {
+  cravingLogs: CravingLog[];
+  relapseLogs: RelapseLog[];
+  anxietyLogs: AnxietyLog[];
+  boredomLogs: BoredomLog[];
+}): AttentionStats {
+  const entries = [
+    ...logs.cravingLogs.filter((record) => record.status === "completed").map((record) => explicitSafetyAnswer(
+      cravingRegistrationKind(record) ?? "craving",
+      record,
+    )),
+    ...logs.relapseLogs.filter((record) => record.status === "completed").map((record) => explicitSafetyAnswer("relapse", record)),
+    ...logs.anxietyLogs.map((record) => explicitSafetyAnswer("anxiety", record)),
+    ...logs.boredomLogs.map((record) => explicitSafetyAnswer("boredom", record)),
+  ];
+  const reasons: Record<AttentionReason, number> = {
+    "anxiety-urgent": 0,
+    "relapse-unsafe": 0,
+    "relapse-continued-use": 0,
+    "relapse-withdrawal": 0,
+    "relapse-self-harm": 0,
+  };
+  for (const entry of entries) {
+    for (const reason of entry.reasons) reasons[reason] += 1;
+  }
+  return {
+    answeredCount: entries.filter((entry) => entry.answered).length,
+    needsAttentionCount: entries.filter((entry) => entry.needsAttention).length,
+    reasons,
   };
 }
 
@@ -382,11 +558,13 @@ export function computeWeeklyTrend(
     return {
       weekLabel,
       avgIntensity: avgOf(
-        week.map((l) => l.intensity).filter((value): value is number => value != null)
+        week
+          .map((l) => registrationNumber(l, "intensity", l.intensity))
+          .filter((value): value is number => value != null)
       ),
       avgConfidence: avgOf(
         week
-          .map((l) => l.confidenceBefore)
+          .map((l) => registrationNumber(l, "confidenceBefore", l.confidenceBefore))
           .filter((v): v is number => v != null)
       ),
       count: week.length,

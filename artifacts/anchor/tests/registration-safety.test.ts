@@ -2,21 +2,37 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
+  CURRENT_REGISTRATION_CONTENT_VERSION,
+  CURRENT_REGISTRATION_DATA_VERSION,
+} from "../src/db/migrations";
+import {
   getSubstanceSafetyWarnings,
   getUrgentSafetyCopy,
 } from "../src/lib/registrationSafety";
+import {
+  buildRelapseAnswers,
+  createBlankRelapseDraft,
+  toggleRelapseAcuteRisk,
+} from "../src/pages/RelapseLog";
 
 function source(path: string): string {
   return readFileSync(resolve(process.cwd(), path), "utf8");
 }
 
 describe("registration safety copy", () => {
+  it("uses a new version boundary for the corrected registration semantics", () => {
+    expect(CURRENT_REGISTRATION_DATA_VERSION).toBe(3);
+    expect(CURRENT_REGISTRATION_CONTENT_VERSION).toBe("registration-v3");
+  });
   it.each(["en", "nl"] as const)("keeps an explicit 112 route in %s", (language) => {
     const copy = getUrgentSafetyCopy(language);
 
     expect(copy.call112).toContain("112");
     expect(copy.emergency).toContain("112");
     expect(copy.assessmentLimit).not.toBe("");
+    expect(copy.unsafe).not.toBe("");
+    expect(copy.continuedUse).not.toBe("");
+    expect(copy.withdrawal).toContain("112");
   });
 
   it("returns cautious warnings for every selected high-risk substance", () => {
@@ -66,19 +82,22 @@ describe("registration safety copy", () => {
     expect(labelStep).toBeGreaterThan(-1);
     expect(riskQuestion).toBeGreaterThan(labelStep);
     expect(whenStep).toBeGreaterThan(riskQuestion);
-    expect(relapseSource).toContain('case "label":   return draft.acuteRisk !== "unanswered";');
+    expect(relapseSource).toContain('case "label":   return draft.acuteRisks.length > 0;');
   });
 
   it("keeps optional Relapse answers genuinely unanswered", () => {
-    const relapseSource = source("src/pages/RelapseLog.tsx");
-    const whenGateStart = relapseSource.indexOf('case "when":');
-    const whenGateEnd = relapseSource.indexOf('case "trigger":', whenGateStart);
-    const whenGate = relapseSource.slice(whenGateStart, whenGateEnd);
+    const draft = {
+      ...toggleRelapseAcuteRisk(createBlankRelapseDraft(), "none"),
+      occurrenceDateTime: "2026-08-02T10:00",
+    };
+    const answers = buildRelapseAnswers(draft);
 
-    expect(relapseSource).toContain('episodeDuration: "unanswered"');
-    expect(relapseSource).toContain('amountCategory: "unanswered"');
-    expect(relapseSource).toContain('emotionAfter: null');
-    expect(whenGate).not.toContain("substances.length");
+    expect(draft.episodeDuration).toBe("unanswered");
+    expect(draft.amountCategory).toBe("unanswered");
+    expect(draft.emotionAfter).toBeNull();
+    expect(answers.episodeDuration).toBeNull();
+    expect(answers.amountCategory).toBeNull();
+    expect(answers.substances).toBeNull();
   });
 
   it.each([
@@ -90,8 +109,15 @@ describe("registration safety copy", () => {
   ])("writes the versioned answer envelope from %s", (tracker) => {
     const trackerSource = source(`src/pages/${tracker}.tsx`);
 
-    expect(trackerSource).toContain("dataVersion: 2");
-    expect(trackerSource).toContain('contentVersion: "registration-v2"');
-    expect(trackerSource).toContain("answers: {");
+    expect(trackerSource).toContain("dataVersion: CURRENT_REGISTRATION_DATA_VERSION");
+    expect(trackerSource).toContain("contentVersion: CURRENT_REGISTRATION_CONTENT_VERSION");
+    const expectedWriter = tracker === "RelapseLog"
+      ? "answers: buildRelapseAnswers"
+      : tracker === "CravingTracker"
+        ? "answers: buildCravingAnswers"
+        : tracker === "TrekTracker"
+          ? "answers: buildTrekAnswers"
+          : "answers: {";
+    expect(trackerSource).toContain(expectedWriter);
   });
 });

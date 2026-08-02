@@ -7,9 +7,19 @@ import { CATEGORY_META } from "@/lib/constants";
 import type { AnxietyLog, BoredomLog, CigaretteLog, CravingLog, RelapseLog } from "@/db";
 import { CigaretteDayDrawer } from "./CigaretteDayDrawer";
 import { logicalTimestamp } from "@/lib/registrationIds";
+import { completedStatusEntries } from "@/lib/analytics";
+import {
+  cravingRegistrationKind,
+  registrationBoolean,
+  registrationNumber,
+  registrationOptionId,
+  registrationOptionIds,
+  registrationText,
+  withCanonicalNote,
+} from "@/lib/canonicalRegistration";
 
-type RegistrationEntry =
-  | (CravingLog & { _type: "trek" | "craving" })
+export type RegistrationEntry =
+  | (CravingLog & { _type: "trek" | "craving" | "unknown" })
   | (RelapseLog & { _type: "relapse" })
   | (AnxietyLog & { _type: "anxiety" })
   | (BoredomLog & { _type: "boredom" })
@@ -33,6 +43,7 @@ const LABEL_KEYS: Record<RegistrationEntry["_type"], string> = {
   boredom: "registrations.boredom.title",
   relapse: "registrations.relapse.title",
   cigarette: "registrations.cigarette.title",
+  unknown: "registrations.unknown.title",
 };
 
 function fmtDate(ts: number, locale: string) {
@@ -60,126 +71,251 @@ function textValue(value: unknown): string {
   return "";
 }
 
-function unique(values: Array<string | undefined>): string[] {
-  return [...new Set(values.filter((value): value is string => Boolean(value?.trim())))];
+export type DetailItem =
+  | { kind: "option"; value: string }
+  | { kind: "literal"; value: string | number };
+
+export type Detail = { labelKey: string; items: DetailItem[] };
+
+function optionItems(value: string | string[] | null | undefined): DetailItem[] {
+  const values = Array.isArray(value) ? value : [value];
+  return values
+    .filter((item): item is string => Boolean(item?.trim()))
+    .map((item) => ({ kind: "option", value: item }));
 }
 
-type Detail = { labelKey: string; value: unknown; translate?: boolean };
+function literalItems(value: string | number | null | undefined): DetailItem[] {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? [{ kind: "literal", value }] : [];
+  }
+  if (typeof value !== "string") return [];
+  const trimmed = value.trim();
+  return trimmed && trimmed !== "unanswered"
+    ? [{ kind: "literal", value: trimmed }]
+    : [];
+}
 
-function detailsFor(entry: RegistrationEntry): Detail[] {
-  if (entry._type === "trek" || entry._type === "craving") {
+function detail(labelKey: string, ...groups: DetailItem[][]): Detail {
+  const seen = new Set<string>();
+  const items = groups.flat().filter((item) => {
+    const key = `${item.kind}:${typeof item.value}:${item.value}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  return { labelKey, items };
+}
+
+export function formatDetailItems(
+  items: DetailItem[],
+  translateOption: (value: string) => string,
+): string {
+  return items
+    .map((item) => item.kind === "option" ? translateOption(item.value) : String(item.value))
+    .filter(Boolean)
+    .join(", ");
+}
+
+export function detailsFor(entry: RegistrationEntry): Detail[] {
+  if (entry._type === "trek" || entry._type === "craving" || entry._type === "unknown") {
+    const actionAttempted = registrationBoolean(entry, "actionAttempted", entry.actionAttempted);
+    const thoughtTextKey = entry._type === "trek" ? "thoughtFreeText" : "thoughtOther";
     const common: Detail[] = [
-      { labelKey: "logs.detail.intensity", value: entry.intensity },
-      { labelKey: "logs.detail.confidence_before", value: entry.confidenceBefore },
-      { labelKey: "logs.detail.location", value: unique([entry.location, entry.locationOther]), translate: true },
-      { labelKey: "logs.detail.emotions", value: unique([...(entry.emotions ?? []), entry.emotionOther]), translate: true },
-      { labelKey: "logs.detail.physical", value: entry.physicalSensations, translate: true },
-      { labelKey: "logs.detail.thoughts", value: unique([...(entry.thoughtPresets ?? []), entry.thoughtFreeText]), translate: true },
-      { labelKey: "logs.detail.substances", value: entry.substances, translate: true },
-      { labelKey: "logs.detail.action", value: entry.chosenAction, translate: true },
-      { labelKey: "logs.detail.action_attempted", value: entry.actionAttempted == null ? "" : entry.actionAttempted ? "Yes" : "No", translate: true },
-      { labelKey: "logs.detail.use_outcome", value: entry.useOutcome, translate: true },
-      { labelKey: "logs.detail.symptom_outcome", value: entry.cravingOutcome, translate: true },
-      { labelKey: "logs.detail.intensity_after", value: entry.intensityAfter },
-      { labelKey: "logs.detail.confidence_after", value: entry.confidenceAfter },
+      detail("logs.detail.intensity", literalItems(registrationNumber(entry, "intensity", entry.intensity))),
+      detail("logs.detail.confidence_before", literalItems(registrationNumber(entry, "confidenceBefore", entry.confidenceBefore))),
+      detail(
+        "logs.detail.location",
+        optionItems(registrationOptionId(entry, "location", entry.location)),
+        literalItems(registrationText(entry, "locationOther", entry.locationOther)),
+      ),
+      detail(
+        "logs.detail.emotions",
+        optionItems(registrationOptionIds(entry, "emotions", entry.emotions)),
+        literalItems(registrationText(entry, "emotionOther", entry.emotionOther)),
+      ),
+      detail("logs.detail.physical", optionItems(registrationOptionIds(entry, "physicalSensations", entry.physicalSensations))),
+      detail(
+        "logs.detail.thoughts",
+        optionItems(registrationOptionIds(entry, "thoughts", entry.thoughtPresets)),
+        literalItems(registrationText(entry, thoughtTextKey, entry.thoughtFreeText)),
+      ),
+      detail("logs.detail.substances", optionItems(registrationOptionIds(entry, "targets", entry.substances))),
+      detail("logs.detail.action", optionItems(registrationOptionId(entry, "chosenAction", entry.chosenAction))),
+      detail("logs.detail.action_attempted", optionItems(actionAttempted == null ? null : actionAttempted ? "Yes" : "No")),
+      detail("logs.detail.use_outcome", optionItems(registrationOptionId(entry, "useOutcome", entry.useOutcome))),
+      detail("logs.detail.symptom_outcome", optionItems(registrationOptionId(entry, "cravingOutcome", entry.cravingOutcome))),
+      detail("logs.detail.intensity_after", literalItems(registrationNumber(entry, "intensityAfter", entry.intensityAfter))),
+      detail("logs.detail.confidence_after", literalItems(registrationNumber(entry, "confidenceAfter", entry.confidenceAfter))),
     ];
     if (entry._type === "trek") {
       return [
-        { labelKey: "logs.detail.type", value: entry.trekTypes, translate: true },
-        { labelKey: "logs.detail.planning", value: entry.planningStage, translate: true },
-        { labelKey: "logs.detail.trigger", value: unique([...(entry.triggers ?? []), entry.triggerNote]), translate: true },
-        { labelKey: "logs.detail.need", value: unique([...(entry.needTypes ?? []), entry.needOther]), translate: true },
+        detail("logs.detail.type", optionItems(registrationOptionIds(entry, "trekTypes", entry.trekTypes))),
+        detail("logs.detail.planning", optionItems(registrationOptionId(entry, "planningStage", entry.planningStage))),
+        detail(
+          "logs.detail.trigger",
+          optionItems(registrationOptionIds(entry, "triggers", entry.triggers)),
+          literalItems(registrationText(entry, "triggerNote", entry.triggerNote)),
+        ),
+        detail(
+          "logs.detail.need",
+          optionItems(registrationOptionIds(entry, "needs", entry.needTypes?.length ? entry.needTypes : entry.needType ? [entry.needType] : [])),
+          literalItems(registrationText(entry, "needOther", entry.needOther)),
+        ),
         ...common,
       ];
     }
-    return [
-      { labelKey: "logs.detail.onset", value: unique([entry.onsetType, entry.onsetOther]), translate: true },
-      { labelKey: "logs.detail.situation", value: unique([...(entry.situationPresets ?? []), entry.situationOther]), translate: true },
-      { labelKey: "logs.detail.buildup", value: entry.buildupDuration, translate: true },
-      ...common,
-    ];
+    if (entry._type === "craving") {
+      return [
+        detail(
+          "logs.detail.onset",
+          optionItems(registrationOptionId(entry, "onsetType", entry.onsetType)),
+          literalItems(registrationText(entry, "onsetOther", entry.onsetOther)),
+        ),
+        detail(
+          "logs.detail.situation",
+          optionItems(registrationOptionIds(entry, "situations", entry.situationPresets)),
+          literalItems(registrationText(entry, "situationOther", entry.situationOther)),
+        ),
+        detail("logs.detail.buildup", optionItems(registrationOptionId(entry, "buildupDuration", entry.buildupDuration))),
+        ...common,
+      ];
+    }
+    return common;
   }
 
   if (entry._type === "anxiety") {
+    const urgency = registrationBoolean(entry, "urgencyHigh", entry.urgencyHigh);
     return [
-      { labelKey: "logs.detail.type", value: entry.anxietyTypes, translate: true },
-      { labelKey: "logs.detail.intensity", value: entry.intensity },
-      { labelKey: "logs.detail.body_location", value: entry.bodyLocations?.length ? entry.bodyLocations : entry.bodySensations, translate: true },
-      { labelKey: "logs.detail.prediction", value: entry.bodyPrediction },
-      { labelKey: "logs.detail.urgency", value: entry.urgencyHigh == null ? "" : entry.urgencyHigh ? "Needs help now" : "Can stay with this", translate: true },
-      { labelKey: "logs.detail.context", value: entry.context, translate: true },
-      { labelKey: "logs.detail.reassurance", value: entry.reassuranceSeeking, translate: true },
-      { labelKey: "logs.detail.linked_state", value: entry.linkedStates?.length ? entry.linkedStates : entry.linkedState ? [entry.linkedState] : [], translate: true },
-      { labelKey: "logs.detail.trigger", value: entry.triggers?.length ? entry.triggers : entry.trigger ? [entry.trigger] : [], translate: true },
-      { labelKey: "logs.detail.action", value: entry.reaction, translate: true },
-      { labelKey: "logs.detail.symptom_outcome", value: entry.outcomeAfter, translate: true },
+      detail("logs.detail.type", optionItems(registrationOptionIds(entry, "anxietyTypes", entry.anxietyTypes))),
+      detail("logs.detail.intensity", literalItems(registrationNumber(entry, "intensity", entry.intensity))),
+      detail("logs.detail.body_location", optionItems(registrationOptionIds(entry, "bodyLocations", entry.bodyLocations?.length ? entry.bodyLocations : entry.bodySensations))),
+      detail("logs.detail.prediction", literalItems(registrationText(entry, "bodyPrediction", entry.bodyPrediction))),
+      detail("logs.detail.urgency", optionItems(urgency == null ? null : urgency ? "Needs help now" : "Can stay with this")),
+      detail("logs.detail.context", optionItems(registrationOptionId(entry, "context", entry.context))),
+      detail("logs.detail.reassurance", optionItems(registrationOptionIds(entry, "reassuranceSeeking", entry.reassuranceSeeking))),
+      detail("logs.detail.linked_state", optionItems(registrationOptionIds(entry, "linkedStates", entry.linkedStates?.length ? entry.linkedStates : entry.linkedState ? [entry.linkedState] : []))),
+      detail("logs.detail.trigger", optionItems(registrationOptionIds(entry, "triggers", entry.triggers?.length ? entry.triggers : entry.trigger ? [entry.trigger] : []))),
+      detail("logs.detail.action", optionItems(registrationOptionId(entry, "reaction", entry.reaction))),
+      detail("logs.detail.symptom_outcome", optionItems(registrationOptionId(entry, "outcomeAfter", entry.outcomeAfter))),
     ];
   }
 
   if (entry._type === "boredom") {
+    const delaySeconds = registrationNumber(entry, "delayDuration", null);
     return [
-      { labelKey: "logs.detail.type", value: entry.restlessnessTypes?.length ? entry.restlessnessTypes : entry.feelingTypes, translate: true },
-      { labelKey: "logs.detail.intensity", value: entry.intensity },
-      { labelKey: "logs.detail.need", value: entry.stimulationNeeds?.length ? entry.stimulationNeeds : entry.stimulationNeed ? [entry.stimulationNeed] : [], translate: true },
-      { labelKey: "logs.detail.classification", value: entry.convertCheck, translate: true },
-      { labelKey: "logs.detail.situation", value: unique([entry.situation, entry.situationOther]), translate: true },
-      { labelKey: "logs.detail.urge", value: unique([entry.urge, entry.urgeOther]), translate: true },
-      { labelKey: "logs.detail.rescue", value: entry.rescueMenu, translate: true },
-      { labelKey: "logs.detail.action", value: entry.action, translate: true },
-      { labelKey: "logs.detail.delay", value: entry.delayDuration },
-      { labelKey: "logs.detail.symptom_outcome", value: entry.outcomeAfter, translate: true },
+      detail("logs.detail.type", optionItems(registrationOptionIds(entry, "restlessnessTypes", entry.restlessnessTypes?.length ? entry.restlessnessTypes : entry.feelingTypes))),
+      detail("logs.detail.intensity", literalItems(registrationNumber(entry, "intensity", entry.intensity))),
+      detail("logs.detail.need", optionItems(registrationOptionIds(entry, "stimulationNeeds", entry.stimulationNeeds?.length ? entry.stimulationNeeds : entry.stimulationNeed ? [entry.stimulationNeed] : []))),
+      detail("logs.detail.classification", optionItems(registrationOptionId(entry, "convertCheck", entry.convertCheck))),
+      detail(
+        "logs.detail.situation",
+        optionItems(registrationOptionId(entry, "situation", entry.situation)),
+        literalItems(registrationText(entry, "situationOther", entry.situationOther)),
+      ),
+      detail(
+        "logs.detail.urge",
+        optionItems(registrationOptionId(entry, "urge", entry.urge)),
+        literalItems(registrationText(entry, "urgeOther", entry.urgeOther)),
+      ),
+      detail("logs.detail.rescue", optionItems(registrationOptionIds(entry, "rescueMenu", entry.rescueMenu))),
+      detail("logs.detail.action", optionItems(registrationOptionId(entry, "action", entry.action))),
+      detail("logs.detail.delay", literalItems(delaySeconds == null ? registrationText(entry, "delayDuration", entry.delayDuration) : `${Math.round(delaySeconds / 60)} min`)),
+      detail("logs.detail.symptom_outcome", optionItems(registrationOptionId(entry, "outcomeAfter", entry.outcomeAfter))),
     ];
   }
 
   if (entry._type === "relapse") {
-    const helped = unique([
-      ...(entry.couldHaveHelpedEarly ?? []),
-      ...(entry.couldHaveHelpedMiddle ?? []),
-      ...(entry.couldHaveHelpedLast ?? []),
-    ]);
     return [
-      { labelKey: "logs.detail.label", value: entry.label, translate: true },
-      { labelKey: "logs.detail.when", value: entry.when, translate: true },
-      { labelKey: "logs.detail.duration", value: entry.episodeDuration, translate: true },
-      { labelKey: "logs.detail.substances", value: entry.substances, translate: true },
-      { labelKey: "logs.detail.amount", value: entry.amountCategory, translate: true },
-      { labelKey: "logs.detail.trigger", value: unique([entry.firstTriggerType, entry.firstTriggerText]), translate: true },
-      { labelKey: "logs.detail.lead_up", value: unique([...(entry.preUseFactors ?? []), entry.context]), translate: true },
-      { labelKey: "logs.detail.warning_signs", value: entry.missedWarnings, translate: true },
-      { labelKey: "logs.detail.thoughts", value: unique([...(entry.preUseThoughtPresets ?? []), entry.preUseThoughtPreset, entry.preUseThoughtFreeText]), translate: true },
-      { labelKey: "logs.detail.could_help", value: helped, translate: true },
-      { labelKey: "logs.detail.support", value: unique([entry.supportContact, entry.supportContactOther]), translate: true },
-      { labelKey: "logs.detail.next_step", value: unique([entry.nextStep, entry.nextStepOther]), translate: true },
-      { labelKey: "logs.detail.risk", value: entry.acuteRisk, translate: true },
-      { labelKey: "logs.detail.need", value: entry.whatNeeded, translate: true },
-      { labelKey: "logs.detail.repair", value: entry.repairActions, translate: true },
+      detail("logs.detail.label", optionItems(registrationOptionId(entry, "label", entry.label))),
+      detail("logs.detail.when", optionItems(registrationOptionId(entry, "when", entry.when))),
+      detail("logs.detail.duration", optionItems(registrationOptionId(entry, "episodeDuration", entry.episodeDuration))),
+      detail("logs.detail.substances", optionItems(registrationOptionIds(entry, "substances", entry.substances))),
+      detail("logs.detail.amount", optionItems(registrationOptionId(entry, "amountCategory", entry.amountCategory))),
+      detail(
+        "logs.detail.trigger",
+        optionItems(registrationOptionId(entry, "firstTriggerType", entry.firstTriggerType)),
+        literalItems(registrationText(entry, "firstTriggerText", entry.firstTriggerText)),
+      ),
+      detail(
+        "logs.detail.lead_up",
+        optionItems(registrationOptionIds(entry, "preUseFactors", entry.preUseFactors)),
+        literalItems(registrationText(entry, "leadUpContext", entry.context)),
+      ),
+      detail("logs.detail.warning_signs", optionItems(registrationOptionIds(entry, "missedWarnings", entry.missedWarnings))),
+      detail(
+        "logs.detail.thoughts",
+        optionItems(registrationOptionIds(entry, "preUseThoughts", entry.preUseThoughtPresets?.length ? entry.preUseThoughtPresets : entry.preUseThoughtPreset ? [entry.preUseThoughtPreset] : [])),
+        literalItems(registrationText(entry, "preUseThoughtFreeText", entry.preUseThoughtFreeText)),
+      ),
+      detail("logs.detail.could_help_early", optionItems(registrationOptionIds(entry, "couldHaveHelpedEarly", entry.couldHaveHelpedEarly))),
+      detail("logs.detail.could_help_middle", optionItems(registrationOptionIds(entry, "couldHaveHelpedMiddle", entry.couldHaveHelpedMiddle))),
+      detail("logs.detail.could_help_last", optionItems(registrationOptionIds(entry, "couldHaveHelpedLast", entry.couldHaveHelpedLast))),
+      detail(
+        "logs.detail.support",
+        optionItems(registrationOptionId(entry, "supportContact", entry.supportContact)),
+        literalItems(registrationText(entry, "supportContactOther", entry.supportContactOther)),
+      ),
+      detail(
+        "logs.detail.next_step",
+        optionItems(registrationOptionId(entry, "nextStep", entry.nextStep)),
+        literalItems(registrationText(entry, "nextStepOther", entry.nextStepOther)),
+      ),
+      detail("logs.detail.risk", optionItems(registrationOptionIds(entry, "acuteRisks", entry.acuteRisks))),
+      detail("logs.detail.need", optionItems(registrationOptionId(entry, "whatNeeded", entry.whatNeeded))),
+      detail("logs.detail.repair", optionItems(registrationOptionIds(entry, "repairActions", entry.repairActions))),
+      detail("logs.detail.emotion_after", literalItems(registrationNumber(entry, "emotionAfter", entry.emotionAfter))),
     ];
   }
 
   return [];
 }
 
+export function registrationEntriesForHistory(logs: {
+  cravingLogs: CravingLog[];
+  relapseLogs: RelapseLog[];
+  anxietyLogs: AnxietyLog[];
+  boredomLogs: BoredomLog[];
+}): RegistrationEntry[] {
+  return [
+    ...completedStatusEntries(logs.cravingLogs).map((log) => ({
+      ...log,
+      _type: cravingRegistrationKind(log) ?? "unknown",
+    } as RegistrationEntry)),
+    ...completedStatusEntries(logs.relapseLogs).map((log) => ({
+      ...log,
+      _type: "relapse" as const,
+    })),
+    ...logs.anxietyLogs.map((log) => ({ ...log, _type: "anxiety" as const })),
+    ...logs.boredomLogs.map((log) => ({ ...log, _type: "boredom" as const })),
+  ];
+}
+
 function DetailRow({
   label,
   value,
-  translate,
-  unansweredLabel,
 }: {
   label: string;
   value: unknown;
-  translate?: (value: string) => string;
-  unansweredLabel?: string;
 }) {
-  const display = (item: unknown) => {
-    const raw = String(item).trim();
-    if (raw === "unanswered") return unansweredLabel ?? "";
-    return translate ? translate(raw) : raw;
-  };
-  const text = Array.isArray(value)
-    ? value.filter(Boolean).map(display).filter(Boolean).join(", ")
-    : typeof value === "string"
-      ? display(value)
-      : textValue(value);
+  const text = textValue(value);
+  if (!text) return null;
+  return (
+    <p className="text-xs text-muted-foreground">
+      <span className="font-medium text-foreground">{label}:</span> {text}
+    </p>
+  );
+}
+
+function DetailItemsRow({
+  label,
+  items,
+  translateOption,
+}: {
+  label: string;
+  items: DetailItem[];
+  translateOption: (value: string) => string;
+}) {
+  const text = formatDetailItems(items, translateOption);
   if (!text) return null;
   return (
     <p className="text-xs text-muted-foreground">
@@ -243,13 +379,7 @@ export function RegistrationHistory() {
     }
 
     const merged: HistoryItem[] = [
-      ...cravingLogs.map((log) => ({
-        ...log,
-        _type: log.cravingType === "active" ? "trek" : "craving",
-      } as RegistrationEntry)),
-      ...relapseLogs.map((log) => ({ ...log, _type: "relapse" as const })),
-      ...anxietyLogs.map((log) => ({ ...log, _type: "anxiety" as const })),
-      ...boredomLogs.map((log) => ({ ...log, _type: "boredom" as const })),
+      ...registrationEntriesForHistory({ cravingLogs, relapseLogs, anxietyLogs, boredomLogs }),
       ...cigaretteDays,
     ];
     return merged.sort((a, b) => {
@@ -266,7 +396,7 @@ export function RegistrationHistory() {
     }
 
     try {
-      if (entry._type === "trek" || entry._type === "craving") {
+      if (entry._type === "trek" || entry._type === "craving" || entry._type === "unknown") {
         await removeCraving(entry.id);
       } else if (entry._type === "relapse") {
         await removeRelapse(entry.id);
@@ -292,7 +422,11 @@ export function RegistrationHistory() {
   const startEdit = (entry: HistoryItem) => {
     setDeleteConfirm(null);
     if (entry._type === "cigarette-day") return;
-    setEditing({ id: entry.id, note: (entry as RegistrationEntry).note ?? "" });
+    const registration = entry as RegistrationEntry;
+    setEditing({
+      id: entry.id,
+      note: registrationText(registration, "note", registration.note) ?? "",
+    });
   };
 
   const saveNote = async (entry: HistoryItem) => {
@@ -300,21 +434,21 @@ export function RegistrationHistory() {
 
     const regEntry = entry as RegistrationEntry;
     try {
-      if (regEntry._type === "trek" || regEntry._type === "craving") {
+      if (regEntry._type === "trek" || regEntry._type === "craving" || regEntry._type === "unknown") {
         const { _type, ...log } = regEntry;
-        await updateCraving({ ...log, note: editing.note } as CravingLog);
+        await updateCraving(withCanonicalNote(log as CravingLog, editing.note));
       } else if (regEntry._type === "relapse") {
         const { _type, ...log } = regEntry;
-        await updateRelapse({ ...log, note: editing.note } as RelapseLog);
+        await updateRelapse(withCanonicalNote(log as RelapseLog, editing.note));
       } else if (regEntry._type === "anxiety") {
         const { _type, ...log } = regEntry;
-        await updateAnxiety({ ...log, note: editing.note } as AnxietyLog);
+        await updateAnxiety(withCanonicalNote(log as AnxietyLog, editing.note));
       } else if (regEntry._type === "boredom") {
         const { _type, ...log } = regEntry;
-        await updateBoredom({ ...log, note: editing.note } as BoredomLog);
+        await updateBoredom(withCanonicalNote(log as BoredomLog, editing.note));
       } else if (regEntry._type === "cigarette") {
         const { _type, ...log } = regEntry;
-        await updateCigarette({ ...log, note: editing.note } as CigaretteLog);
+        await updateCigarette(withCanonicalNote(log as CigaretteLog, editing.note));
       }
       toast({ title: t("common.save") });
     } catch (e) {
@@ -336,17 +470,19 @@ export function RegistrationHistory() {
     <div className="flex flex-col gap-2">
       {items.map((entry) => {
         const isCigaretteDay = entry._type === "cigarette-day";
-        const meta = CATEGORY_META[isCigaretteDay ? "cigarette" : entry._type] || CATEGORY_META.craving;
+        const metaKey = isCigaretteDay || entry._type === "unknown"
+          ? isCigaretteDay ? "cigarette" : "craving"
+          : entry._type;
+        const meta = CATEGORY_META[metaKey] || CATEGORY_META.craving;
         const Icon = meta.icon;
         const isExpanded = expandedId === entry.id;
         const isEditing = editing?.id === entry.id;
         const isConfirm = deleteConfirm === entry.id;
         const contentId = `registration-details-${entry.id}`;
         const details = isCigaretteDay ? [] : detailsFor(entry as RegistrationEntry);
-        const intensity =
-          !isCigaretteDay && "intensity" in entry && typeof entry.intensity === "number"
-            ? entry.intensity
-            : null;
+        const intensity = !isCigaretteDay && "intensity" in entry
+          ? registrationNumber(entry, "intensity", entry.intensity)
+          : null;
 
         return (
           <article
@@ -428,15 +564,21 @@ export function RegistrationHistory() {
                         />
                       </label>
                     ) : (
-                      <DetailRow label={t("logs.detail.note")} value={(entry as RegistrationEntry).note} />
+                      <DetailRow
+                        label={t("logs.detail.note")}
+                        value={registrationText(
+                          entry as RegistrationEntry,
+                          "note",
+                          (entry as RegistrationEntry).note,
+                        )}
+                      />
                     )}
                     {details.map((detail) => (
-                      <DetailRow
+                      <DetailItemsRow
                         key={detail.labelKey}
                         label={t(detail.labelKey)}
-                        value={detail.value}
-                        translate={detail.translate ? tOpt : undefined}
-                        unansweredLabel={t("logs.detail.unanswered")}
+                        items={detail.items}
+                        translateOption={tOpt}
                       />
                     ))}
                     {(entry as RegistrationEntry).startedAt && (entry as RegistrationEntry).completedAt && (

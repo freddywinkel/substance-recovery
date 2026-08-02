@@ -2,10 +2,28 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
 import { useStore } from "@/hooks/useStore";
 import { useT } from "@/hooks/useTranslation";
-import { RelapseLog as RelapseLogType, RelapseLabel, EpisodeDuration, AmountCategory, AcuteRisk } from "@/db";
+import {
+  RelapseLog as RelapseLogType,
+  RelapseLabel,
+  EpisodeDuration,
+  AmountCategory,
+  AcuteRisk,
+  AcuteRiskSelection,
+  type RegistrationAnswerValue,
+} from "@/db";
+import {
+  CURRENT_REGISTRATION_CONTENT_VERSION,
+  CURRENT_REGISTRATION_DATA_VERSION,
+} from "@/db/migrations";
+import {
+  acuteRiskCompatibilityAlias,
+  normalizeAcuteRisks,
+} from "@/db/relapseSafety";
+import { relapseWhenForOccurrence } from "@/db/relapseTiming";
 import { useActiveRegistration } from "@/contexts/ActiveRegistrationContext";
 import { PageHeader } from "@/components/PageHeader";
 import { toStableOptionId, toStableOptionIds } from "@/lib/registrationIds";
+import { RELAPSE_NO_CLEAR_TRIGGER_ID } from "@/lib/relapseTrigger";
 import {
   getSubstanceSafetyWarnings,
   getUrgentSafetyCopy,
@@ -14,7 +32,7 @@ import {
 import { Heart, ArrowRight, AlertTriangle, Phone } from "lucide-react";
 
 // ── Step type ────────────────────────────────────────────────
-type Step =
+export type Step =
   | "label"
   | "when"
   | "trigger"
@@ -24,11 +42,23 @@ type Step =
 
 const STEP_ORDER: Step[] = ["label", "when", "trigger", "before", "next"];
 
+export const RELAPSE_OPTIONAL_STEPS: readonly Step[] = ["trigger", "before"];
+
 // ── Option lists ─────────────────────────────────────────────
 const LABEL_OPTIONS: { value: RelapseLabel; label: string; sub: string }[] = [
-  { value: "lapse", label: "A lapse", sub: "One instance, caught quickly" },
-  { value: "relapse", label: "A relapse", sub: "A more serious return" },
-  { value: "no-label", label: "No label", sub: "I just want to document this" },
+  { value: "lapse", label: "lapse", sub: "" },
+  { value: "setback", label: "setback", sub: "" },
+  { value: "return-to-use", label: "return-to-use", sub: "" },
+  { value: "relapse", label: "relapse", sub: "" },
+  { value: "no-label", label: "no-label", sub: "" },
+];
+
+const ACUTE_RISK_OPTIONS: { value: AcuteRiskSelection }[] = [
+  { value: "self-harm-risk" },
+  { value: "unsafe" },
+  { value: "fear-continued-use" },
+  { value: "withdrawal" },
+  { value: "none" },
 ];
 
 const DURATION_OPTIONS: { value: EpisodeDuration; label: string }[] = [
@@ -45,12 +75,12 @@ const SUBSTANCES = [
 ];
 
 const AMOUNT_OPTIONS: { value: AmountCategory; label: string; sub: string }[] = [
-  { value: "small", label: "Small", sub: "Less than usual" },
-  { value: "moderate", label: "Moderate", sub: "About as expected" },
-  { value: "a-lot", label: "A lot", sub: "More than usual" },
-  { value: "multiple-times", label: "Multiple times", sub: "More than once" },
-  { value: "binge", label: "A binge", sub: "Couldn't stop" },
-  { value: "prefer-not", label: "Prefer not to say", sub: "" },
+  { value: "small", label: "small", sub: "" },
+  { value: "moderate", label: "moderate", sub: "" },
+  { value: "a-lot", label: "a-lot", sub: "" },
+  { value: "multiple-times", label: "multiple-times", sub: "" },
+  { value: "binge", label: "binge", sub: "" },
+  { value: "prefer-not", label: "prefer-not", sub: "" },
 ];
 
 const FIRST_TRIGGER_TYPES = [
@@ -142,7 +172,7 @@ function SelectList<T extends string>({
   options, selected, onSelect, multi = false, translate, disabled = false,
 }: {
   options: { value: T; label: string; sub?: string }[];
-  selected: T | T[];
+  selected: T | T[] | "";
   onSelect: (v: T) => void;
   multi?: boolean;
   translate?: (s: string) => string;
@@ -206,8 +236,16 @@ function ChipGrid({ options, selected, onToggle, translate }: {
 }
 
 // ── Draft type ────────────────────────────────────────────────
-type Draft = Omit<RelapseLogType, "id" | "timestamp" | "status" | "acuteRisk"> & {
+export type RelapseDraft = Omit<
+  RelapseLogType,
+  "id" | "timestamp" | "status" | "acuteRisk" | "acuteRisks" | "label" | "when"
+> & {
+  /** Canonical safety selection; empty means the required answer is pending. */
+  acuteRisks: AcuteRiskSelection[];
+  /** Compatibility alias only; always derived from `acuteRisks`. */
   acuteRisk: AcuteRisk;
+  label: RelapseLabel | "";
+  when: string;
   occurrenceDateTime: string;
 };
 
@@ -216,8 +254,8 @@ function toLocalDateTimeInput(date: Date): string {
   return local.toISOString().slice(0, 16);
 }
 
-function occurrenceForWhen(when: string): string {
-  const date = new Date();
+export function occurrenceForWhen(when: string, now = new Date()): string {
+  const date = new Date(now);
   if (when === "today") {
     if (date.getHours() >= 3) date.setHours(date.getHours() - 3);
     else date.setHours(0, 0, 0, 0);
@@ -227,10 +265,20 @@ function occurrenceForWhen(when: string): string {
   return toLocalDateTimeInput(date);
 }
 
-function blankDraft(): Draft {
+export function whenForOccurrence(value: string, now = new Date()): string {
+  return relapseWhenForOccurrence(value, now);
+}
+
+export function isValidRelapseOccurrence(value: string, now = Date.now()): boolean {
+  if (!value) return false;
+  const occurrence = new Date(value).getTime();
+  return Number.isFinite(occurrence) && occurrence >= 0 && occurrence <= now + 60_000;
+}
+
+export function createBlankRelapseDraft(): RelapseDraft {
   return {
-    label: "no-label",
-    when: "just-now",
+    label: "",
+    when: "",
     episodeDuration: "unanswered",
     substances: [], primarySubstance: "", amountCategory: "unanswered",
     firstTriggerType: "", firstTriggerText: "",
@@ -239,21 +287,36 @@ function blankDraft(): Draft {
     couldHaveHelpedEarly: [], couldHaveHelpedMiddle: [], couldHaveHelpedLast: [],
     supportContact: "", supportContactOther: "",
     nextStep: "", nextStepOther: "",
+    acuteRisks: [],
     acuteRisk: "unanswered",
     note: "", context: "", emotionAfter: null,
     whatNeeded: "", repairActions: [],
-    occurrenceDateTime: occurrenceForWhen("just-now"),
+    // Occurrence time is required and must be confirmed by the person. Do not
+    // silently turn the form-open time into the event time.
+    occurrenceDateTime: "",
   };
 }
 
-function restoreDraft(raw: unknown): Draft {
-  const base = blankDraft();
+function restoreDraft(raw: unknown): RelapseDraft {
+  const base = createBlankRelapseDraft();
   if (!raw || typeof raw !== "object") return base;
-  const stored = raw as Partial<Draft> & { acuteRisk?: unknown };
+  const stored = raw as Partial<RelapseDraft> & {
+    acuteRisk?: unknown;
+    acuteRisks?: unknown;
+  };
+  const acuteRisks = normalizeAcuteRisks(stored.acuteRisks, stored.acuteRisk);
+  const substances = Array.isArray(stored.substances) ? stored.substances : [];
+  const occurrenceDateTime =
+    typeof stored.occurrenceDateTime === "string" && stored.occurrenceDateTime
+      ? stored.occurrenceDateTime
+      : "";
+  const hasTarget = substances.length > 0
+    || (typeof stored.primarySubstance === "string" && stored.primarySubstance !== "");
   return {
     ...base,
     ...stored,
-    substances: Array.isArray(stored.substances) ? stored.substances : [],
+    substances,
+    amountCategory: hasTarget ? stored.amountCategory ?? "unanswered" : "unanswered",
     preUseFactors: Array.isArray(stored.preUseFactors) ? stored.preUseFactors : [],
     missedWarnings: Array.isArray(stored.missedWarnings) ? stored.missedWarnings : [],
     preUseThoughtPresets: Array.isArray(stored.preUseThoughtPresets) ? stored.preUseThoughtPresets : [],
@@ -261,19 +324,208 @@ function restoreDraft(raw: unknown): Draft {
     couldHaveHelpedMiddle: Array.isArray(stored.couldHaveHelpedMiddle) ? stored.couldHaveHelpedMiddle : [],
     couldHaveHelpedLast: Array.isArray(stored.couldHaveHelpedLast) ? stored.couldHaveHelpedLast : [],
     repairActions: Array.isArray(stored.repairActions) ? stored.repairActions : [],
-    acuteRisk:
-      stored.acuteRisk === "none"
-      || stored.acuteRisk === "unsafe"
-      || stored.acuteRisk === "fear-continued-use"
-      || stored.acuteRisk === "withdrawal"
-      || stored.acuteRisk === "self-harm-risk"
-        ? stored.acuteRisk
-        : "unanswered",
-    occurrenceDateTime:
-      typeof stored.occurrenceDateTime === "string" && stored.occurrenceDateTime
-        ? stored.occurrenceDateTime
-        : occurrenceForWhen(typeof stored.when === "string" ? stored.when : base.when),
+    acuteRisks,
+    acuteRisk: acuteRiskCompatibilityAlias(acuteRisks),
+    occurrenceDateTime,
+    when: whenForOccurrence(occurrenceDateTime),
   };
+}
+
+function optionAnswer(value: string): string | null {
+  if (!value || value === "unanswered") return null;
+  return toStableOptionId(value) || null;
+}
+
+function optionListAnswer(values: string[]): string[] | null {
+  const result = toStableOptionIds(values);
+  return result.length > 0 ? result : null;
+}
+
+function textAnswer(value: string): string | null {
+  const result = value.trim();
+  return result || null;
+}
+
+export function generalHelpSelections(draft: Pick<
+  RelapseDraft,
+  "couldHaveHelpedEarly" | "couldHaveHelpedMiddle" | "couldHaveHelpedLast"
+>): string[] {
+  return [...new Set([
+    ...(draft.couldHaveHelpedEarly ?? []),
+    ...(draft.couldHaveHelpedMiddle ?? []),
+    ...(draft.couldHaveHelpedLast ?? []),
+  ])];
+}
+
+export function toggleHelpPhaseSelection(
+  draft: RelapseDraft,
+  phase: "couldHaveHelpedEarly" | "couldHaveHelpedMiddle" | "couldHaveHelpedLast",
+  value: string,
+): RelapseDraft {
+  const current = draft[phase] ?? [];
+  const next = current.includes(value)
+    ? current.filter((item) => item !== value)
+    : [...current, value];
+  return {
+    ...draft,
+    [phase]: next,
+  };
+}
+
+export function hasNoClearTrigger(draft: Pick<RelapseDraft, "firstTriggerType" | "firstTriggerText">): boolean {
+  return draft.firstTriggerType === RELAPSE_NO_CLEAR_TRIGGER_ID;
+}
+
+export function toggleNoClearTrigger(draft: RelapseDraft): RelapseDraft {
+  return {
+    ...draft,
+    firstTriggerType: hasNoClearTrigger(draft) ? "" : RELAPSE_NO_CLEAR_TRIGGER_ID,
+    firstTriggerText: "",
+  };
+}
+
+export function selectFirstTrigger(draft: RelapseDraft, value: string): RelapseDraft {
+  return {
+    ...draft,
+    firstTriggerType: draft.firstTriggerType === value ? "" : value,
+    firstTriggerText: "",
+  };
+}
+
+export function enterFirstTriggerText(draft: RelapseDraft, value: string): RelapseDraft {
+  return {
+    ...draft,
+    firstTriggerType: "",
+    firstTriggerText: value,
+  };
+}
+
+export function toggleRelapseAcuteRisk(
+  draft: RelapseDraft,
+  value: AcuteRiskSelection,
+): RelapseDraft {
+  const next = value === "none"
+    ? draft.acuteRisks.length === 1 && draft.acuteRisks[0] === "none"
+      ? []
+      : ["none" as const]
+    : draft.acuteRisks
+        .filter((risk) => risk !== "none")
+        .filter((risk) => risk !== value)
+        .concat(draft.acuteRisks.includes(value) ? [] : value);
+
+  return {
+    ...draft,
+    acuteRisks: next,
+    acuteRisk: acuteRiskCompatibilityAlias(next),
+  };
+}
+
+export function relapseSafetyRoutes(acuteRisks: readonly AcuteRiskSelection[]) {
+  return {
+    urgent: acuteRisks.some((risk) => risk !== "none"),
+    unsafe: acuteRisks.includes("unsafe"),
+    continuedUse: acuteRisks.includes("fear-continued-use"),
+    withdrawal: acuteRisks.includes("withdrawal"),
+    selfHarm: acuteRisks.includes("self-harm-risk"),
+  };
+}
+
+export async function navigateAfterRelapseReturnSaved(
+  saveReturn: () => Promise<boolean>,
+  navigate: () => void,
+): Promise<boolean> {
+  try {
+    if (!(await saveReturn())) return false;
+    navigate();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function persistedFirstTriggerText(
+  draft: Pick<RelapseDraft, "firstTriggerType" | "firstTriggerText">,
+): string {
+  return hasNoClearTrigger(draft) ? "" : draft.firstTriggerText;
+}
+
+export function selectExclusiveChoice(
+  current: string,
+  value: string,
+): { selected: string; other: string } {
+  return {
+    selected: current === value ? "" : value,
+    other: "",
+  };
+}
+
+export function enterExclusiveOther(value: string): { selected: string; other: string } {
+  return { selected: "", other: value };
+}
+
+export function buildRelapseAnswers(
+  draft: RelapseDraft,
+  reference: Date | number = new Date(),
+): Record<string, RegistrationAnswerValue> {
+  const help = generalHelpSelections(draft);
+  const hasTarget = draft.substances.length > 0;
+  return {
+    // Canonical multi-select safety answer. The top-level `acuteRisk` field on
+    // the completed record is retained only as a documented compatibility alias.
+    acuteRisks: optionListAnswer(draft.acuteRisks),
+    label: optionAnswer(draft.label),
+    when: optionAnswer(relapseWhenForOccurrence(draft.occurrenceDateTime, reference)),
+    episodeDuration: optionAnswer(draft.episodeDuration),
+    substances: optionListAnswer(draft.substances),
+    primarySubstance: null,
+    amountCategory: hasTarget ? optionAnswer(draft.amountCategory) : null,
+    firstTriggerType: hasNoClearTrigger(draft)
+      ? RELAPSE_NO_CLEAR_TRIGGER_ID
+      : optionAnswer(draft.firstTriggerType),
+    firstTriggerText: hasNoClearTrigger(draft) ? null : textAnswer(draft.firstTriggerText),
+    preUseFactors: optionListAnswer(draft.preUseFactors),
+    leadUpContext: textAnswer(draft.context),
+    missedWarnings: optionListAnswer(draft.missedWarnings),
+    preUseThoughts: optionListAnswer(draft.preUseThoughtPresets ?? []),
+    preUseThoughtFreeText: textAnswer(draft.preUseThoughtFreeText),
+    couldHaveHelped: optionListAnswer(help),
+    // Retain the three phase-specific answers and also expose their de-duplicated
+    // union above for consumers that need one general retrospective list.
+    couldHaveHelpedEarly: optionListAnswer(draft.couldHaveHelpedEarly),
+    couldHaveHelpedMiddle: optionListAnswer(draft.couldHaveHelpedMiddle),
+    couldHaveHelpedLast: optionListAnswer(draft.couldHaveHelpedLast),
+    supportContact: optionAnswer(draft.supportContact),
+    supportContactOther: textAnswer(draft.supportContactOther),
+    nextStep: optionAnswer(draft.nextStep),
+    nextStepOther: textAnswer(draft.nextStepOther),
+    note: textAnswer(draft.note),
+    emotionAfter: draft.emotionAfter,
+    whatNeeded: optionAnswer(draft.whatNeeded ?? ""),
+    repairActions: optionListAnswer(draft.repairActions ?? []),
+  };
+}
+
+export function mergeRelapseFollowUpAnswers(
+  existing: Record<string, RegistrationAnswerValue> | undefined,
+  changes: Partial<RelapseLogType>,
+): Record<string, RegistrationAnswerValue> {
+  const answers = { ...(existing ?? {}) };
+  if (Object.prototype.hasOwnProperty.call(changes, "whatNeeded")) {
+    answers.whatNeeded = optionAnswer(changes.whatNeeded ?? "");
+  }
+  if (Object.prototype.hasOwnProperty.call(changes, "repairActions")) {
+    answers.repairActions = optionListAnswer(changes.repairActions ?? []);
+  }
+  if (Object.prototype.hasOwnProperty.call(changes, "emotionAfter")) {
+    const emotionAfter = changes.emotionAfter;
+    answers.emotionAfter = typeof emotionAfter === "number"
+      && Number.isFinite(emotionAfter)
+      && emotionAfter >= 0
+      && emotionAfter <= 10
+      ? emotionAfter
+      : null;
+  }
+  return answers;
 }
 
 const WHEN_OPTIONS = [
@@ -305,12 +557,12 @@ export function RelapseLog() {
   // Older active sessions can resume beyond the former late safety question.
   // Bring only unanswered, unfinished sessions to the new first-step screen so
   // Save never becomes a silent no-op and urgent guidance is not skipped.
-  const initialStep = resumableStep !== "done" && restoredDraft.acuteRisk === "unanswered"
+  const initialStep = resumableStep !== "done" && restoredDraft.acuteRisks.length === 0
     ? "label"
     : resumableStep;
 
   const [step, setStep] = useState<Step>(initialStep);
-  const [draft, setDraft] = useState<Draft>(restoredDraft);
+  const [draft, setDraft] = useState<RelapseDraft>(restoredDraft);
   const [savedLog, setSavedLog] = useState<RelapseLogType | null>(() => {
     const id = matched?.savedLogId;
     return id ? relapseLogs.find((log) => log.id === id) ?? null : null;
@@ -373,19 +625,24 @@ export function RelapseLog() {
     }
   }, [matched?.savedLogId, relapseLogs, savedLog]);
 
-  const toggleHelp = (v: string) => {
-    setDraft((prev) => {
-      const arr = (prev.couldHaveHelpedEarly as string[]) ?? [];
-      const next = arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v];
-      return { ...prev, couldHaveHelpedEarly: next, couldHaveHelpedMiddle: next, couldHaveHelpedLast: next };
-    });
-  };
+  useEffect(() => {
+    if (!savedLog) return;
+    // Post-save questions live on the saved record. Rehydrate them when a done
+    // screen is resumed instead of letting the older active-session snapshot
+    // hide a previously saved answer.
+    setDraft((previous) => ({
+      ...previous,
+      whatNeeded: savedLog.whatNeeded ?? "",
+      repairActions: savedLog.repairActions ?? [],
+      emotionAfter: savedLog.emotionAfter ?? null,
+    }));
+  }, [savedLog]);
 
-  const update = useCallback(<K extends keyof Draft>(key: K, value: Draft[K]) => {
+  const update = useCallback(<K extends keyof RelapseDraft>(key: K, value: RelapseDraft[K]) => {
     setDraft((prev) => ({ ...prev, [key]: value }));
   }, []);
 
-  const toggleArr = useCallback(<T extends string>(key: keyof Draft, val: T) => {
+  const toggleArr = useCallback(<T extends string>(key: keyof RelapseDraft, val: T) => {
     setDraft((prev) => {
       const arr = (prev[key] as T[]) ?? [];
       return {
@@ -428,53 +685,56 @@ export function RelapseLog() {
   };
 
   const save = async () => {
-    if (saveLock.current || draft.acuteRisk === "unanswered") return;
+    if (saveLock.current || draft.acuteRisks.length === 0) return;
     saveLock.current = true;
     setSaving(true);
     setError(null);
     try {
       const timestamp = new Date(draft.occurrenceDateTime).getTime();
-      if (!Number.isFinite(timestamp) || timestamp > Date.now() + 60_000) {
+      if (!isValidRelapseOccurrence(draft.occurrenceDateTime)) {
         throw new Error("invalid-occurrence-time");
       }
       const completedAt = Date.now();
       const startedAt = reg.session?.startedAt ?? completedAt;
-      const { occurrenceDateTime: _occurrenceDateTime, acuteRisk, ...persistedDraft } = draft;
+      const normalizedDraft: RelapseDraft = {
+        ...draft,
+        when: whenForOccurrence(draft.occurrenceDateTime, new Date(completedAt)),
+        primarySubstance: "",
+        amountCategory: draft.substances.length > 0
+          ? draft.amountCategory
+          : "unanswered",
+      };
+      const {
+        occurrenceDateTime: _occurrenceDateTime,
+        acuteRisk,
+        ...persistedDraft
+      } = normalizedDraft;
       const saved = await logRelapse({
         ...persistedDraft,
+        // The legacy core shape has no blank label sentinel. The canonical
+        // answers envelope above/below preserves blank versus explicit no-label.
+        label: normalizedDraft.label || "no-label",
+        when: normalizedDraft.when,
+        // A no-clear-trigger answer lives in firstTriggerType. Keep the legacy
+        // free-text field empty so it cannot imply that the person wrote it.
+        firstTriggerText: persistedFirstTriggerText(normalizedDraft),
+        note: normalizedDraft.note.trim(),
         acuteRisk,
-        preUseThoughtPreset: (draft.preUseThoughtPresets ?? [])[0] ?? "",
+        // The current control is plural and does not ask for a primary thought.
+        // Keep the retired scalar empty so array order cannot create meaning.
+        preUseThoughtPreset: "",
         timestamp,
         occurredAt: timestamp,
         startedAt,
         completedAt,
-        dataVersion: 2,
-        contentVersion: "registration-v2",
-        answers: {
-          acuteRisk,
-          label: toStableOptionId(draft.label),
-          when: toStableOptionId(draft.when),
-          episodeDuration: toStableOptionId(draft.episodeDuration),
-          substances: toStableOptionIds(draft.substances),
-          primarySubstance: toStableOptionId(draft.primarySubstance),
-          amountCategory: toStableOptionId(draft.amountCategory),
-          firstTriggerType: toStableOptionId(draft.firstTriggerType),
-          preUseFactors: toStableOptionIds(draft.preUseFactors),
-          missedWarnings: toStableOptionIds(draft.missedWarnings),
-          preUseThoughts: toStableOptionIds(draft.preUseThoughtPresets ?? []),
-          couldHaveHelpedEarly: toStableOptionIds(draft.couldHaveHelpedEarly),
-          couldHaveHelpedMiddle: toStableOptionIds(draft.couldHaveHelpedMiddle),
-          couldHaveHelpedLast: toStableOptionIds(draft.couldHaveHelpedLast),
-          supportContact: toStableOptionId(draft.supportContact),
-          nextStep: toStableOptionId(draft.nextStep),
-          emotionAfter: draft.emotionAfter,
-          whatNeeded: toStableOptionId(draft.whatNeeded ?? ""),
-          repairActions: toStableOptionIds(draft.repairActions ?? []),
-        },
+        dataVersion: CURRENT_REGISTRATION_DATA_VERSION,
+        contentVersion: CURRENT_REGISTRATION_CONTENT_VERSION,
+        answers: buildRelapseAnswers(normalizedDraft, completedAt),
         status: "completed",
       });
       setSavedLog(saved);
-      reg.patchSession({ savedLogId: saved.id, step: "done", draft });
+      setDraft(normalizedDraft);
+      reg.patchSession({ savedLogId: saved.id, step: "done", draft: normalizedDraft });
       setStep("done");
     } catch {
       setError(
@@ -494,13 +754,18 @@ export function RelapseLog() {
     setPostSaveWriting(true);
     setError(null);
     try {
-      const updated: RelapseLogType = { ...savedLog, ...changes };
+      const updated: RelapseLogType = {
+        ...savedLog,
+        ...changes,
+        answers: mergeRelapseFollowUpAnswers(savedLog.answers, changes),
+      };
       await updateRelapse(updated);
       setSavedLog(updated);
       setDraft((prev) => ({
         ...prev,
         whatNeeded: updated.whatNeeded ?? "",
         repairActions: updated.repairActions ?? [],
+        emotionAfter: updated.emotionAfter ?? null,
       }));
     } catch {
       setError(
@@ -534,14 +799,27 @@ export function RelapseLog() {
     }
   };
 
-  const openSupportRoute = (path: string) => {
+  const openSupportRoute = async (path: string) => {
     if (isWriting) return;
-    reg.patchSession({ pendingReturn: { returnRoute: "/relapse", returnStep: step } });
-    navigate(path);
+    setLeavingHome(true);
+    setError(null);
+    const opened = await navigateAfterRelapseReturnSaved(
+      () => reg.patchSession({ pendingReturn: { returnRoute: "/relapse", returnStep: step } }),
+      () => navigate(path),
+    );
+    if (!opened) {
+      setError(
+        language === "nl"
+          ? "De terugkeer naar deze registratie kon niet worden opgeslagen. Probeer opnieuw."
+          : "The return to this log could not be saved. Please try again.",
+      );
+    }
+    setLeavingHome(false);
   };
 
-  const isSafety = draft.acuteRisk !== "unanswered" && draft.acuteRisk !== "none";
-  const isOptional = step === "before";
+  const safetyRoutes = relapseSafetyRoutes(draft.acuteRisks);
+  const isSafety = safetyRoutes.urgent;
+  const isOptional = RELAPSE_OPTIONAL_STEPS.includes(step);
 
   const urgentSupportPanel = isSafety ? (
     <div className="bg-card border border-amber-500/50 rounded-2xl p-4 text-left max-w-xs w-full">
@@ -552,14 +830,18 @@ export function RelapseLog() {
       <div className="space-y-2 text-sm text-muted-foreground leading-relaxed">
         <p>{safetyCopy.assessmentLimit}</p>
         <p>{safetyCopy.emergency}</p>
-        {draft.acuteRisk === "self-harm-risk" && <p>{safetyCopy.selfHarm}</p>}
+        <p>{t("relapse.risk.selected")}: {draft.acuteRisks.filter((risk) => risk !== "none").map(tOpt).join(", ")}</p>
+        {safetyRoutes.unsafe && <p>{safetyCopy.unsafe}</p>}
+        {safetyRoutes.continuedUse && <p>{safetyCopy.continuedUse}</p>}
+        {safetyRoutes.withdrawal && <p>{safetyCopy.withdrawal}</p>}
+        {safetyRoutes.selfHarm && <p>{safetyCopy.selfHarm}</p>}
         <p>{safetyCopy.humanHelp}</p>
       </div>
       <div className="mt-3 flex flex-col gap-2">
         <a href="tel:112" className="text-sm text-primary font-semibold touch-target inline-flex items-center">
           {safetyCopy.call112}
         </a>
-        {draft.acuteRisk === "self-harm-risk" && (
+        {safetyRoutes.selfHarm && (
           <>
             <a href="tel:113" className="text-sm text-primary font-semibold touch-target inline-flex items-center">
               {safetyCopy.call113}
@@ -584,13 +866,11 @@ export function RelapseLog() {
   // Gate "Next": every required question on the current step must be answered.
   const canProceed = (() => {
     switch (step) {
-      case "label":   return draft.acuteRisk !== "unanswered";
+      case "label":   return draft.acuteRisks.length > 0;
       case "when": {
-        const occurrence = new Date(draft.occurrenceDateTime).getTime();
-        return Number.isFinite(occurrence)
-          && occurrence <= Date.now() + 60_000;
+        return isValidRelapseOccurrence(draft.occurrenceDateTime)
+          && draft.when !== "";
       }
-      case "trigger": return draft.firstTriggerType !== "";
       case "next":    return (draft.supportContact !== "" || draft.supportContactOther.trim() !== "")
         && (draft.nextStep !== "" || draft.nextStepOther.trim() !== "");
       default:        return true;
@@ -643,10 +923,10 @@ export function RelapseLog() {
 
           <div className="w-full max-w-xs text-left">
             <p className="text-sm font-medium text-foreground mb-1">
-              {language === "nl" ? "Wat had je op dat moment nodig?" : "What did you need in that moment?"}
+              {t("relapse.q.needs")}
             </p>
             <p className="text-xs text-muted-foreground mb-3">
-              {language === "nl" ? "Optioneel; je keuze wordt bij deze registratie opgeslagen." : "Optional; your choice is saved with this log."}
+              {t("relapse.q.needs_sub")}
             </p>
             <SelectList
               options={WHAT_NEEDED_OPTIONS}
@@ -656,6 +936,42 @@ export function RelapseLog() {
               disabled={isWriting || !savedLog}
             />
           </div>
+
+          <fieldset className="w-full max-w-xs text-left">
+            <legend className="text-sm font-medium text-foreground mb-1">
+              {t("relapse.q.emotion_after")} {" "}
+              <span className="font-normal text-muted-foreground">({t("common.optional")})</span>
+            </legend>
+            <p className="text-xs text-muted-foreground mb-3">
+              {t("relapse.q.emotion_after_sub")}
+            </p>
+            <div className="grid grid-cols-6 gap-2" aria-label={t("relapse.q.emotion_after")}>
+              {Array.from({ length: 11 }, (_, value) => {
+                const selected = draft.emotionAfter === value;
+                return (
+                  <button
+                    key={value}
+                    type="button"
+                    disabled={isWriting || !savedLog}
+                    aria-pressed={selected}
+                    aria-label={`${t("relapse.q.emotion_after")} ${value}`}
+                    onClick={() => updateSavedLog({ emotionAfter: selected ? null : value })}
+                    className={`touch-target rounded-xl border text-sm font-semibold transition-all ${
+                      selected
+                        ? "border-primary bg-primary/10 text-foreground"
+                        : "border-border bg-card text-muted-foreground hover:border-primary/30"
+                    } disabled:opacity-50`}
+                  >
+                    {value}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="mt-2 flex justify-between text-xs text-muted-foreground">
+              <span>{t("relapse.q.emotion_after_low")}</span>
+              <span>{t("relapse.q.emotion_after_high")}</span>
+            </div>
+          </fieldset>
 
           {/* Repair actions */}
           <div className="w-full max-w-xs text-left">
@@ -750,38 +1066,44 @@ export function RelapseLog() {
         {/* ── Label ─────────────────────────────────────────── */}
         {step === "label" && (
           <>
-            <p className="text-base font-medium text-foreground">{t("relapse.q.risk")}</p>
+            <p className="text-base font-medium text-foreground">
+              {t("relapse.q.risk")} {" "}
+              <span className="text-sm font-normal text-muted-foreground">
+                ({t("common.required")})
+              </span>
+            </p>
             <p className="text-sm text-muted-foreground -mt-2">{t("relapse.q.risk_sub")}</p>
             <div className="grid grid-cols-2 gap-2">
-              {[
-                { value: "none" as const, label: language === "nl" ? "Geen directe zorg" : "No immediate concern" },
-                { value: "unsafe" as const, label: language === "nl" ? "Ik voel me niet veilig" : "I do not feel safe" },
-                { value: "fear-continued-use" as const, label: language === "nl" ? "Bang dat ik doorga met gebruiken" : "Afraid I will continue using" },
-                { value: "withdrawal" as const, label: language === "nl" ? "Zorgen over ontwenning" : "Withdrawal concern" },
-                { value: "self-harm-risk" as const, label: language === "nl" ? "Risico dat ik mezelf of iemand anders iets aandoe" : "Risk I may hurt myself or someone else" },
-              ].map(({ value, label }) => (
+              {/* Put concern routes before the reassuring answer so the first
+                  visual suggestion is not a preselected-looking "all clear". */}
+              {ACUTE_RISK_OPTIONS.map(({ value }) => (
                 <button
                   type="button"
                   key={value}
-                  onClick={() => update("acuteRisk", draft.acuteRisk === value ? "unanswered" : value)}
-                  aria-pressed={draft.acuteRisk === value}
+                  onClick={() => setDraft((previous) => toggleRelapseAcuteRisk(previous, value))}
+                  aria-pressed={draft.acuteRisks.includes(value)}
                   className={`py-3.5 px-3 rounded-2xl border text-sm font-medium text-left leading-tight transition-all touch-target ${
-                    draft.acuteRisk === value
+                    draft.acuteRisks.includes(value)
                       ? "bg-primary/10 border-primary text-foreground"
                       : "bg-card border-border text-muted-foreground"
                   }`}
                 >
-                  {label}
+                  {tOpt(value)}
                 </button>
               ))}
             </div>
             {urgentSupportPanel}
             <div className="h-px bg-border" />
-            <p className="text-base font-medium text-foreground">{t("relapse.q.label")}</p>
+            <p className="text-base font-medium text-foreground">
+              {t("relapse.q.label")} {" "}
+              <span className="text-sm font-normal text-muted-foreground">({t("common.optional")})</span>
+            </p>
             <SelectList
               options={LABEL_OPTIONS}
               selected={draft.label}
-              onSelect={(v) => update("label", v)}
+              onSelect={(value) => {
+                update("label", draft.label === value ? "" : value);
+              }}
               translate={tOpt}
             />
           </>
@@ -793,7 +1115,7 @@ export function RelapseLog() {
             <p className="text-base font-medium text-foreground">{t("relapse.q.when")}</p>
             <SelectList
               options={WHEN_OPTIONS}
-              selected={draft.when}
+              selected={draft.occurrenceDateTime ? draft.when : ""}
               onSelect={(v) => setDraft((prev) => ({
                 ...prev,
                 when: v,
@@ -802,19 +1124,29 @@ export function RelapseLog() {
               translate={tOpt}
             />
             <label className="flex flex-col gap-2 text-sm font-medium text-foreground">
-              {language === "nl" ? "Exact tijdstip van de gebeurtenis" : "Exact time the event occurred"}
+              <span>
+                {t("relapse.q.occurrence_exact")} {" "}
+                <span className="font-normal text-muted-foreground">
+                  ({t("common.required")})
+                </span>
+              </span>
               <input
                 type="datetime-local"
                 required
                 value={draft.occurrenceDateTime}
                 max={toLocalDateTimeInput(new Date())}
-                onChange={(event) => update("occurrenceDateTime", event.target.value)}
+                onChange={(event) => {
+                  const occurrenceDateTime = event.target.value;
+                  setDraft((prev) => ({
+                    ...prev,
+                    occurrenceDateTime,
+                    when: whenForOccurrence(occurrenceDateTime),
+                  }));
+                }}
                 className="w-full rounded-2xl border border-input bg-card px-4 py-3.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
               />
               <span className="text-xs font-normal text-muted-foreground">
-                {language === "nl"
-                  ? "Dit tijdstip wordt in je logboek gebruikt, niet het moment waarop je op Opslaan drukt."
-                  : "Your log uses this time, not the moment you press Save."}
+                {t("relapse.q.occurrence_exact_sub")}
               </span>
             </label>
             <div className="h-px bg-border mt-1" />
@@ -878,18 +1210,33 @@ export function RelapseLog() {
         {/* ── First trigger ──────────────────────────────────── */}
         {step === "trigger" && (
           <>
-            <p className="text-base font-medium text-foreground">{t("relapse.q.trigger")}</p>
+            <p className="text-base font-medium text-foreground">
+              {t("relapse.q.trigger")} {" "}
+              <span className="text-sm font-normal text-muted-foreground">({t("common.optional")})</span>
+            </p>
             <p className="text-sm text-muted-foreground -mt-2">{t("relapse.q.trigger_sub")}</p>
             <ChipGrid
               options={FIRST_TRIGGER_TYPES}
               selected={draft.firstTriggerType ? [draft.firstTriggerType] : []}
-              onToggle={(v) => update("firstTriggerType", draft.firstTriggerType === v ? "" : v)}
+              onToggle={(value) => setDraft((prev) => selectFirstTrigger(prev, value))}
               translate={tOpt}
             />
+            <button
+              type="button"
+              aria-pressed={hasNoClearTrigger(draft)}
+              onClick={() => setDraft((prev) => toggleNoClearTrigger(prev))}
+              className={`touch-target rounded-xl border px-3.5 py-2.5 text-left text-sm font-medium transition-all ${
+                hasNoClearTrigger(draft)
+                  ? "border-primary bg-primary/10 text-foreground"
+                  : "border-border bg-card text-muted-foreground hover:border-primary/30"
+              }`}
+            >
+              {t("relapse.q.trigger_unsure")}
+            </button>
             <textarea
               aria-label={t("relapse.q.trigger")}
-              value={draft.firstTriggerText}
-              onChange={(e) => update("firstTriggerText", e.target.value)}
+              value={hasNoClearTrigger(draft) ? "" : draft.firstTriggerText}
+              onChange={(event) => setDraft((prev) => enterFirstTriggerText(prev, event.target.value))}
               placeholder={t("relapse.q.trigger_placeholder")}
               rows={4}
               className="w-full bg-card border border-input rounded-2xl px-4 py-3.5 text-foreground placeholder:text-muted-foreground/50 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring"
@@ -900,7 +1247,10 @@ export function RelapseLog() {
         {/* ── Before ────────────────────────────────────────── */}
         {step === "before" && (
           <>
-            <p className="text-base font-medium text-foreground">{t("relapse.q.before")}</p>
+            <p className="text-base font-medium text-foreground">
+              {t("relapse.q.before")} {" "}
+              <span className="text-sm font-normal text-muted-foreground">({t("common.optional")})</span>
+            </p>
             <p className="text-sm text-muted-foreground -mt-2">{t("relapse.q.before_sub")}</p>
             <ChipGrid
               options={PRE_USE_FACTORS}
@@ -917,7 +1267,10 @@ export function RelapseLog() {
               className="w-full bg-card border border-input rounded-2xl px-4 py-3.5 text-foreground placeholder:text-muted-foreground/50 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring"
             />
             <div className="h-px bg-border" />
-            <p className="text-base font-medium text-foreground">{t("relapse.q.warnings")}</p>
+            <p className="text-base font-medium text-foreground">
+              {t("relapse.q.warnings")} {" "}
+              <span className="text-sm font-normal text-muted-foreground">({t("common.optional")})</span>
+            </p>
             <p className="text-sm text-muted-foreground -mt-2">{t("relapse.q.warnings_sub")}</p>
             <ChipGrid
               options={MISSED_WARNINGS}
@@ -926,7 +1279,10 @@ export function RelapseLog() {
               translate={tOpt}
             />
             <div className="h-px bg-border" />
-            <p className="text-base font-medium text-foreground">{t("relapse.q.thought")}</p>
+            <p className="text-base font-medium text-foreground">
+              {t("relapse.q.thought")} {" "}
+              <span className="text-sm font-normal text-muted-foreground">({t("common.optional")})</span>
+            </p>
             <p className="text-sm text-muted-foreground -mt-2">{t("relapse.q.thought_sub")}</p>
             <ChipGrid
               options={THOUGHT_PRESETS}
@@ -943,12 +1299,30 @@ export function RelapseLog() {
               className="w-full bg-card border border-input rounded-2xl px-4 py-3.5 text-foreground placeholder:text-muted-foreground/50 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring"
             />
             <div className="h-px bg-border" />
-            <p className="text-base font-medium text-foreground">{t("relapse.q.help")}</p>
+            <p className="text-base font-medium text-foreground">
+              {t("relapse.q.help")} {" "}
+              <span className="text-sm font-normal text-muted-foreground">({t("common.optional")})</span>
+            </p>
             <p className="text-sm text-muted-foreground -mt-2">{t("relapse.q.help_sub")}</p>
+            <p className="text-sm font-medium text-foreground">{t("relapse.q.help.early")}</p>
             <ChipGrid
               options={COULD_HELP_OPTIONS}
-              selected={(draft.couldHaveHelpedEarly as string[]) ?? []}
-              onToggle={toggleHelp}
+              selected={draft.couldHaveHelpedEarly ?? []}
+              onToggle={(value) => setDraft((prev) => toggleHelpPhaseSelection(prev, "couldHaveHelpedEarly", value))}
+              translate={tOpt}
+            />
+            <p className="text-sm font-medium text-foreground">{t("relapse.q.help.middle")}</p>
+            <ChipGrid
+              options={COULD_HELP_OPTIONS}
+              selected={draft.couldHaveHelpedMiddle ?? []}
+              onToggle={(value) => setDraft((prev) => toggleHelpPhaseSelection(prev, "couldHaveHelpedMiddle", value))}
+              translate={tOpt}
+            />
+            <p className="text-sm font-medium text-foreground">{t("relapse.q.help.last")}</p>
+            <ChipGrid
+              options={COULD_HELP_OPTIONS}
+              selected={draft.couldHaveHelpedLast ?? []}
+              onToggle={(value) => setDraft((prev) => toggleHelpPhaseSelection(prev, "couldHaveHelpedLast", value))}
               translate={tOpt}
             />
           </>
@@ -957,34 +1331,56 @@ export function RelapseLog() {
         {/* ── Next step + safety ────────────────────────────── */}
         {step === "next" && (
           <>
-            <p className="text-base font-medium text-foreground">{t("relapse.q.next_support")}</p>
+            <p className="text-base font-medium text-foreground">
+              {t("relapse.q.next_support")} {" "}
+              <span className="text-sm font-normal text-muted-foreground">
+                ({t("common.required")})
+              </span>
+            </p>
             <ChipGrid
               options={SUPPORT_CONTACTS}
               selected={draft.supportContact ? [draft.supportContact] : []}
-              onToggle={(v) => update("supportContact", draft.supportContact === v ? "" : v)}
+              onToggle={(value) => setDraft((prev) => {
+                const choice = selectExclusiveChoice(prev.supportContact, value);
+                return { ...prev, supportContact: choice.selected, supportContactOther: choice.other };
+              })}
               translate={tOpt}
             />
             <input
               type="text"
               aria-label={t("relapse.q.next_support")}
               value={draft.supportContactOther}
-              onChange={(e) => update("supportContactOther", e.target.value)}
+              onChange={(event) => setDraft((prev) => {
+                const choice = enterExclusiveOther(event.target.value);
+                return { ...prev, supportContact: choice.selected, supportContactOther: choice.other };
+              })}
               placeholder={t("relapse.q.next_support_placeholder")}
               className="w-full bg-card border border-input rounded-2xl px-4 py-3.5 text-foreground placeholder:text-muted-foreground/50 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
             />
             <div className="h-px bg-border" />
-            <p className="text-base font-medium text-foreground">{t("relapse.q.next_step")}</p>
+            <p className="text-base font-medium text-foreground">
+              {t("relapse.q.next_step")} {" "}
+              <span className="text-sm font-normal text-muted-foreground">
+                ({t("common.required")})
+              </span>
+            </p>
             <ChipGrid
               options={NEXT_STEPS}
               selected={draft.nextStep ? [draft.nextStep] : []}
-              onToggle={(v) => update("nextStep", draft.nextStep === v ? "" : v)}
+              onToggle={(value) => setDraft((prev) => {
+                const choice = selectExclusiveChoice(prev.nextStep, value);
+                return { ...prev, nextStep: choice.selected, nextStepOther: choice.other };
+              })}
               translate={tOpt}
             />
             <input
               type="text"
               aria-label={t("relapse.q.next_step")}
               value={draft.nextStepOther}
-              onChange={(e) => update("nextStepOther", e.target.value)}
+              onChange={(event) => setDraft((prev) => {
+                const choice = enterExclusiveOther(event.target.value);
+                return { ...prev, nextStep: choice.selected, nextStepOther: choice.other };
+              })}
               placeholder={t("relapse.q.next_step_other_placeholder")}
               className="w-full bg-card border border-input rounded-2xl px-4 py-3.5 text-foreground placeholder:text-muted-foreground/50 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
             />

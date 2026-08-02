@@ -60,6 +60,7 @@ const trekFile = "src/pages/TrekTracker.tsx";
 const anxietyFile = "src/pages/AnxietyTracker.tsx";
 const boredomFile = "src/pages/BoredomTracker.tsx";
 const relapseFile = "src/pages/RelapseLog.tsx";
+const relapseSafetyFile = "src/db/relapseSafety.ts";
 
 const catalogCases: CatalogCase[] = [
   { type: "craving", field: "onsetType", kind: "scalar", values: literalOptions(cravingFile, "ONSET_TYPES") },
@@ -119,12 +120,10 @@ const catalogCases: CatalogCase[] = [
   { type: "relapse", field: "when", kind: "scalar", values: literalOptions(relapseFile, "WHEN_OPTIONS", "value") },
   { type: "relapse", field: "episodeDuration", kind: "scalar", values: literalOptions(relapseFile, "DURATION_OPTIONS", "value") },
   { type: "relapse", field: "substances", kind: "array", values: literalOptions(relapseFile, "SUBSTANCES") },
-  { type: "relapse", field: "primarySubstance", kind: "scalar", values: literalOptions(relapseFile, "SUBSTANCES") },
   { type: "relapse", field: "amountCategory", kind: "scalar", values: literalOptions(relapseFile, "AMOUNT_OPTIONS", "value") },
   { type: "relapse", field: "firstTriggerType", kind: "scalar", values: literalOptions(relapseFile, "FIRST_TRIGGER_TYPES") },
   { type: "relapse", field: "preUseFactors", kind: "array", values: literalOptions(relapseFile, "PRE_USE_FACTORS") },
   { type: "relapse", field: "missedWarnings", kind: "array", values: literalOptions(relapseFile, "MISSED_WARNINGS") },
-  { type: "relapse", field: "preUseThoughtPreset", kind: "scalar", values: literalOptions(relapseFile, "THOUGHT_PRESETS") },
   { type: "relapse", field: "preUseThoughtPresets", kind: "array", values: literalOptions(relapseFile, "THOUGHT_PRESETS") },
   { type: "relapse", field: "couldHaveHelpedEarly", kind: "array", values: literalOptions(relapseFile, "COULD_HELP_OPTIONS") },
   { type: "relapse", field: "couldHaveHelpedMiddle", kind: "array", values: literalOptions(relapseFile, "COULD_HELP_OPTIONS") },
@@ -133,9 +132,9 @@ const catalogCases: CatalogCase[] = [
   { type: "relapse", field: "nextStep", kind: "scalar", values: literalOptions(relapseFile, "NEXT_STEPS") },
   {
     type: "relapse",
-    field: "acuteRisk",
-    kind: "scalar",
-    values: ["none", "unsafe", "fear-continued-use", "withdrawal", "self-harm-risk"],
+    field: "acuteRisks",
+    kind: "array",
+    values: literalOptions(relapseSafetyFile, "ACUTE_RISK_SELECTION_VALUES"),
   },
   { type: "relapse", field: "whatNeeded", kind: "scalar", values: literalOptions(relapseFile, "WHAT_NEEDED_OPTIONS", "value") },
   { type: "relapse", field: "repairActions", kind: "array", values: literalOptions(relapseFile, "REPAIR_ACTIONS") },
@@ -162,8 +161,19 @@ describe("active-registration option catalogs", () => {
       const session = migratedSession(type);
       for (const option of values) {
         const value = kind === "array" ? [option] : option;
+        const candidate = type === "relapse"
+          && field === "amountCategory"
+          && option !== "unanswered"
+          ? {
+              ...withDraftValue(session, field, value),
+              draft: {
+                ...(withDraftValue(session, field, value).draft as Record<string, unknown>),
+                substances: ["Alcohol"],
+              },
+            }
+          : withDraftValue(session, field, value);
         expect(
-          parseActiveRegistration(withDraftValue(session, field, value)),
+          parseActiveRegistration(candidate),
           `${type}.${field} should accept ${option}`,
         ).toMatchObject({ ok: true });
       }
@@ -177,7 +187,10 @@ describe("active-registration option catalogs", () => {
       const corrupted = kind === "array"
         ? [values[0], "__not-a-catalog-option__"]
         : "__not-a-catalog-option__";
-      expect(parseActiveRegistration(withDraftValue(session, field, corrupted))).toEqual({
+      expect(
+        parseActiveRegistration(withDraftValue(session, field, corrupted)),
+        `${type}.${field} should reject a corrupted catalog value`,
+      ).toEqual({
         ok: false,
         value: null,
         migrated: false,
@@ -190,7 +203,10 @@ describe("active-registration option catalogs", () => {
     "rejects duplicate $type.$field choices",
     ({ type, field, values }) => {
       const session = migratedSession(type);
-      expect(parseActiveRegistration(withDraftValue(session, field, [values[0], values[0]])))
+      expect(
+        parseActiveRegistration(withDraftValue(session, field, [values[0], values[0]])),
+        `${type}.${field} should reject duplicate catalog values`,
+      )
         .toMatchObject({ ok: false, error: "Active-registration draft has an invalid shape." });
     },
   );
@@ -222,6 +238,78 @@ describe("active-registration option catalogs", () => {
     ]))).toMatchObject({ ok: false, error: "Active-registration draft has an invalid shape." });
   });
 
+  it("rejects the neutral Anxiety body answer combined with a specific answer", () => {
+    const session = migratedSession("anxiety");
+    expect(parseActiveRegistration(withDraftValue(
+      session,
+      "bodyLocations",
+      ["Not in one place / not sure", "Chest"],
+    )))
+      .toMatchObject({ ok: false, error: "Active-registration draft has an invalid shape." });
+  });
+
+  it("rejects no immediate Relapse concern combined with a concern", () => {
+    const session = migratedSession("relapse");
+    expect(parseActiveRegistration(withDraftValue(
+      session,
+      "acuteRisks",
+      ["none", "withdrawal"],
+    ))).toMatchObject({
+      ok: false,
+      error: "Active-registration draft has an invalid shape.",
+    });
+  });
+
+  it("rejects an unknown legacy Relapse concern instead of silently losing it", () => {
+    const session = migratedSession("relapse");
+    const draft = { ...(session.draft as Record<string, unknown>) };
+    delete draft.acuteRisks;
+    draft.acuteRisk = "__not-a-catalog-option__";
+
+    expect(parseActiveRegistration({ ...session, draft })).toMatchObject({
+      ok: false,
+      error: "Active-registration draft has an invalid shape.",
+    });
+  });
+
+  it("treats canonical Relapse concerns as authoritative over a stale alias", () => {
+    const session = migratedSession("relapse");
+    expect(parseActiveRegistration({
+      ...session,
+      draft: {
+        ...(session.draft as Record<string, unknown>),
+        acuteRisks: ["unsafe", "withdrawal"],
+        acuteRisk: "__stale-compatibility-alias__",
+      },
+    })).toMatchObject({
+      ok: true,
+      value: {
+        draft: {
+          acuteRisks: ["unsafe", "withdrawal"],
+          acuteRisk: "withdrawal",
+        },
+      },
+    });
+  });
+
+  it("rejects a restored Anxiety draft that combines whole-body with a specific location", () => {
+    const session = migratedSession("anxiety");
+    expect(parseActiveRegistration(withDraftValue(
+      session,
+      "bodyLocations",
+      ["Whole body", "Chest"],
+    ))).toMatchObject({ ok: false, error: "Active-registration draft has an invalid shape." });
+  });
+
+  it("rejects a neutral Boredom need combined with a specific need", () => {
+    const session = migratedSession("boredom");
+    expect(parseActiveRegistration(withDraftValue(
+      session,
+      "stimulationNeeds",
+      ["not-sure", "calming"],
+    ))).toMatchObject({ ok: false, error: "Active-registration draft has an invalid shape." });
+  });
+
   it("migrates retired catalog values into their current semantic fields", () => {
     const craving = parseActiveRegistration(legacySession("craving", {
       chosenAction: "used",
@@ -241,6 +329,114 @@ describe("active-registration option catalogs", () => {
     });
     expect(parseActiveRegistration(craving.value)).toMatchObject({ ok: true, migrated: false });
     expect(parseActiveRegistration(boredom.value)).toMatchObject({ ok: true, migrated: false });
+  });
+
+  it("migrates retired Trek types into form, need, and trigger fields without dropping meaning", () => {
+    const session = migratedSession("trek");
+    const parseTrek = (trekTypes: string[]) => parseActiveRegistration({
+      ...session,
+      draft: {
+        ...(session.draft as Record<string, unknown>),
+        trekTypes,
+        needTypes: ["Not sure"],
+        triggers: ["No clear trigger / not sure"],
+      },
+    });
+
+    const forms = parseTrek(["Planning or thinking about it", "Actively seeking it"]);
+    const routineAndContext = parseTrek(["Ritual / habit", "Social pressure"]);
+    const motives = parseTrek(["Boredom-driven", "Emotional escape"]);
+    const socialContextOnly = parseActiveRegistration({
+      ...session,
+      step: "action",
+      stepIndex: 6,
+      draft: {
+        ...(session.draft as Record<string, unknown>),
+        trekTypes: ["Social pressure"],
+        needTypes: ["Not sure"],
+        triggers: ["No clear trigger / not sure"],
+      },
+    });
+    if (
+      !forms.ok || !forms.value
+      || !routineAndContext.ok || !routineAndContext.value
+      || !motives.ok || !motives.value
+      || !socialContextOnly.ok || !socialContextOnly.value
+    ) throw new Error("Expected retired Trek types to migrate");
+
+    expect(forms).toMatchObject({ migrated: true });
+    expect(forms.value.draft).toMatchObject({
+      trekTypes: ["approach-mental-rehearsal", "approach-checking-availability"],
+      needTypes: ["Not sure"],
+      triggers: ["No clear trigger / not sure"],
+    });
+    expect(routineAndContext.value.draft).toMatchObject({
+      trekTypes: ["approach-automatic-routine"],
+      needTypes: ["Not sure"],
+      triggers: ["Social pressure"],
+    });
+    expect(motives.value.draft).toMatchObject({
+      trekTypes: [],
+      needTypes: ["Stimulation", "Escape"],
+      triggers: ["No clear trigger / not sure"],
+    });
+    expect(socialContextOnly).toMatchObject({ migrated: true });
+    expect(socialContextOnly.value).toMatchObject({
+      step: "type",
+      stepIndex: 1,
+      draft: {
+        trekTypes: [],
+        needTypes: ["Not sure"],
+        triggers: ["Social pressure"],
+      },
+    });
+    expect(parseActiveRegistration(motives.value)).toMatchObject({ ok: true, migrated: false });
+  });
+
+  it("returns a motive-only v1 Trek draft to the required form step without losing meaning", () => {
+    const result = parseActiveRegistration({
+      ...legacySession("trek", {
+        trekTypes: ["Boredom-driven"],
+        planningStage: "On my way there",
+        needTypes: ["Connection"],
+        triggers: ["Stress"],
+        thoughtFreeText: "I was already making a plan",
+      }),
+      step: "action",
+      stepIndex: 6,
+    });
+    if (!result.ok || !result.value) throw new Error("Expected v1 Trek draft to migrate");
+
+    expect(result).toMatchObject({ ok: true, migrated: true });
+    expect(result.value.step).toBe("type");
+    expect(result.value.stepIndex).toBe(1);
+    expect(result.value.draft).toMatchObject({
+      trekTypes: [],
+      planningStage: "immediacy-access-close",
+      needTypes: ["Connection", "Stimulation"],
+      triggers: ["Stress"],
+      thoughtFreeText: "I was already making a plan",
+    });
+  });
+
+  it.each([
+    ["Just thinking about it", "immediacy-thoughts-only"],
+    ["Getting money or resources", "immediacy-steps-started"],
+    ["On my way there", "immediacy-access-close"],
+    ["About to act", "immediacy-about-to-act"],
+    ["just-thinking-about-it", "immediacy-thoughts-only"],
+  ])("migrates retired Trek immediacy value %s", (legacyValue, expectedValue) => {
+    const session = migratedSession("trek");
+    const result = parseActiveRegistration(withDraftValue(
+      session,
+      "planningStage",
+      legacyValue,
+    ));
+    if (!result.ok || !result.value) throw new Error("Expected retired Trek immediacy to migrate");
+
+    expect(result.migrated).toBe(true);
+    expect(result.value.draft).toMatchObject({ planningStage: expectedValue });
+    expect(parseActiveRegistration(result.value)).toMatchObject({ ok: true, migrated: false });
   });
 
   it.each(["setback", "return-to-use"])(

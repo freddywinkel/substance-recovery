@@ -4,7 +4,16 @@ import { useStore } from "@/hooks/useStore";
 import { useT } from "@/hooks/useTranslation";
 import { PageHeader } from "@/components/PageHeader";
 import { useResumableDraft } from "@/contexts/ActiveRegistrationContext";
-import { updateCravingLog, getCravingLogs, type CravingLog } from "@/db";
+import {
+  updateCravingLog,
+  getCravingLogs,
+  type CravingLog,
+  type RegistrationAnswerValue,
+} from "@/db";
+import {
+  CURRENT_REGISTRATION_CONTENT_VERSION,
+  CURRENT_REGISTRATION_DATA_VERSION,
+} from "@/db/migrations";
 import { IntensitySlider } from "@/components/tracker/IntensitySlider";
 import { ChipCol } from "@/components/tracker/ChipCol";
 import { MultiSelectGrid } from "@/components/tracker/MultiSelectGrid";
@@ -30,6 +39,7 @@ const ONSET_TYPES = [
 ];
 
 const TRIGGER_PRESETS = [
+  "No clear situation / not sure",
   "Home alone",
   "On my way somewhere",
   "After work",
@@ -42,6 +52,22 @@ const TRIGGER_PRESETS = [
   "Saw or smelled a trigger",
   "Other",
 ];
+
+const NO_CLEAR_SITUATION = "No clear situation / not sure";
+
+/** "Not sure" is a complete answer and cannot coexist with specific situations. */
+export function toggleCravingSituationSelection(
+  selected: string[],
+  value: string,
+): string[] {
+  if (value === NO_CLEAR_SITUATION) {
+    return selected.includes(value) ? [] : [value];
+  }
+  const specific = selected.filter((item) => item !== NO_CLEAR_SITUATION);
+  return specific.includes(value)
+    ? specific.filter((item) => item !== value)
+    : [...specific, value];
+}
 
 const PHYSICAL_SENSATIONS = [
   "Restlessness", "Chest tightness", "Head pressure",
@@ -78,6 +104,31 @@ const OUTCOMES = [
 
 const SUBSTANCES = ["Alcohol", "Cannabis", "Cocaine / stimulant", "Benzodiazepines", "Nicotine", "Opioids", "Gambling", "Sex / pornography", "Gaming", "Food / binge eating"];
 
+const BEHAVIOURAL_TARGETS = new Set([
+  "Gambling",
+  "Sex / pornography",
+  "Gaming",
+  "Food / binge eating",
+]);
+
+/**
+ * Generic medical-emergency copy is useful when the target is unknown or may
+ * be a substance. It is misleadingly alarmist when every selected target is a
+ * behaviour, so behaviour-only entries retain the support/relapse route but
+ * do not receive substance-oriented emergency copy.
+ */
+export function shouldShowMedicalSafetyForTargets(targets: string[]): boolean {
+  return targets.length === 0 || targets.some((target) => !BEHAVIOURAL_TARGETS.has(target));
+}
+
+/** A hidden follow-up value must not survive "don't know" or deselection. */
+export function normalizedIntensityAfter(
+  outcome: string,
+  intensityAfter: number | null,
+): number | null {
+  return outcome && outcome !== "dont-know" ? intensityAfter : null;
+}
+
 // Inner-experience + location vocab — mirrors Logs.tsx C_EMOTIONS / C_THOUGHTS / C_LOCATIONS
 // so the Logbook display, editor and analytics stay consistent with what the tracker captures.
 const EMOTIONS = ["Anxious", "Tense", "Low / sad", "Empty", "Angry", "Frustrated", "Guilty", "Ashamed", "Lonely", "Bored", "Restless", "Overwhelmed", "Rejected", "Hopeless", "Excited / hyped", "Numb"];
@@ -91,7 +142,7 @@ const USE_OUTCOMES: { value: "not_used" | "used" | "unsure"; labelKey: string }[
 ];
 
 // ── Draft state ───────────────────────────────────────────────
-interface Draft {
+export interface CravingDraft {
   onsetType: string;
   intensity: number | null;
   confidenceBefore: number | null;
@@ -113,7 +164,7 @@ interface Draft {
   useOutcome: "" | "used" | "not_used" | "unsure";
 }
 
-function blankDraft(): Draft {
+export function createBlankCravingDraft(): CravingDraft {
   return {
     onsetType: "",
     intensity: null,
@@ -137,13 +188,75 @@ function blankDraft(): Draft {
   };
 }
 
+function textOrNull(value: string): string | null {
+  const trimmed = value.trim();
+  return trimmed || null;
+}
+
+function stableIdOrNull(value: string): string | null {
+  return textOrNull(toStableOptionId(value));
+}
+
+function stableIdsOrNull(values: string[]): string[] | null {
+  const ids = toStableOptionIds(values);
+  return ids.length ? ids : null;
+}
+
+export function buildCravingAnswers(
+  draft: CravingDraft,
+): Record<string, RegistrationAnswerValue> {
+  return {
+    registrationType: "craving",
+    onsetType: toStableOptionId(draft.onsetType),
+    onsetOther: textOrNull(removeHiddenOtherText(draft.onsetType, draft.onsetOther)),
+    intensity: draft.intensity,
+    confidenceBefore: draft.confidenceBefore,
+    situations: toStableOptionIds(draft.situationPresets),
+    situationOther: textOrNull(removeHiddenOtherText(draft.situationPresets, draft.triggerOther)),
+    physicalSensations: stableIdsOrNull(draft.physicalSensations),
+    buildupDuration: draft.buildupDuration,
+    location: stableIdOrNull(draft.location),
+    emotions: stableIdsOrNull(draft.emotions),
+    emotionOther: textOrNull(draft.emotionOther),
+    thoughts: stableIdsOrNull(draft.thoughtPresets),
+    thoughtOther: textOrNull(draft.thoughtFreeText),
+    targets: stableIdsOrNull(draft.substances),
+    chosenAction: draft.chosenAction,
+    actionAttempted: draft.actionAttempted,
+    useOutcome: draft.useOutcome,
+    cravingOutcome: null,
+    intensityAfter: null,
+  };
+}
+
+export async function navigateAfterCravingReturnSaved(
+  saveReturn: () => Promise<boolean>,
+  navigate: () => void,
+): Promise<boolean> {
+  try {
+    if (!(await saveReturn())) return false;
+    navigate();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function RequiredMarker({ language }: { language: "en" | "nl" }) {
+  return (
+    <span data-field-status="required" className="text-primary font-normal text-xs ml-2">
+      ({language === "nl" ? "verplicht" : "required"})
+    </span>
+  );
+}
+
 // ── Main component ────────────────────────────────────────────
 export function CravingTracker() {
-  const { step, setStep, draft, setDraft, reg } = useResumableDraft<Step, Draft>({
+  const { step, setStep, draft, setDraft, reg } = useResumableDraft<Step, CravingDraft>({
     type: "craving",
     route: "/craving",
     firstStep: "onset",
-    makeBlank: blankDraft,
+    makeBlank: createBlankCravingDraft,
     steps: STEP_ORDER,
   });
   const [saving, setSaving] = useState(false);
@@ -165,14 +278,16 @@ export function CravingTracker() {
     done: t("common.done"),
   };
 
-  const update = useCallback(<K extends keyof Draft>(key: K, value: Draft[K]) => {
+  const update = useCallback(<K extends keyof CravingDraft>(key: K, value: CravingDraft[K]) => {
     setDraft((prev) => ({ ...prev, [key]: value }));
   }, []);
 
   const toggleArr = useCallback((key: "situationPresets" | "physicalSensations" | "substances", val: string) => {
     setDraft((prev) => {
       const arr = prev[key];
-      const next = arr.includes(val)
+      const next = key === "situationPresets"
+        ? toggleCravingSituationSelection(arr, val)
+        : arr.includes(val)
         ? arr.filter((x) => x !== val)
         : key === "physicalSensations" && arr.length >= 3
           ? arr
@@ -204,7 +319,7 @@ export function CravingTracker() {
     switch (step) {
       case "onset":   return draft.onsetType !== "" && (draft.onsetType !== "Other" || draft.onsetOther.trim() !== "");
       case "trigger": return draft.situationPresets.length > 0 && draft.buildupDuration !== "" && (!draft.situationPresets.includes("Other") || draft.triggerOther.trim() !== "");
-      case "inner":   return draft.emotions.length > 0 || draft.emotionOther.trim() !== "" || draft.thoughtPresets.length > 0 || draft.thoughtFreeText.trim() !== "";
+      case "inner":   return true;
       case "substance": return true;
       case "action":  return draft.chosenAction !== "" && draft.actionAttempted !== null;
       case "outcome": return draft.useOutcome !== "";
@@ -257,23 +372,9 @@ export function CravingTracker() {
         occurredAt: startedAt,
         startedAt,
         completedAt,
-        dataVersion: 2,
-        contentVersion: "registration-v2",
-        answers: {
-          onsetType: toStableOptionId(draft.onsetType),
-          intensity: draft.intensity,
-          confidenceBefore: draft.confidenceBefore,
-          situations: toStableOptionIds(draft.situationPresets),
-          physicalSensations: toStableOptionIds(draft.physicalSensations),
-          buildupDuration: draft.buildupDuration,
-          location: toStableOptionId(draft.location),
-          emotions: toStableOptionIds(draft.emotions),
-          thoughts: toStableOptionIds(draft.thoughtPresets),
-          targets: toStableOptionIds(draft.substances),
-          chosenAction: draft.chosenAction,
-          actionAttempted: draft.actionAttempted,
-          useOutcome: draft.useOutcome,
-        },
+        dataVersion: CURRENT_REGISTRATION_DATA_VERSION,
+        contentVersion: CURRENT_REGISTRATION_CONTENT_VERSION,
+        answers: buildCravingAnswers(draft),
         status: "completed",
         onsetType: draft.onsetType,
         intensity: draft.intensity,
@@ -305,7 +406,9 @@ export function CravingTracker() {
         cravingOutcome: null,
         interventionUsed: draft.actionAttempted,
         markAsPattern: false,
-        highRiskFlag: draft.intensity != null && draft.intensity >= 8,
+        // Deprecated compatibility field. Intensity is not a safety answer and
+        // must never be promoted to an inferred risk flag.
+        highRiskFlag: false,
         note: "",
         useOutcome: draft.useOutcome || undefined,
       });
@@ -322,15 +425,40 @@ export function CravingTracker() {
   const applyOutcome = useCallback(async (outcome: string, intensityAfter: number | null) => {
     if (!savedLog) return;
     const real = (["decreased", "same", "increased", "unknown"] as const).find((o) => o === (outcome === "dont-know" ? "unknown" : outcome)) ?? null;
-    const updated: CravingLog = { ...savedLog, cravingOutcome: real, intensityAfter: real && real !== "unknown" ? intensityAfter : null };
-    setSavedLog(updated);
+    const normalizedAfter = real && real !== "unknown" ? intensityAfter : null;
+    const updated: CravingLog = {
+      ...savedLog,
+      cravingOutcome: real,
+      intensityAfter: normalizedAfter,
+      answers: {
+        ...(savedLog.answers ?? {}),
+        cravingOutcome: real,
+        intensityAfter: normalizedAfter,
+      },
+    };
     try {
       await updateCravingLog(updated);
-      reg.patchSession({ draft: { ...draft, cravingOutcome: outcome, intensityAfter } });
+      setSavedLog(updated);
+      reg.patchSession({
+        draft: {
+          ...draft,
+          cravingOutcome: outcome,
+          intensityAfter: normalizedAfter,
+        },
+      });
     } catch {
       toast({ title: t("common.save_error"), variant: "destructive" });
     }
   }, [draft, reg, savedLog, t, toast]);
+
+  const openToolPath = useCallback(async (path: string, returnStep: Step) => {
+    const opened = await navigateAfterCravingReturnSaved(
+      () => reg.patchSession({ pendingReturn: { returnRoute: "/craving", returnStep } }),
+      () => navigate(path),
+    );
+    if (!opened) toast({ title: t("common.save_error"), variant: "destructive" });
+    return opened;
+  }, [navigate, reg, t, toast]);
 
   const openHelpPath = async (path: string) => {
     const switchesRegistration = path === "/anxiety" || path === "/boredom";
@@ -340,12 +468,13 @@ export function CravingTracker() {
       if (await reg.suspendSession()) navigate(path);
       return;
     }
-    reg.patchSession({ pendingReturn: { returnRoute: "/craving", returnStep: step } });
-    navigate(path);
+    await openToolPath(path, step);
   };
 
   // ── Done screen ───────────────────────────────────────────
   if (step === "done") {
+    const showMedicalSafety = draft.useOutcome === "used"
+      && shouldShowMedicalSafetyForTargets(draft.substances);
     const usedSafetyWarnings = draft.useOutcome === "used"
       ? getSubstanceSafetyWarnings(draft.substances, language)
       : [];
@@ -371,7 +500,7 @@ export function CravingTracker() {
             <p className="text-muted-foreground leading-relaxed max-w-xs">{outcomeMsg}</p>
           </div>
 
-          {draft.useOutcome === "used" && (
+          {showMedicalSafety && (
             <div className="w-full max-w-xs space-y-3 text-left">
               <div className="rounded-2xl border border-amber-500/50 bg-card p-4">
                 <div className="mb-2 flex items-start gap-2">
@@ -406,10 +535,7 @@ export function CravingTracker() {
               </p>
               {chosenDef.tool && draft.actionAttempted === false && (
                 <button
-                  onClick={() => {
-                    reg.patchSession({ pendingReturn: { returnRoute: "/craving", returnStep: "done" } });
-                    navigate(chosenDef.tool!);
-                  }}
+                  onClick={() => void openToolPath(chosenDef.tool!, "done")}
                   className="self-start text-xs font-semibold text-primary border border-primary/30 rounded-xl px-3 py-2 hover:bg-primary/10 active:scale-95 transition-all touch-target"
                 >
                   {t("craving.action.launch")} →
@@ -432,8 +558,13 @@ export function CravingTracker() {
                 <button key={value}
                   onClick={() => {
                     const next = draft.cravingOutcome === value ? "" : value;
-                    update("cravingOutcome", next);
-                    applyOutcome(next, draft.intensityAfter);
+                    const nextIntensity = normalizedIntensityAfter(next, draft.intensityAfter);
+                    setDraft((prev) => ({
+                      ...prev,
+                      cravingOutcome: next,
+                      intensityAfter: nextIntensity,
+                    }));
+                    void applyOutcome(next, nextIntensity);
                   }}
                   aria-pressed={draft.cravingOutcome === value}
                   className={`py-3 px-3 rounded-2xl border text-sm font-medium transition-all touch-target ${
@@ -477,10 +608,7 @@ export function CravingTracker() {
               </button>
             )}
             <button
-              onClick={() => {
-                reg.patchSession({ pendingReturn: { returnRoute: "/craving", returnStep: "done" } });
-                navigate("/tools");
-              }}
+              onClick={() => void openToolPath("/tools", "done")}
               className="w-full bg-primary text-primary-foreground rounded-2xl py-3.5 font-semibold touch-target hover:opacity-90 active:scale-95 transition-all"
             >
               {t("common.browse_tools")}
@@ -560,25 +688,43 @@ export function CravingTracker() {
         {/* ── Onset ──────────────────────────────────────────── */}
         {step === "onset" && (
           <>
-            <p className="text-base font-medium text-foreground">{t("craving.q.onset")}</p>
+            <p className="text-base font-medium text-foreground">
+              {t("craving.q.onset")}
+              <RequiredMarker language={language} />
+            </p>
             <p className="text-sm text-muted-foreground -mt-2">{t("craving.q.onset_sub")}</p>
             <ChipCol
               options={ONSET_TYPES}
               value={draft.onsetType}
-              onChange={(v) => update("onsetType", v)}
+              onChange={(v) => setDraft((prev) => ({
+                ...prev,
+                onsetType: v,
+                onsetOther: v === "Other" ? prev.onsetOther : "",
+              }))}
               translate={tOpt}
             />
             {draft.onsetType === "Other" && (
-              <textarea
-                value={draft.onsetOther}
-                onChange={(e) => update("onsetOther", e.target.value)}
-                placeholder={t("craving.onset.other_placeholder")}
-                rows={2}
-                className="w-full px-4 py-3 rounded-xl border border-border bg-card text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 resize-none"
-              />
+              <div className="flex flex-col gap-2">
+                <label htmlFor="craving-onset-other" className="text-sm font-medium text-foreground">
+                  {t("craving.onset.other_placeholder")}
+                  <RequiredMarker language={language} />
+                </label>
+                <textarea
+                  id="craving-onset-other"
+                  aria-required="true"
+                  value={draft.onsetOther}
+                  onChange={(e) => update("onsetOther", e.target.value)}
+                  placeholder={t("craving.onset.other_placeholder")}
+                  rows={2}
+                  className="w-full px-4 py-3 rounded-xl border border-border bg-card text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 resize-none"
+                />
+              </div>
             )}
             <div className="h-px bg-border my-1" />
-            <p className="text-sm font-medium text-foreground">{t("craving.q.intensity")}</p>
+            <p className="text-sm font-medium text-foreground">
+              {t("craving.q.intensity")} {" "}
+              <span className="text-muted-foreground font-normal text-sm">({t("common.optional")})</span>
+            </p>
             <IntensitySlider
               value={draft.intensity}
               ariaLabel={t("craving.q.intensity")}
@@ -587,7 +733,10 @@ export function CravingTracker() {
               highLabel={t("logs.cr_intensity_high")}
             />
             <div className="h-px bg-border my-1" />
-            <p className="text-sm font-medium text-foreground">{t("craving.q.confidence")}</p>
+            <p className="text-sm font-medium text-foreground">
+              {t("craving.q.confidence")} {" "}
+              <span className="text-muted-foreground font-normal text-sm">({t("common.optional")})</span>
+            </p>
             <IntensitySlider
               value={draft.confidenceBefore}
               ariaLabel={t("craving.q.confidence")}
@@ -612,7 +761,10 @@ export function CravingTracker() {
         {/* ── Trigger & Body ─────────────────────────────────── */}
         {step === "trigger" && (
           <>
-            <p className="text-base font-medium text-foreground">{t("craving.q.situation")}</p>
+            <p className="text-base font-medium text-foreground">
+              {t("craving.q.situation")}
+              <RequiredMarker language={language} />
+            </p>
             <p className="text-sm text-muted-foreground -mt-2">{t("craving.q.situation_sub")}</p>
             <MultiSelectGrid
               options={TRIGGER_PRESETS}
@@ -621,13 +773,21 @@ export function CravingTracker() {
               translate={tOpt}
             />
             {draft.situationPresets.includes("Other") && (
-              <textarea
-                value={draft.triggerOther}
-                onChange={(e) => update("triggerOther", e.target.value)}
-                placeholder={t("craving.onset.other_placeholder")}
-                rows={2}
-                className="w-full px-4 py-3 rounded-xl border border-border bg-card text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 resize-none"
-              />
+              <div className="flex flex-col gap-2">
+                <label htmlFor="craving-situation-other" className="text-sm font-medium text-foreground">
+                  {t("craving.q.situation_other")}
+                  <RequiredMarker language={language} />
+                </label>
+                <textarea
+                  id="craving-situation-other"
+                  aria-required="true"
+                  value={draft.triggerOther}
+                  onChange={(e) => update("triggerOther", e.target.value)}
+                  placeholder={t("craving.q.situation_other")}
+                  rows={2}
+                  className="w-full px-4 py-3 rounded-xl border border-border bg-card text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 resize-none"
+                />
+              </div>
             )}
             <div className="h-px bg-border my-1" />
             <p className="text-base font-medium text-foreground">
@@ -644,7 +804,10 @@ export function CravingTracker() {
               selectionLabel={t("tracker.selection_limit")}
             />
             <div className="h-px bg-border my-1" />
-            <p className="text-base font-medium text-foreground">{t("craving.q.buildup")}</p>
+            <p className="text-base font-medium text-foreground">
+              {t("craving.q.buildup")}
+              <RequiredMarker language={language} />
+            </p>
             <div className="flex flex-col gap-2">
               {BUILDUP_OPTIONS.map(({ value, label, sub }) => (
                 <button key={value}
@@ -675,7 +838,10 @@ export function CravingTracker() {
               <Info size={15} className="text-primary shrink-0 mt-0.5" />
               <p className="text-xs text-muted-foreground leading-relaxed">{t("craving.inner.hint")}</p>
             </div>
-            <p className="text-base font-medium text-foreground">{t("craving.q.emotions")}</p>
+            <p className="text-base font-medium text-foreground">
+              {t("craving.q.emotions")} {" "}
+              <span className="text-muted-foreground font-normal text-sm">({t("common.optional")})</span>
+            </p>
             <p className="text-sm text-muted-foreground -mt-2">{t("craving.q.emotions_sub")}</p>
             <MultiSelectGrid
               options={EMOTIONS}
@@ -693,7 +859,10 @@ export function CravingTracker() {
               className="w-full px-4 py-3 rounded-xl border border-border bg-card text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 resize-none"
             />
             <div className="h-px bg-border my-1" />
-            <p className="text-base font-medium text-foreground">{t("craving.q.thoughts")}</p>
+            <p className="text-base font-medium text-foreground">
+              {t("craving.q.thoughts")} {" "}
+              <span className="text-muted-foreground font-normal text-sm">({t("common.optional")})</span>
+            </p>
             <p className="text-sm text-muted-foreground -mt-2">{t("craving.q.thoughts_sub")}</p>
             <MultiSelectGrid
               options={THOUGHTS}
@@ -730,7 +899,10 @@ export function CravingTracker() {
         {/* ── Action ─────────────────────────────────────────── */}
         {step === "action" && (
           <>
-            <p className="text-base font-medium text-foreground">{t("craving.q.action")}</p>
+            <p className="text-base font-medium text-foreground">
+              {t("craving.q.action")}
+              <RequiredMarker language={language} />
+            </p>
             <div className="flex flex-col gap-2">
               {OUTCOME_ACTIONS.map(({ value, label }) => (
                 <button key={value}
@@ -758,16 +930,16 @@ export function CravingTracker() {
                   {selected?.tool && (
                     <button
                       type="button"
-                      onClick={() => {
-                        reg.patchSession({ pendingReturn: { returnRoute: "/craving", returnStep: "action" } });
-                        navigate(selected.tool!);
-                      }}
+                      onClick={() => void openToolPath(selected.tool!, "action")}
                       className="w-full rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground touch-target"
                     >
                       {t("tracker.action.open_tool")}
                     </button>
                   )}
-                  <p className="text-sm font-medium text-foreground">{t("tracker.action.attempted_q")}</p>
+                  <p className="text-sm font-medium text-foreground">
+                    {t("tracker.action.attempted_q")}
+                    <RequiredMarker language={language} />
+                  </p>
                   <div className="grid grid-cols-2 gap-2">
                     {[
                       { value: true, label: t("tracker.action.tried") },
@@ -797,7 +969,10 @@ export function CravingTracker() {
         {/* ── Outcome (behavioral) ───────────────────────────── */}
         {step === "outcome" && (
           <>
-            <p className="text-base font-medium text-foreground">{t("tracker.outcome.q")}</p>
+            <p className="text-base font-medium text-foreground">
+              {t("tracker.outcome.q")}
+              <RequiredMarker language={language} />
+            </p>
             <p className="text-sm text-muted-foreground -mt-2">{t("tracker.outcome.sub")}</p>
             <div className="flex flex-col gap-2">
               {USE_OUTCOMES.map(({ value, labelKey }) => (
@@ -818,7 +993,7 @@ export function CravingTracker() {
                 </button>
               ))}
             </div>
-            {draft.useOutcome === "used" && (
+            {draft.useOutcome === "used" && shouldShowMedicalSafetyForTargets(draft.substances) && (
               <div role="alert" className="space-y-3 rounded-2xl border border-amber-500/50 bg-card p-4">
                 <div className="flex items-start gap-2">
                   <AlertTriangle size={18} className="mt-0.5 shrink-0 text-amber-500" />
