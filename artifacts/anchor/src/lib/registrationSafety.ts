@@ -1,8 +1,9 @@
 export type SafetyLanguage = "en" | "nl";
 
-// Safety wording reviewed 2026-08-02 against 113 Suicide Prevention and
-// Trimbos/DRUGSinfo guidance. Keep the UI concise and re-check these sources
-// when changing emergency or withdrawal copy:
+// Safety wording was source-checked in an AI-assisted software/content pass on
+// 2026-08-02. Qualified bilingual human clinical/content review remains pending.
+// Keep the UI concise and re-check these sources when changing emergency or
+// withdrawal copy:
 // https://www.113.nl/i/ik-heb-hulp-nodig
 // https://www.drugsinfo.nl/vraag/wat-zijn-ontwenningsverschijnselen
 // https://www.drugsinfo.nl/heroine/heroine-risicos-verminderen
@@ -18,6 +19,9 @@ interface UrgentSafetyCopy {
   title: string;
   assessmentLimit: string;
   emergency: string;
+  unsafe: string;
+  continuedUse: string;
+  withdrawal: string;
   selfHarm: string;
   humanHelp: string;
   call112: string;
@@ -33,6 +37,12 @@ const URGENT_SAFETY_COPY: Record<SafetyLanguage, UrgentSafetyCopy> = {
     assessmentLimit: "This app cannot assess whether this is a medical emergency.",
     emergency:
       "Call 112 now for immediate danger, loss of consciousness, a seizure, severe confusion, severe chest pain, or slow or difficult breathing.",
+    unsafe:
+      "If you do not feel safe where you are, contact emergency services or move toward another person or safer place if you can do so safely.",
+    continuedUse:
+      "If you are concerned you may continue using or act on a behaviour, contact a trusted person, your GP, addiction service, or configured crisis service now.",
+    withdrawal:
+      "Withdrawal can sometimes require urgent medical care. Contact a GP, out-of-hours GP service, or addiction doctor now. Call 112 for a seizure, collapse, severe confusion, or trouble breathing.",
     selfHarm:
       "If you might hurt yourself or someone else, do not stay alone with that risk. Call 112 for immediate danger. For thoughts of suicide, call 113 or freephone 0800-0113, or chat at 113.nl.",
     humanHelp:
@@ -48,6 +58,12 @@ const URGENT_SAFETY_COPY: Record<SafetyLanguage, UrgentSafetyCopy> = {
     assessmentLimit: "Deze app kan niet beoordelen of dit een medisch noodgeval is.",
     emergency:
       "Bel nu 112 bij direct gevaar, bewusteloosheid, een aanval, ernstige verwardheid, ernstige pijn op de borst of een langzame of moeilijke ademhaling.",
+    unsafe:
+      "Voel je je niet veilig waar je bent, neem dan contact op met de hulpdiensten of ga naar een andere persoon of veiligere plek als dat veilig kan.",
+    continuedUse:
+      "Ben je bang dat je doorgaat met gebruiken of het gedrag uitvoert, neem dan nu contact op met iemand die je vertrouwt, je huisarts, verslavingszorg of ingestelde crisisdienst.",
+    withdrawal:
+      "Ontwenning kan soms dringende medische zorg vereisen. Neem nu contact op met een huisarts, huisartsenpost of verslavingsarts. Bel 112 bij een aanval, instorten, ernstige verwardheid of moeite met ademhalen.",
     selfHarm:
       "Als je jezelf of iemand anders mogelijk iets aandoet, blijf dan niet alleen met dat risico. Bel 112 bij direct gevaar. Bij gedachten aan zelfdoding kun je 113 of gratis 0800-0113 bellen, of chatten via 113.nl.",
     humanHelp:

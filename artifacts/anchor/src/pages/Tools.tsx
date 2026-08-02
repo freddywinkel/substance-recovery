@@ -147,6 +147,23 @@ export function Tools() {
             </p>
           </div>
 
+          <Link href="/help" asChild>
+            <a className="flex items-center justify-between gap-3 rounded-2xl border border-red-800/40 bg-red-950/20 p-4 transition-colors hover:bg-red-950/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/50">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="rounded-xl bg-red-600/20 p-2.5 text-red-400 shrink-0">
+                  <Phone size={20} strokeWidth={2} aria-hidden="true" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-foreground">{t("crisis.title")}</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground leading-relaxed">
+                    {t("tools.support.urgent")}
+                  </p>
+                </div>
+              </div>
+              <span aria-hidden="true" className="text-red-400 font-semibold">→</span>
+            </a>
+          </Link>
+
           {!showSupport && (
             <div className="rounded-2xl border border-border bg-card/60 p-4">
               <p className="text-sm text-muted-foreground leading-relaxed">

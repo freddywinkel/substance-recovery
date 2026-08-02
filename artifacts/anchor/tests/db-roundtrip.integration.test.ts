@@ -3,18 +3,22 @@ import "fake-indexeddb/auto";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   addCravingLog,
+  addRelapseLog,
   clearAllData,
   exportAllData,
   getCravingLogs,
+  getRelapseLogs,
   getCrisisService,
   getEmergencyContacts,
   getSetting,
   importAllData,
   saveCrisisService,
   setSetting,
+  updateCravingLog,
 } from "../src/db/crud";
-import type { CravingLog } from "../src/db/schema";
+import type { CravingLog, RelapseLog } from "../src/db/schema";
 import { setRegistrationSessionState } from "../src/db/registrationSessionSettings";
+import { withCanonicalNote } from "../src/lib/canonicalRegistration";
 
 const TEST_TIMESTAMP = 1_700_000_000_000;
 
@@ -22,6 +26,29 @@ function cravingRecord(overrides: Partial<CravingLog> = {}): CravingLog {
   return {
     id: "craving-roundtrip",
     timestamp: TEST_TIMESTAMP,
+    cravingType: "passive",
+    answers: {
+      registrationType: "craving",
+      onsetType: "random-no-reason",
+      onsetOther: null,
+      intensity: 5,
+      confidenceBefore: 5,
+      situations: ["no-clear-situation-not-sure"],
+      situationOther: null,
+      physicalSensations: null,
+      buildupDuration: "just-started",
+      location: null,
+      emotions: null,
+      emotionOther: null,
+      thoughts: null,
+      thoughtOther: null,
+      targets: null,
+      chosenAction: "just-observed",
+      actionAttempted: false,
+      useOutcome: "unsure",
+      cravingOutcome: null,
+      intensityAfter: null,
+    },
     status: "completed",
     situationPresets: [],
     situationOther: "",
@@ -55,6 +82,71 @@ function cravingRecord(overrides: Partial<CravingLog> = {}): CravingLog {
   };
 }
 
+function relapseRecord(overrides: Partial<RelapseLog> = {}): RelapseLog {
+  return {
+    id: "relapse-roundtrip",
+    timestamp: TEST_TIMESTAMP,
+    status: "completed",
+    label: "no-label",
+    when: "today",
+    episodeDuration: "unanswered",
+    substances: [],
+    primarySubstance: "",
+    amountCategory: "unanswered",
+    firstTriggerType: "",
+    firstTriggerText: "",
+    preUseFactors: [],
+    missedWarnings: [],
+    preUseThoughtPreset: "",
+    preUseThoughtFreeText: "",
+    couldHaveHelpedEarly: [],
+    couldHaveHelpedMiddle: [],
+    couldHaveHelpedLast: [],
+    supportContact: "",
+    supportContactOther: "",
+    nextStep: "",
+    nextStepOther: "",
+    acuteRisks: ["none"],
+    acuteRisk: "none",
+    note: "",
+    context: "",
+    emotionAfter: null,
+    ...overrides,
+  };
+}
+
+function relapseV3Answers(overrides: Record<string, string | string[] | number | boolean | null> = {}) {
+  return {
+    acuteRisks: ["none"],
+    label: null,
+    when: "just-now",
+    episodeDuration: null,
+    substances: null,
+    primarySubstance: null,
+    amountCategory: null,
+    firstTriggerType: null,
+    firstTriggerText: null,
+    preUseFactors: null,
+    leadUpContext: null,
+    missedWarnings: null,
+    preUseThoughts: null,
+    preUseThoughtFreeText: null,
+    couldHaveHelped: null,
+    couldHaveHelpedEarly: null,
+    couldHaveHelpedMiddle: null,
+    couldHaveHelpedLast: null,
+    supportContact: "no-one-right-now",
+    supportContactOther: null,
+    nextStep: "water-food-rest-first",
+    nextStepOther: null,
+    note: null,
+    emotionAfter: null,
+    whatNeeded: null,
+    repairActions: null,
+    ...overrides,
+  };
+}
+
 function emptyBackup(overrides: Record<string, unknown> = {}) {
   return {
     version: 1,
@@ -81,7 +173,7 @@ describe("IndexedDB backup and retry integration", () => {
   });
 
   it("saves, reads, exports, clears, and restores a registration", async () => {
-    await addCravingLog(cravingRecord({ note: "roundtrip marker" }));
+    await addCravingLog(withCanonicalNote(cravingRecord(), "roundtrip marker"));
     await setSetting("theme", "light");
 
     expect(await getCravingLogs()).toHaveLength(1);
@@ -116,9 +208,9 @@ describe("IndexedDB backup and retry integration", () => {
   });
 
   it("reuses a stable record ID so a retried save cannot duplicate a registration", async () => {
-    const firstAttempt = cravingRecord({ note: "first attempt" });
+    const firstAttempt = withCanonicalNote(cravingRecord(), "first attempt");
     await addCravingLog(firstAttempt);
-    await addCravingLog({ ...firstAttempt, note: "successful retry" });
+    await addCravingLog(withCanonicalNote(firstAttempt, "successful retry"));
 
     const stored = await getCravingLogs();
     expect(stored).toHaveLength(1);
@@ -126,6 +218,222 @@ describe("IndexedDB backup and retry integration", () => {
       id: "craving-roundtrip",
       note: "successful retry",
     });
+  });
+
+  it("round-trips a canonical Craving note added by the History editor", async () => {
+    const saved = await addCravingLog(cravingRecord());
+    await updateCravingLog(withCanonicalNote(saved, "  Edited in History  "));
+
+    const backup = await exportAllData();
+    await clearAllData();
+    expect(await importAllData(backup)).toMatchObject({ skipped: 0, errors: [] });
+    expect(await getCravingLogs()).toMatchObject([{
+      note: "Edited in History",
+      answers: { note: "Edited in History" },
+    }]);
+  });
+
+  it("preserves every simultaneous Relapse concern through save, export, and import", async () => {
+    await addRelapseLog(relapseRecord({
+      dataVersion: 3,
+      contentVersion: "registration-v3",
+      occurredAt: TEST_TIMESTAMP,
+      startedAt: TEST_TIMESTAMP,
+      completedAt: TEST_TIMESTAMP,
+      when: "just-now",
+      acuteRisks: ["unsafe", "withdrawal", "self-harm-risk"],
+      acuteRisk: "unsafe",
+      answers: relapseV3Answers({
+        acuteRisks: ["unsafe", "withdrawal", "self-harm-risk"],
+      }),
+    }));
+
+    const backup = await exportAllData();
+    expect(backup).toMatchObject({
+      relapseLogs: [{
+        acuteRisks: ["unsafe", "withdrawal", "self-harm-risk"],
+        acuteRisk: "self-harm-risk",
+        answers: {
+          acuteRisks: ["unsafe", "withdrawal", "self-harm-risk"],
+        },
+      }],
+    });
+
+    await clearAllData();
+    const imported = await importAllData(backup);
+    expect(imported).toMatchObject({ skipped: 0, errors: [] });
+    expect(await getRelapseLogs()).toMatchObject([{
+      acuteRisks: ["unsafe", "withdrawal", "self-harm-risk"],
+      acuteRisk: "self-harm-risk",
+      answers: {
+        acuteRisks: ["unsafe", "withdrawal", "self-harm-risk"],
+      },
+    }]);
+  });
+
+  it("migrates a legacy singular Relapse concern during import and exports the canonical array", async () => {
+    const { acuteRisks: _removed, ...legacy } = relapseRecord({
+      acuteRisk: "withdrawal",
+      when: "yesterday",
+    });
+    const imported = await importAllData(emptyBackup({ relapseLogs: [legacy] }));
+
+    expect(imported).toMatchObject({ skipped: 0, errors: [] });
+    expect(await getRelapseLogs()).toMatchObject([{
+      acuteRisks: ["withdrawal"],
+      acuteRisk: "withdrawal",
+      when: "yesterday",
+    }]);
+    expect(await exportAllData()).toMatchObject({
+      relapseLogs: [{
+        acuteRisks: ["withdrawal"],
+        acuteRisk: "withdrawal",
+        when: "yesterday",
+      }],
+    });
+  });
+
+  it("keeps legacy none unanswered, preserves canonical none, and removes stale answer aliases", async () => {
+    const { acuteRisks: _legacyArray, ...legacyNone } = relapseRecord({
+      id: "legacy-none",
+      acuteRisk: "none",
+      answers: { acuteRisk: "none" },
+    });
+    const canonicalNone = relapseRecord({
+      id: "canonical-none",
+      acuteRisks: ["none"],
+      acuteRisk: "unsafe",
+      answers: { acuteRisks: ["none"], acuteRisk: "unsafe" },
+    });
+
+    const imported = await importAllData(emptyBackup({
+      relapseLogs: [legacyNone, canonicalNone],
+    }));
+    expect(imported).toMatchObject({ skipped: 0, errors: [] });
+    const logs = await getRelapseLogs();
+    expect(logs.find(({ id }) => id === "canonical-none")).toMatchObject({
+      acuteRisks: ["none"],
+      acuteRisk: "none",
+      answers: { acuteRisks: ["none"] },
+    });
+    expect(logs.find(({ id }) => id === "legacy-none")).toMatchObject({
+      acuteRisks: [],
+      acuteRisk: "unanswered",
+      answers: { acuteRisks: null },
+    });
+  });
+
+  it("migrates the deployed v2 singular-none and post-save follow-up shape without hiding answers", async () => {
+    const { acuteRisks: _removed, ...deployedV2 } = relapseRecord({
+      id: "deployed-v2-follow-up",
+      dataVersion: 2,
+      contentVersion: "registration-v2",
+      label: "no-label",
+      when: "just-now",
+      acuteRisk: "none",
+      whatNeeded: "connection",
+      repairActions: ["Tell someone safe", "Make a next-24-hour plan"],
+      emotionAfter: 0,
+      answers: {
+        acuteRisk: "none",
+        label: "no-label",
+        when: "just-now",
+        whatNeeded: null,
+        repairActions: null,
+        emotionAfter: null,
+      },
+    });
+
+    expect(await importAllData(emptyBackup({ relapseLogs: [deployedV2] })))
+      .toMatchObject({ skipped: 0, errors: [] });
+    expect(await getRelapseLogs()).toMatchObject([{
+      id: "deployed-v2-follow-up",
+      acuteRisks: ["none"],
+      acuteRisk: "none",
+      label: "no-label",
+      when: "just-now",
+      whatNeeded: "connection",
+      repairActions: ["Tell someone safe", "Make a next-24-hour plan"],
+      emotionAfter: 0,
+      answers: {
+        acuteRisks: ["none"],
+        label: null,
+        when: null,
+        whatNeeded: "connection",
+        repairActions: ["tell-someone-safe", "make-a-next-24-hour-plan"],
+        emotionAfter: 0,
+      },
+    }]);
+
+    const backup = await exportAllData();
+    await clearAllData();
+    expect(await importAllData(backup)).toMatchObject({ skipped: 0, errors: [] });
+    expect(await getRelapseLogs()).toMatchObject([{
+      answers: {
+        acuteRisks: ["none"],
+        label: null,
+        when: null,
+        whatNeeded: "connection",
+        repairActions: ["tell-someone-safe", "make-a-next-24-hour-plan"],
+        emotionAfter: 0,
+      },
+    }]);
+  });
+
+  it("rejects contradictory canonical safety arrays and an amount without a target", async () => {
+    const imported = await importAllData(emptyBackup({
+      relapseLogs: [
+        relapseRecord({
+          id: "conflicting-risks",
+          acuteRisks: ["unsafe"],
+          answers: { acuteRisks: ["withdrawal"] },
+        }),
+        relapseRecord({
+          id: "orphaned-amount",
+          amountCategory: "moderate",
+        }),
+      ],
+    }));
+    expect(imported.skipped).toBe(2);
+    expect(imported.errors).toEqual([
+      "Invalid relapseLogs conflicting-risks: acuteRisks conflicts with answers.acuteRisks",
+      "Invalid relapseLogs orphaned-amount: amountCategory requires at least one substance or behavior target",
+    ]);
+    expect(await getRelapseLogs()).toEqual([]);
+  });
+
+  it("normalizes when from exact timestamps and round-trips the optional emotion-after answer", async () => {
+    const completedAt = new Date(2026, 7, 2, 12, 0).getTime();
+    const occurredAt = new Date(2026, 7, 1, 10, 0).getTime();
+    await addRelapseLog(relapseRecord({
+      id: "timed-relapse",
+      dataVersion: 3,
+      contentVersion: "registration-v3",
+      timestamp: occurredAt,
+      occurredAt,
+      completedAt,
+      when: "yesterday",
+      emotionAfter: 7,
+      answers: relapseV3Answers({
+        acuteRisks: ["none"],
+        when: "yesterday",
+        emotionAfter: 7,
+      }),
+    }));
+
+    expect(await getRelapseLogs()).toMatchObject([{
+      when: "yesterday",
+      emotionAfter: 7,
+      answers: { emotionAfter: 7 },
+    }]);
+    const backup = await exportAllData();
+    await clearAllData();
+    expect(await importAllData(backup)).toMatchObject({ skipped: 0, errors: [] });
+    expect(await getRelapseLogs()).toMatchObject([{
+      when: "yesterday",
+      emotionAfter: 7,
+      answers: { emotionAfter: 7 },
+    }]);
   });
 
   it("updates the active and suspended registration settings together", async () => {

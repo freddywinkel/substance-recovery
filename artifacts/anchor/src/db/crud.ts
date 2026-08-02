@@ -16,8 +16,17 @@ import {
   validateImportedStoreRecord,
   type ImportStoreKey,
 } from "./validation";
-import { CURRENT_REGISTRATION_DATA_VERSION } from "./migrations";
+import {
+  CURRENT_REGISTRATION_CONTENT_VERSION,
+  CURRENT_REGISTRATION_DATA_VERSION,
+  migrateCravingRegistrationType,
+  migrateRelapseFollowUpAnswers,
+  migrateRelapseV2DefaultAnswers,
+} from "./migrations";
+import { migrateRelapseSafetyRecord } from "./relapseSafety";
+import { normalizeRelapseTimingRecord } from "./relapseTiming";
 import { parseActiveRegistration } from "@/contexts/activeRegistrationValidation";
+import { migrateCompletedTrekRecord } from "@/lib/trekMigration";
 
 type NewRegistrationRecord<T extends { id: string }> = Omit<T, "id"> & {
   id?: string;
@@ -43,6 +52,9 @@ function prepareRegistrationRecord<T extends TimedRegistrationRecord>(
     typeof entry.completedAt === "number" && Number.isFinite(entry.completedAt)
       ? entry.completedAt
       : Date.now();
+  const dataVersion = entry.dataVersion ?? CURRENT_REGISTRATION_DATA_VERSION;
+  const contentVersion = entry.contentVersion
+    ?? (dataVersion === 3 ? CURRENT_REGISTRATION_CONTENT_VERSION : undefined);
 
   return {
     ...entry,
@@ -52,8 +64,38 @@ function prepareRegistrationRecord<T extends TimedRegistrationRecord>(
     occurredAt,
     startedAt,
     completedAt,
-    dataVersion: entry.dataVersion ?? CURRENT_REGISTRATION_DATA_VERSION,
+    dataVersion,
+    ...(contentVersion === undefined ? {} : { contentVersion }),
   } as T;
+}
+
+function normalizeRelapseRecord(record: RelapseLog): RelapseLog {
+  return normalizeRelapseTimingRecord(
+    migrateRelapseFollowUpAnswers(
+      migrateRelapseV2DefaultAnswers(migrateRelapseSafetyRecord(record)),
+    ),
+  );
+}
+
+function normalizeCravingRecord(record: CravingLog): CravingLog {
+  return migrateCompletedTrekRecord(migrateCravingRegistrationType(record));
+}
+
+function assertRelapseAmountHasTarget(record: Pick<
+  RelapseLog,
+  "amountCategory" | "substances" | "primarySubstance" | "dataVersion"
+>): void {
+  const isCurrentWrite = record.dataVersion === undefined || record.dataVersion >= 3;
+  if (isCurrentWrite && record.primarySubstance !== "") {
+    throw new Error("A current Relapse record cannot use the primarySubstance compatibility field.");
+  }
+  if (
+    record.amountCategory !== "unanswered"
+    && record.substances.length === 0
+    && (isCurrentWrite || record.primarySubstance === "")
+  ) {
+    throw new Error("A Relapse amount requires at least one substance or behavior target.");
+  }
 }
 export async function getCrisisService(): Promise<CrisisService | null> {
   const db = await getDB();
@@ -106,18 +148,22 @@ export async function setSetting(key: string, value: string | number | boolean) 
 // ── Craving Logs ─────────────────────────────────────────────
 export async function addCravingLog(entry: NewRegistrationRecord<CravingLog>): Promise<CravingLog> {
   const db = await getDB();
-  const full = prepareRegistrationRecord<CravingLog>(entry);
+  const full = normalizeCravingRecord(prepareRegistrationRecord<CravingLog>(entry));
   await db.put("cravingLogs", full);
   return full;
 }
 export async function updateCravingLog(log: CravingLog): Promise<void> {
   const db = await getDB();
-  await db.put("cravingLogs", log);
+  await db.put("cravingLogs", normalizeCravingRecord(log));
 }
 export async function getCravingLogs(limit = 200): Promise<CravingLog[]> {
   const db = await getDB();
   const all = await db.getAllFromIndex("cravingLogs", "byTimestamp");
-  return all.filter((e) => !e.deleted).slice(-limit).reverse();
+  return all
+    .filter((e) => !e.deleted)
+    .slice(-limit)
+    .reverse()
+    .map(normalizeCravingRecord);
 }
 export async function deleteCravingLog(id: string): Promise<void> {
   const db = await getDB();
@@ -127,18 +173,27 @@ export async function deleteCravingLog(id: string): Promise<void> {
 // ── Relapse Logs ─────────────────────────────────────────────
 export async function addRelapseLog(entry: NewRegistrationRecord<RelapseLog>): Promise<RelapseLog> {
   const db = await getDB();
-  const full = prepareRegistrationRecord<RelapseLog>(entry);
+  assertRelapseAmountHasTarget(entry);
+  const full = normalizeRelapseRecord(prepareRegistrationRecord<RelapseLog>(entry));
   await db.put("relapseLogs", full);
   return full;
 }
 export async function getRelapseLogs(limit = 200): Promise<RelapseLog[]> {
   const db = await getDB();
   const all = await db.getAllFromIndex("relapseLogs", "byTimestamp");
-  return all.filter((e) => !e.deleted).slice(-limit).reverse();
+  return all
+    .filter((entry) => !entry.deleted)
+    .slice(-limit)
+    .reverse()
+    .map(normalizeRelapseRecord);
 }
 export async function updateRelapseLog(log: RelapseLog): Promise<void> {
   const db = await getDB();
-  await db.put("relapseLogs", log);
+  assertRelapseAmountHasTarget(log);
+  await db.put(
+    "relapseLogs",
+    normalizeRelapseRecord(log),
+  );
 }
 export async function deleteRelapseLog(id: string): Promise<void> {
   const db = await getDB();
@@ -247,7 +302,9 @@ export async function exportAllData(): Promise<Record<string, unknown>> {
     exportedAt: Date.now(),
     journal: journal.filter((e) => !e.deleted),
     cravingLogs: cravingLogs.filter((e) => !e.deleted),
-    relapseLogs: relapseLogs.filter((e) => !e.deleted),
+    relapseLogs: relapseLogs
+      .filter((entry) => !entry.deleted)
+      .map(normalizeRelapseRecord),
     anxietyLogs: anxietyLogs.filter((e) => !e.deleted),
     boredomLogs: boredomLogs.filter((e) => !e.deleted),
     cigaretteLogs: cigaretteLogs.filter((e) => !e.deleted),

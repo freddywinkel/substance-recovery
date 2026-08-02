@@ -1,4 +1,26 @@
-export const ACTIVE_REGISTRATION_VERSION = 2 as const;
+import {
+  ACUTE_RISK_SELECTION_VALUES,
+  acuteRiskCompatibilityAlias,
+  isAcuteRisk,
+  isValidAcuteRiskSelectionArray,
+  normalizeAcuteRisks,
+} from "@/db/relapseSafety";
+import { relapseWhenForOccurrence } from "@/db/relapseTiming";
+import {
+  RETIRED_TREK_AXIS_MIGRATIONS,
+  RETIRED_TREK_IMMEDIACY_MIGRATIONS,
+} from "@/lib/trekMigration";
+import {
+  RELAPSE_NO_CLEAR_TRIGGER_ID,
+  relapseFirstTriggerIdForRead,
+} from "@/lib/relapseTrigger";
+import {
+  activeBoredomClassificationNeedsMigration,
+  BOREDOM_CLASSIFICATION_NOT_SURE_ID,
+  normalizeActiveBoredomClassification,
+} from "@/lib/boredomClassification";
+
+export const ACTIVE_REGISTRATION_VERSION = 3 as const;
 
 export type RegistrationType =
   | "craving"
@@ -132,10 +154,12 @@ const DRAFT_DEFAULTS: Record<RegistrationType, UnknownRecord> = {
     action: "",
     showNote: false,
     note: "",
+    delayTimerStartedAt: null,
+    delayDuration: null,
   },
   relapse: {
-    label: "no-label",
-    when: "just-now",
+    label: "",
+    when: "",
     occurrenceDateTime: "",
     episodeDuration: "unanswered",
     substances: [],
@@ -155,6 +179,7 @@ const DRAFT_DEFAULTS: Record<RegistrationType, UnknownRecord> = {
     supportContactOther: "",
     nextStep: "",
     nextStepOther: "",
+    acuteRisks: [],
     acuteRisk: "unanswered",
     note: "",
     context: "",
@@ -167,6 +192,7 @@ const DRAFT_DEFAULTS: Record<RegistrationType, UnknownRecord> = {
 type DraftCatalog = {
   scalars: Readonly<Record<string, readonly string[]>>;
   arrays: Readonly<Record<string, readonly string[]>>;
+  arrayLimits?: Readonly<Record<string, number>>;
 };
 
 function optionalValues(values: readonly string[]): readonly string[] {
@@ -243,19 +269,25 @@ const DRAFT_CATALOGS: Record<RegistrationType, DraftCatalog> = {
       situationPresets: [
         "Home alone", "On my way somewhere", "After work", "Conflict or argument",
         "Feeling bored", "Under stress", "Bad news", "Party or social event",
-        "Someone using nearby", "Saw or smelled a trigger", "Other",
+        "Someone using nearby", "Saw or smelled a trigger",
+        "No clear situation / not sure", "Other",
       ],
       physicalSensations: PHYSICAL_VALUES,
       emotions: EMOTION_VALUES,
       thoughtPresets: THOUGHT_VALUES,
       substances: SUBSTANCE_VALUES,
     },
+    arrayLimits: {
+      physicalSensations: 3,
+      emotions: 3,
+      thoughtPresets: 2,
+    },
   },
   trek: {
     scalars: {
       planningStage: optionalValues([
-        "Just thinking about it", "Getting money or resources", "On my way there",
-        "About to act",
+        "immediacy-thoughts-only", "immediacy-steps-started",
+        "immediacy-access-close", "immediacy-about-to-act",
       ]),
       location: optionalValues([
         "Home", "Work", "Outside", "Shop or bar", "In transit",
@@ -269,21 +301,29 @@ const DRAFT_CATALOGS: Record<RegistrationType, DraftCatalog> = {
     },
     arrays: {
       trekTypes: [
-        "Planning or thinking about it", "Actively seeking it", "Ritual / habit",
-        "Boredom-driven", "Emotional escape", "Social pressure",
+        "approach-mental-rehearsal", "approach-checking-availability",
+        "approach-arranging-access", "approach-moving-toward",
+        "approach-automatic-routine", "approach-responding-to-contact",
+        "approach-not-sure",
       ],
       triggers: [
         "Boredom", "Stress", "Habit / routine", "Social pressure", "Money available",
-        "Feeling good / celebratory", "Conflict", "Other",
+        "Feeling good / celebratory", "Conflict", "No clear trigger / not sure", "Other",
       ],
       emotions: EMOTION_VALUES,
       physicalSensations: PHYSICAL_VALUES,
       thoughtPresets: THOUGHT_VALUES,
       needTypes: [
         "Relief", "Excitement", "Reward", "Numbness", "Comfort", "Connection",
-        "Stimulation", "Escape", "Other",
+        "Stimulation", "Escape", "Not sure", "Other",
       ],
       substances: SUBSTANCE_VALUES,
+    },
+    arrayLimits: {
+      trekTypes: 2,
+      emotions: 3,
+      physicalSensations: 3,
+      thoughtPresets: 2,
     },
   },
   anxiety: {
@@ -296,6 +336,7 @@ const DRAFT_CATALOGS: Record<RegistrationType, DraftCatalog> = {
         "Sat with it — didn't react", "Tried to fix myself", "Avoided or left",
         "Searched for distraction", "Talked more / overcompensated",
         "Used a tool (breathing, grounding…)", "Reached out to someone",
+        "Not yet / just logging",
       ]),
       outcome: optionalValues(OUTCOME_VALUES),
     },
@@ -304,7 +345,10 @@ const DRAFT_CATALOGS: Record<RegistrationType, DraftCatalog> = {
         "Panic spike", "Health anxiety", "Dread", "Racing thoughts", "Social anxiety",
         "Generalized worry", "Shame / fear after use", "Future fear", "Body anxiety",
       ],
-      bodyLocations: ["Chest", "Stomach", "Throat", "Head", "Arms", "Legs", "Whole body"],
+      bodyLocations: [
+        "Chest", "Stomach", "Throat", "Head", "Arms", "Legs", "Whole body",
+        "Not in one place / not sure",
+      ],
       triggers: [
         "Feeling observed", "Thought about appearance", "Silence / nothing to do",
         "Social expectation", "Fear of judgment", "Something else",
@@ -320,12 +364,15 @@ const DRAFT_CATALOGS: Record<RegistrationType, DraftCatalog> = {
         "Not connected to anything specific",
       ],
     },
+    arrayLimits: {
+      anxietyTypes: 2,
+    },
   },
   boredom: {
     scalars: {
       convertCheck: optionalValues([
         "Yes — this feels like restlessness", "Maybe a craving", "Maybe anxiety",
-        "Maybe loneliness", "Maybe exhaustion", "Not sure",
+        "Maybe loneliness", "Maybe exhaustion", BOREDOM_CLASSIFICATION_NOT_SURE_ID,
       ]),
       situation: optionalValues([
         "Doing nothing", "Between activities", "Alone", "After stimulation drops",
@@ -337,7 +384,7 @@ const DRAFT_CATALOGS: Record<RegistrationType, DraftCatalog> = {
       ]),
       action: optionalValues([
         "Sat with it — didn't react", "Delayed action", "Replaced with healthy routine",
-        "Escaped immediately",
+        "Escaped immediately", "Not yet / just logging",
       ]),
     },
     arrays: {
@@ -346,20 +393,28 @@ const DRAFT_CATALOGS: Record<RegistrationType, DraftCatalog> = {
         "Can't sit still", "Empty", "Irritated", "Craving stimulation",
         "Lonely and restless", "Tired but wired",
       ],
-      stimulationNeeds: ["calming", "movement", "sensory-reset", "hands", "mental", "social"],
+      stimulationNeeds: [
+        "calming", "movement", "sensory-reset", "hands", "mental", "social", "not-sure",
+      ],
       rescueMenu: BOREDOM_RESCUE_VALUES,
+    },
+    arrayLimits: {
+      restlessnessTypes: 2,
     },
   },
   relapse: {
     scalars: {
       // `setback` and `return-to-use` are retained schema values from earlier
-      // releases even though the current selector presents three labels.
-      label: ["lapse", "setback", "return-to-use", "relapse", "no-label"],
-      when: ["just-now", "today", "yesterday", "few-days"],
+      // releases and are available in the current optional selector.
+      label: optionalValues(["lapse", "setback", "return-to-use", "relapse", "no-label"]),
+      when: optionalValues(["just-now", "today", "yesterday", "few-days"]),
       episodeDuration: [
         "unanswered", "single-moment", "few-hours", "whole-day", "multiple-days",
       ],
-      primarySubstance: optionalValues(SUBSTANCE_VALUES),
+      // Compatibility storage only. Current v3 controls use the visible
+      // `substances` array; a non-empty scalar is migrated exclusively while
+      // reading a v1/v2 draft and must never become a hidden v3 answer.
+      primarySubstance: [""],
       amountCategory: [
         "unanswered", "small", "moderate", "a-lot", "multiple-times", "binge",
         "prefer-not",
@@ -367,9 +422,11 @@ const DRAFT_CATALOGS: Record<RegistrationType, DraftCatalog> = {
       firstTriggerType: optionalValues([
         "Internal emotion", "External event", "Specific thought", "Physical discomfort",
         "Social pressure", "Craving out of nowhere", "Memory / flashback",
-        "Seeing or smelling a cue",
+        "Seeing or smelling a cue", RELAPSE_NO_CLEAR_TRIGGER_ID,
       ]),
-      preUseThoughtPreset: optionalValues(RELAPSE_THOUGHT_VALUES),
+      // Compatibility-only scalar. Current v3 controls persist the plural
+      // `preUseThoughtPresets` answer and never infer a primary from array order.
+      preUseThoughtPreset: [""],
       supportContact: optionalValues([
         "No one right now", "Partner", "Friend", "Family member", "Sponsor",
         "Therapist / counsellor", "GP / doctor", "Crisis line if needed",
@@ -426,6 +483,7 @@ const DRAFT_CATALOGS: Record<RegistrationType, DraftCatalog> = {
         "Re-enter my routine", "Open the toolbox", "Make a next-24-hour plan",
         "Let myself rest without shame",
       ],
+      acuteRisks: ACUTE_RISK_SELECTION_VALUES,
     },
   },
 };
@@ -461,6 +519,10 @@ const ZERO_TO_TEN_FIELDS = new Set([
   "confidenceAfter",
   "emotionAfter",
 ]);
+const NULLABLE_NON_NEGATIVE_NUMBER_FIELDS = new Set([
+  "delayTimerStartedAt",
+  "delayDuration",
+]);
 
 function isZeroToTen(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 10;
@@ -478,6 +540,8 @@ function matchesDefaultType(
     if (value === null) return true;
     return NULLABLE_BOOLEAN_FIELDS.has(key)
       ? typeof value === "boolean"
+      : NULLABLE_NON_NEGATIVE_NUMBER_FIELDS.has(key)
+        ? isFiniteTimestamp(value)
       : ZERO_TO_TEN_FIELDS.has(key) && isZeroToTen(value);
   }
   if (typeof defaultValue === "number") {
@@ -500,6 +564,152 @@ function migrateLegacyDraftValues(type: RegistrationType, draft: UnknownRecord):
   }
 }
 
+const ACTIVE_TREK_NEED_BY_STABLE_ID: Readonly<Record<string, string>> = {
+  stimulation: "Stimulation",
+  escape: "Escape",
+};
+
+const ACTIVE_TREK_TRIGGER_BY_STABLE_ID: Readonly<Record<string, string>> = {
+  "social-pressure": "Social pressure",
+};
+
+function appendMissingStrings(source: string[], additions: string[]): string[] {
+  const result = [...source];
+  for (const value of additions) {
+    if (!result.includes(value)) result.push(value);
+  }
+  return result;
+}
+
+function hasRetiredTrekDraftValues(type: RegistrationType, value: unknown): boolean {
+  if (type !== "trek" || !isRecord(value)) return false;
+  const trekTypes = value.trekTypes;
+  return (
+    Array.isArray(trekTypes)
+    && trekTypes.some((item) =>
+      typeof item === "string" && Object.hasOwn(RETIRED_TREK_AXIS_MIGRATIONS, item))
+  ) || (
+    typeof value.planningStage === "string"
+    && Object.hasOwn(RETIRED_TREK_IMMEDIACY_MIGRATIONS, value.planningStage)
+  );
+}
+
+function hasRelapseDraftNormalization(
+  type: RegistrationType,
+  value: unknown,
+  singularNoneIsDeliberate: boolean,
+): boolean {
+  if (type !== "relapse" || !isRecord(value)) return false;
+  const hasCanonical = Array.isArray(value.acuteRisks);
+  const acuteRisks = normalizeAcuteRisks(
+    hasCanonical ? value.acuteRisks : undefined,
+    value.acuteRisk,
+    singularNoneIsDeliberate,
+  );
+  const expectedAlias = acuteRiskCompatibilityAlias(acuteRisks);
+  const expectedWhen = typeof value.occurrenceDateTime === "string"
+    ? relapseWhenForOccurrence(value.occurrenceDateTime)
+    : "";
+  return !hasCanonical
+    || value.acuteRisk !== expectedAlias
+    || value.when !== expectedWhen;
+}
+
+/**
+ * Normalize both v1 and already-versioned v2 drafts from the retired Trek list.
+ * Values that encoded a motive or context move to their dedicated fields, so the
+ * approach-form axis stays clean without dropping what the person selected.
+ */
+function migrateRetiredTrekDraftValues(type: RegistrationType, draft: UnknownRecord): void {
+  if (type !== "trek") return;
+
+  const sourceTypes = draft.trekTypes as string[];
+  const forms: string[] = [];
+  const inferredNeeds: string[] = [];
+  const inferredTriggers: string[] = [];
+  let retiredTypeFound = false;
+
+  // Duplicate input is corruption, not migration material. Leave it untouched so
+  // catalog validation rejects it instead of silently sanitizing it.
+  if (new Set(sourceTypes).size === sourceTypes.length) {
+    for (const value of sourceTypes) {
+      const replacement = RETIRED_TREK_AXIS_MIGRATIONS[value];
+      if (!replacement) {
+        forms.push(value);
+        continue;
+      }
+      retiredTypeFound = true;
+      if (replacement.form) forms.push(replacement.form);
+      if (replacement.need) {
+        inferredNeeds.push(ACTIVE_TREK_NEED_BY_STABLE_ID[replacement.need] ?? replacement.need);
+      }
+      if (replacement.trigger) {
+        inferredTriggers.push(
+          ACTIVE_TREK_TRIGGER_BY_STABLE_ID[replacement.trigger] ?? replacement.trigger,
+        );
+      }
+    }
+  }
+
+  if (retiredTypeFound) {
+    // Motive-only retired values prove a need, not the new observable-form
+    // answer. An empty form list deliberately sends the resumed draft back to
+    // the required type step below.
+    draft.trekTypes = forms;
+
+    if (inferredNeeds.length > 0) {
+      const sourceNeeds = (draft.needTypes as string[])
+        .filter((value) => value !== "Not sure");
+      draft.needTypes = appendMissingStrings(sourceNeeds, inferredNeeds);
+    }
+
+    if (inferredTriggers.length > 0) {
+      const sourceTriggers = (draft.triggers as string[])
+        .filter((value) => value !== "No clear trigger / not sure");
+      draft.triggers = appendMissingStrings(sourceTriggers, inferredTriggers);
+    }
+  }
+
+  const planningStage = draft.planningStage as string;
+  const nextPlanningStage = RETIRED_TREK_IMMEDIACY_MIGRATIONS[planningStage];
+  if (nextPlanningStage) draft.planningStage = nextPlanningStage;
+}
+
+/**
+ * Clear answers whose controlling choice no longer exposes them. These are
+ * deterministic visibility rules, not guesses: retaining the hidden value
+ * would make the resumed draft disagree with the tracker payload.
+ */
+function normalizeDependentDraftValues(type: RegistrationType, draft: UnknownRecord): void {
+  if (type === "craving") {
+    if (draft.onsetType !== "Other") draft.onsetOther = "";
+    if (!(draft.situationPresets as string[]).includes("Other")) draft.triggerOther = "";
+    return;
+  }
+
+  if (type === "trek") {
+    if (draft.location !== "Other") draft.locationOther = "";
+    if (!(draft.triggers as string[]).includes("Other")) draft.triggerNote = "";
+    if (!(draft.needTypes as string[]).includes("Other")) draft.needOther = "";
+    if (draft.actionAttempted !== true) draft.confidenceAfter = null;
+    return;
+  }
+
+  if (type === "boredom") {
+    if (draft.situation !== "Other") draft.situationOther = "";
+    if (draft.urge !== "Other stimulation") draft.urgeOther = "";
+
+    const convertedToAnotherTracker = draft.convertCheck === "Maybe a craving"
+      || draft.convertCheck === "Maybe anxiety";
+    if (convertedToAnotherTracker) {
+      draft.rescueMenu = [];
+      draft.action = "";
+      draft.showNote = false;
+      draft.note = "";
+    }
+  }
+}
+
 function matchesDraftCatalog(type: RegistrationType, draft: UnknownRecord): boolean {
   const catalog = DRAFT_CATALOGS[type];
 
@@ -512,9 +722,27 @@ function matchesDraftCatalog(type: RegistrationType, draft: UnknownRecord): bool
     const value = draft[field];
     if (!Array.isArray(value) || !value.every((item) => allowed.includes(item))) return false;
     if (new Set(value).size !== value.length) return false;
+    const limit = catalog.arrayLimits?.[field];
+    if (limit !== undefined && value.length > limit) return false;
+  }
+
+  if (type === "craving") {
+    const situations = draft.situationPresets as string[];
+    if (situations.length > 1 && situations.includes("No clear situation / not sure")) {
+      return false;
+    }
   }
 
   if (type === "anxiety") {
+    const bodyLocations = draft.bodyLocations as string[];
+    if (
+      bodyLocations.length > 1 &&
+      (
+        bodyLocations.includes("Not in one place / not sure")
+        || bodyLocations.includes("Whole body")
+      )
+    ) return false;
+
     const linkedStates = draft.linkedStates as string[];
     if (
       linkedStates.includes("Not connected to anything specific") &&
@@ -524,22 +752,83 @@ function matchesDraftCatalog(type: RegistrationType, draft: UnknownRecord): bool
     }
   }
 
+  if (type === "boredom") {
+    const stimulationNeeds = draft.stimulationNeeds as string[];
+    if (stimulationNeeds.length > 1 && stimulationNeeds.includes("not-sure")) return false;
+  }
+
+  if (type === "trek") {
+    const trekTypes = draft.trekTypes as string[];
+    if (trekTypes.length > 1 && trekTypes.includes("approach-not-sure")) {
+      return false;
+    }
+
+    const triggers = draft.triggers as string[];
+    if (triggers.length > 1 && triggers.includes("No clear trigger / not sure")) {
+      return false;
+    }
+
+    const needTypes = draft.needTypes as string[];
+    if (needTypes.length > 1 && needTypes.includes("Not sure")) return false;
+  }
+
+  if (type === "relapse") {
+    const acuteRisks = draft.acuteRisks as string[];
+    if (acuteRisks.length > 1 && acuteRisks.includes("none")) return false;
+
+    // Current controls make each canned/custom pair mutually exclusive. A
+    // restored pair cannot be migrated without silently discarding one of the
+    // person's answers, so reject the draft and surface the invalid session.
+    if (
+      ((draft.firstTriggerType as string) !== "" && (draft.firstTriggerText as string).trim() !== "")
+      || ((draft.supportContact as string) !== "" && (draft.supportContactOther as string).trim() !== "")
+      || ((draft.nextStep as string) !== "" && (draft.nextStepOther as string).trim() !== "")
+    ) return false;
+
+    const hasTarget = (draft.substances as string[]).length > 0;
+    if ((draft.primarySubstance as string) !== "") return false;
+    if (!hasTarget && draft.amountCategory !== "unanswered") return false;
+  }
+
   return true;
 }
 
 function normalizeDraft(
   type: RegistrationType,
   value: unknown,
-  allowLegacyMissingFields: boolean,
+  sourceVersion: 1 | 2 | typeof ACTIVE_REGISTRATION_VERSION,
 ): UnknownRecord | null {
   if (!isRecord(value)) return null;
+  const allowLegacyMissingFields = sourceVersion === 1;
   const defaults = DRAFT_DEFAULTS[type];
   const result: UnknownRecord = {};
 
   for (const [key, defaultValue] of Object.entries(defaults)) {
     const candidate = value[key];
+    const canonicalRelapseSafetyAlias = type === "relapse"
+      && key === "acuteRisk"
+      && Array.isArray(value.acuteRisks);
     if (candidate === undefined) {
-      if (!allowLegacyMissingFields) return null;
+      // `acuteRisks` was added to the existing v2 Relapse draft. Accept a v2
+      // session that predates the field and derive it from its singular answer.
+      const canMigrateRelapseSafety = sourceVersion === 2
+        && type === "relapse"
+        && key === "acuteRisks";
+      const canMigrateBoredomDelay = sourceVersion === 2
+        && type === "boredom"
+        && (key === "delayTimerStartedAt" || key === "delayDuration");
+      if (
+        !allowLegacyMissingFields
+        && !canMigrateRelapseSafety
+        && !canMigrateBoredomDelay
+        && !canonicalRelapseSafetyAlias
+      ) return null;
+      result[key] = cloneDefault(defaultValue);
+      continue;
+    }
+    // Once the canonical array exists, a compatibility alias is derived below
+    // and must never invalidate or override the canonical answer.
+    if (canonicalRelapseSafetyAlias) {
       result[key] = cloneDefault(defaultValue);
       continue;
     }
@@ -548,6 +837,73 @@ function normalizeDraft(
   }
 
   if (allowLegacyMissingFields) migrateLegacyDraftValues(type, result);
+  migrateRetiredTrekDraftValues(type, result);
+  normalizeDependentDraftValues(type, result);
+  if (type === "boredom") {
+    result.convertCheck = normalizeActiveBoredomClassification(result.convertCheck as string);
+  }
+  if (type === "relapse") {
+    result.firstTriggerType = relapseFirstTriggerIdForRead(
+      result.firstTriggerType as string,
+      sourceVersion,
+    ) ?? "";
+    const legacyPrimary = result.primarySubstance as string;
+    if (sourceVersion < 3 && legacyPrimary !== "") {
+      result.substances = appendMissingStrings(result.substances as string[], [legacyPrimary]);
+      result.primarySubstance = "";
+    } else if (sourceVersion >= 3 && legacyPrimary !== "") {
+      // v3 has only the visible plural target control. A hidden scalar cannot
+      // be reconciled without overriding the canonical draft.
+      return null;
+    }
+    const legacyThought = result.preUseThoughtPreset as string;
+    if (sourceVersion < 3 && legacyThought !== "") {
+      result.preUseThoughtPresets = appendMissingStrings(
+        result.preUseThoughtPresets as string[],
+        [legacyThought],
+      );
+      result.preUseThoughtPreset = "";
+    } else if (sourceVersion >= 3 && legacyThought !== "") {
+      return null;
+    }
+    const hadCanonicalArray = Array.isArray(value.acuteRisks);
+    if (hadCanonicalArray && !isValidAcuteRiskSelectionArray(value.acuteRisks)) {
+      return null;
+    }
+    // A pre-array v2 draft may only be migrated from a recognized singular
+    // value. Reject unknown legacy data instead of silently converting it to
+    // an unanswered safety question. Once the canonical array exists it is
+    // authoritative and the compatibility alias is regenerated below.
+    if (
+      !hadCanonicalArray
+      && value.acuteRisk !== undefined
+      && !isAcuteRisk(value.acuteRisk)
+    ) {
+      return null;
+    }
+    const acuteRisks = normalizeAcuteRisks(
+      hadCanonicalArray ? result.acuteRisks : undefined,
+      result.acuteRisk,
+      sourceVersion >= 2,
+    );
+    result.acuteRisks = acuteRisks;
+    result.acuteRisk = acuteRiskCompatibilityAlias(acuteRisks);
+    // v1 and deployed v2 prefilled no-label and just-now/exact time. Those
+    // defaults do not prove an interaction. Clear only the unprovable defaults;
+    // a non-default label/bucket is evidence that the person changed it.
+    if (sourceVersion < 3 && result.label === "no-label") result.label = "";
+    if (sourceVersion < 3 && result.when === "just-now") {
+      result.when = "";
+      result.occurrenceDateTime = "";
+    }
+
+    // For current semantics, or a migrated non-default historical selection,
+    // exact occurrence is authoritative and the broad bucket is regenerated.
+    if (!(DRAFT_CATALOGS.relapse.scalars.when as readonly unknown[]).includes(result.when)) {
+      return null;
+    }
+    result.when = relapseWhenForOccurrence(result.occurrenceDateTime as string);
+  }
   return matchesDraftCatalog(type, result) ? result : null;
 }
 
@@ -558,7 +914,7 @@ function parseJson(raw: unknown): unknown {
 }
 
 /**
- * Validate a persisted session and migrate the legacy v1 shape to v2. Invalid
+ * Validate a persisted session and migrate v1/v2 shapes to v3. Invalid
  * sessions are rejected instead of being cast into tracker state.
  */
 export function parseActiveRegistration(
@@ -588,8 +944,12 @@ export function parseActiveRegistration(
     };
   }
 
-  const legacy = data.version === 1;
-  if (!legacy && data.version !== ACTIVE_REGISTRATION_VERSION) {
+  const sourceVersion = data.version;
+  if (
+    sourceVersion !== 1
+    && sourceVersion !== 2
+    && sourceVersion !== ACTIVE_REGISTRATION_VERSION
+  ) {
     return {
       ok: false,
       value: null,
@@ -624,7 +984,16 @@ export function parseActiveRegistration(
     };
   }
 
-  const draft = normalizeDraft(type, data.draft, legacy);
+  const trekTaxonomyMigrated = hasRetiredTrekDraftValues(type, data.draft);
+  const boredomClassificationMigrated = type === "boredom"
+    && isRecord(data.draft)
+    && activeBoredomClassificationNeedsMigration(data.draft.convertCheck);
+  const relapseDraftMigrated = hasRelapseDraftNormalization(
+    type,
+    data.draft,
+    sourceVersion >= 2,
+  );
+  const draft = normalizeDraft(type, data.draft, sourceVersion);
   if (!draft) {
     return {
       ok: false,
@@ -634,17 +1003,14 @@ export function parseActiveRegistration(
     };
   }
   // v1 preselected these safety-sensitive answers. Their stored value cannot
-  // prove the user made a choice, so migration deliberately asks again. v2
-  // values are never rewritten and therefore preserve an explicit "no".
-  if (legacy && type === "anxiety" && draft.urgencyHigh === false) {
+  // prove the user made a choice, so migration deliberately asks again. v2's
+  // affirmative/none safety choices remain explicit because its blank sentinel
+  // was `unanswered`.
+  if (sourceVersion === 1 && type === "anxiety" && draft.urgencyHigh === false) {
     draft.urgencyHigh = null;
   }
-  if (legacy && type === "relapse" && draft.acuteRisk === "none") {
-    draft.acuteRisk = "unanswered";
-  }
-
   if (
-    !legacy &&
+    sourceVersion !== 1 &&
     (typeof data.recordId !== "string" || data.recordId.trim() === "")
   ) {
     return {
@@ -654,7 +1020,7 @@ export function parseActiveRegistration(
       error: "Active-registration record ID is invalid.",
     };
   }
-  if (!legacy && !isFiniteTimestamp(data.startedAt)) {
+  if (sourceVersion !== 1 && !isFiniteTimestamp(data.startedAt)) {
     return {
       ok: false,
       value: null,
@@ -662,7 +1028,7 @@ export function parseActiveRegistration(
       error: "Active-registration start time is invalid.",
     };
   }
-  if (!legacy && !isFiniteTimestamp(data.updatedAt)) {
+  if (sourceVersion !== 1 && !isFiniteTimestamp(data.updatedAt)) {
     return {
       ok: false,
       value: null,
@@ -685,7 +1051,7 @@ export function parseActiveRegistration(
   const now = Date.now();
   const startedAt = isFiniteTimestamp(data.startedAt)
     ? data.startedAt
-    : legacy && isFiniteTimestamp(data.updatedAt)
+    : sourceVersion === 1 && isFiniteTimestamp(data.updatedAt)
       ? data.updatedAt
       : now;
   const updatedAt = isFiniteTimestamp(data.updatedAt)
@@ -721,15 +1087,22 @@ export function parseActiveRegistration(
     };
   }
 
+  const migratedStep = type === "trek"
+    && trekTaxonomyMigrated
+    && (draft.trekTypes as string[]).length === 0
+      ? "type"
+      : data.step;
+  const stepWasReset = migratedStep !== data.step;
   const expectedStepCount = STEPS[type].length - 1;
-  const currentIndex = STEPS[type].indexOf(data.step);
+  const currentIndex = STEPS[type].indexOf(migratedStep);
   const derivedStepIndex =
-    data.step === "done" ? expectedStepCount : currentIndex + 1;
+    migratedStep === "done" ? expectedStepCount : currentIndex + 1;
   const stepCount =
     Number.isInteger(data.stepCount) && Number(data.stepCount) > 0
       ? Number(data.stepCount)
       : expectedStepCount;
   const stepIndex =
+    !stepWasReset &&
     Number.isInteger(data.stepIndex) &&
     Number(data.stepIndex) > 0 &&
     Number(data.stepIndex) <= stepCount
@@ -738,12 +1111,25 @@ export function parseActiveRegistration(
 
   return {
     ok: true,
-    migrated: legacy || data.recordId !== recordId,
+    migrated: sourceVersion !== ACTIVE_REGISTRATION_VERSION
+      || trekTaxonomyMigrated
+      || boredomClassificationMigrated
+      || relapseDraftMigrated
+      || data.recordId !== recordId
+      || (type === "relapse"
+        && isRecord(data.draft)
+        && !Object.prototype.hasOwnProperty.call(data.draft, "acuteRisks"))
+      || (type === "boredom"
+        && isRecord(data.draft)
+        && (
+          !Object.prototype.hasOwnProperty.call(data.draft, "delayTimerStartedAt")
+          || !Object.prototype.hasOwnProperty.call(data.draft, "delayDuration")
+        )),
     value: {
       version: ACTIVE_REGISTRATION_VERSION,
       type,
       route: ROUTES[type],
-      step: data.step,
+      step: migratedStep,
       draft,
       recordId,
       startedAt,

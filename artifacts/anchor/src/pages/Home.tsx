@@ -5,16 +5,20 @@ import { useT } from "@/hooks/useTranslation";
 import { useActiveRegistration } from "@/contexts/ActiveRegistrationContext";
 import { getTodaysQuote } from "@/lib/recoveryQuotes";
 import { hapticLight } from "@/lib/haptics";
-import { calculateRiskScore } from "@/lib/riskScore";
 import { usePinnedTools } from "@/hooks/usePinnedTools";
 import { useRegistrationLauncher } from "@/contexts/RegistrationLauncherContext";
 import { buildImpactInsights } from "@/lib/impactInsights";
+import {
+  completedStatusEntries,
+  computeCompletedRegistrationActivity,
+  computeSobrietyStats,
+} from "@/lib/analytics";
 import { CigaretteCounter } from "@/components/CigaretteCounter";
 import { CigaretteDayDrawer } from "@/components/CigaretteDayDrawer";
 import {
   Wind, Eye, Droplets, Waves, Rewind, Heart, Shuffle,
   CalendarCheck, RotateCcw, Settings,
-  TrendingUp, HeartPulse, Info,
+  TrendingUp,
 } from "lucide-react";
 
 const TOOL_META: Record<string, { icon: typeof Wind; labelKey: string; to: string }> = {
@@ -26,12 +30,6 @@ const TOOL_META: Record<string, { icon: typeof Wind; labelKey: string; to: strin
   "/tools/self-compassion": { icon: Heart, labelKey: "tools.compassion.title", to: "/tools/self-compassion" },
   "/tools/distraction": { icon: Shuffle, labelKey: "tools.distraction.title", to: "/tools/distraction" },
 };
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 
 const RESUME_LABEL_KEYS: Record<string, string> = {
   craving: "home.craving.title",
@@ -40,25 +38,6 @@ const RESUME_LABEL_KEYS: Record<string, string> = {
   boredom: "home.boredom_title",
   relapse: "relapse.title",
 };
-
-function computeSobrietyStats(
-  sobrietyStartDate: string | null,
-  relapseLogs: { timestamp: number }[],
-) {
-  if (!sobrietyStartDate) return null;
-  const startMs = new Date(sobrietyStartDate + "T00:00:00").getTime();
-  const nowMs = Date.now();
-  if (isNaN(startMs) || startMs > nowMs) return null;
-  const msPerDay = 1000 * 60 * 60 * 24;
-  const totalDays = Math.floor((nowMs - startMs) / msPerDay);
-  const relapseAfterStart = relapseLogs
-    .filter((r) => r.timestamp >= startMs)
-    .sort((a, b) => b.timestamp - a.timestamp)[0];
-  const currentStreakDays = relapseAfterStart
-    ? Math.floor((nowMs - relapseAfterStart.timestamp) / msPerDay)
-    : totalDays;
-  return { totalDays, currentStreakDays, hasRelapse: !!relapseAfterStart, startDate: sobrietyStartDate };
-}
 
 function milestoneLabel(days: number, t: (key: string) => string): string {
   if (days >= 365 * 2) return t("home.milestone.years").replace("{n}", String(Math.floor(days / 365)));
@@ -73,7 +52,7 @@ function milestoneLabel(days: number, t: (key: string) => string): string {
 }
 
 export function Home() {
-  const { cravingLogs, relapseLogs, anxietyLogs, boredomLogs, journal, sobrietyStartDate, loading, cigaretteLogs, logCigarette, updateCigarette, removeCigarette } = useStore();
+  const { cravingLogs, relapseLogs, anxietyLogs, boredomLogs, sobrietyStartDate, loading, cigaretteLogs, logCigarette, updateCigarette, removeCigarette } = useStore();
   const { t, language } = useT();
   const { session, discardSession } = useActiveRegistration();
   const [, navigate] = useLocation();
@@ -81,8 +60,13 @@ export function Home() {
   const { openRegistrationLauncher } = useRegistrationLauncher();
   const todaysQuote = useMemo(() => getTodaysQuote(language), [language]);
   const [cigaretteDrawerOpen, setCigaretteDrawerOpen] = useState(false);
+  const completedCravingLogs = useMemo(() => completedStatusEntries(cravingLogs), [cravingLogs]);
+  const completedRelapseLogs = useMemo(() => completedStatusEntries(relapseLogs), [relapseLogs]);
 
-  const sobriety = useMemo(() => computeSobrietyStats(sobrietyStartDate, relapseLogs), [sobrietyStartDate, relapseLogs]);
+  const sobriety = useMemo(
+    () => computeSobrietyStats(sobrietyStartDate, completedRelapseLogs),
+    [completedRelapseLogs, sobrietyStartDate],
+  );
 
   const timeGreeting = () => {
     const h = new Date().getHours();
@@ -93,38 +77,25 @@ export function Home() {
     return t("home.greeting.late");
   };
 
-  // Risk assessment
-  const riskInfo = useMemo(() => {
-    const result = calculateRiskScore({
-      cravingLogs,
-      relapseLogs,
-      anxietyLogs,
-      boredomLogs,
-      journalEntries: journal,
-    });
-    if (result.level === "none") {
-      return { ...result, text: t("home.risk.no_data") };
-    }
-    const days = [...cravingLogs, ...anxietyLogs, ...boredomLogs]
-      .sort((a, b) => b.timestamp - a.timestamp)[0];
-    const daysSince = days ? Math.floor((Date.now() - days.timestamp) / (1000 * 60 * 60 * 24)) : 0;
-
-    if (result.level === "low") {
-      return { ...result, text: t("home.risk.low").replace("{n}", String(daysSince)) };
-    }
-    if (result.level === "medium") {
-      return { ...result, text: t("home.risk.medium").replace("{n}", String(daysSince)) };
-    }
-    return { ...result, text: t("home.risk.high").replace("{n}", String(daysSince)) };
-  }, [cravingLogs, relapseLogs, anxietyLogs, boredomLogs, journal, t]);
+  const registrationActivity = useMemo(() => computeCompletedRegistrationActivity({
+    cravingLogs: completedCravingLogs,
+    relapseLogs: completedRelapseLogs,
+    anxietyLogs,
+    boredomLogs,
+  }), [anxietyLogs, boredomLogs, completedCravingLogs, completedRelapseLogs]);
 
   const topImpactInsight = useMemo(
     () =>
       buildImpactInsights(
-        { cravingLogs, relapseLogs, anxietyLogs, boredomLogs },
+        {
+          cravingLogs: completedCravingLogs,
+          relapseLogs: completedRelapseLogs,
+          anxietyLogs,
+          boredomLogs,
+        },
         "30d",
       )[0] ?? null,
-    [anxietyLogs, boredomLogs, cravingLogs, relapseLogs],
+    [anxietyLogs, boredomLogs, completedCravingLogs, completedRelapseLogs],
   );
 
   if (loading) {
@@ -212,7 +183,7 @@ export function Home() {
             <div className="mt-3 grid grid-cols-3 gap-2">
               <div className="rounded-2xl border border-border/50 bg-card/50 p-3">
                 <p className="text-[11px] font-medium text-muted-foreground">{t("home.status.cravings")}</p>
-                <p className="mt-1 text-sm font-semibold text-foreground">{cravingLogs.length} {t("home.status.logged")}</p>
+                <p className="mt-1 text-sm font-semibold text-foreground">{completedCravingLogs.length} {t("home.status.logged")}</p>
               </div>
               <div className="rounded-2xl border border-border/50 bg-card/50 p-3">
                 <p className="text-[11px] font-medium text-muted-foreground">{t("home.status.checkins")}</p>
@@ -252,59 +223,38 @@ export function Home() {
           onAdd={logCigarette}
         />
 
-        {/* Risk overview */}
-        <section aria-label={t("home.risk.label")} className="animate-fade-up">
-          <div className={`rounded-[1.5rem] border p-4 ${riskInfo.level === "high" ? "border-rose-300/30 bg-rose-400/5" : riskInfo.level === "medium" ? "border-amber-300/30 bg-amber-400/5" : "border-border/50 bg-card/50"}`}>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <HeartPulse size={16} className={riskInfo.level === "high" ? "text-rose-300" : riskInfo.level === "medium" ? "text-amber-300" : "text-emerald-300"} />
-                <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">{t("home.risk.label")}</p>
-              </div>
-              <TooltipProvider delayDuration={200}>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button type="button" className="rounded-full p-1 text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50" aria-label={t("home.risk.tooltip_aria")}>
-                      <Info size={14} strokeWidth={2} />
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent side="top" className="max-w-[240px] text-center">
-                    {t("home.risk.tooltip")}
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
+        {/* Neutral completed-registration activity */}
+        <section aria-label={t("home.activity.label")} className="animate-fade-up">
+          <div className="rounded-[1.5rem] border border-border/50 bg-card/50 p-4">
+            <div className="flex items-center gap-2">
+              <CalendarCheck size={16} className="text-muted-foreground" />
+              <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                {t("home.activity.label")}
+              </p>
             </div>
-
-            {riskInfo.level === "none" ? (
-              <p className="mt-2 text-sm text-foreground/80">{riskInfo.text}</p>
+            {registrationActivity.completedCount === 0 ? (
+              <p className="mt-2 text-sm text-foreground/80">{t("home.activity.empty")}</p>
             ) : (
               <div className="mt-3">
-                <div className="flex items-baseline gap-2">
-                  <span className={`text-2xl font-semibold tabular-nums ${riskInfo.level === "high" ? "text-rose-300" : riskInfo.level === "medium" ? "text-amber-300" : "text-emerald-300"}`}>
-                    {t(riskInfo.label)}
-                  </span>
-                  <span className="text-xs text-muted-foreground">
-                    {t("home.risk.score")}: {riskInfo.score}/100
-                  </span>
-                </div>
-                {riskInfo.factors.length > 0 && (
-                  <ul className="mt-2 flex flex-col gap-0.5">
-                    {riskInfo.factors.map((f, i) => (
-                      <li key={i} className="text-xs text-muted-foreground flex items-start gap-1.5">
-                        <span className="mt-1.5 h-1 w-1 rounded-full bg-muted-foreground/50 shrink-0" />
-                        {t(f)}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                <p className="mt-2 text-sm text-foreground/80">{riskInfo.text}</p>
+                <p className="text-2xl font-semibold text-foreground tabular-nums">
+                  {registrationActivity.completedCount}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {t("home.activity.completed_count")}
+                </p>
+                <p className="mt-2 text-sm text-foreground/80">
+                  {registrationActivity.daysSinceLastCompleted === 0
+                    ? t("home.activity.last_today")
+                    : t("home.activity.last_days").replace(
+                      "{n}",
+                      String(registrationActivity.daysSinceLastCompleted),
+                    )}
+                </p>
               </div>
             )}
-
-            {riskInfo.level !== "none" && (
-              <button onClick={openRegistrationLauncher} className="mt-3 text-xs font-medium text-primary hover:opacity-80 transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 rounded">
-                {t("home.risk.action")} →
-              </button>
-            )}
+            <button onClick={openRegistrationLauncher} className="mt-3 text-xs font-medium text-primary hover:opacity-80 transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 rounded">
+              {t("home.activity.action")} →
+            </button>
           </div>
         </section>
 

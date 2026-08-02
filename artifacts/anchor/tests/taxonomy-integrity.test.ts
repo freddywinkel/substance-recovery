@@ -3,7 +3,6 @@ import {
   arrayObjectStringPropertyValuesContaining,
   objectPropertyNames,
   readLiteralVariable,
-  typeAliasStringLiterals,
 } from "./helpers/sourceContracts";
 
 type Option =
@@ -27,7 +26,7 @@ const trackers = [
   {
     name: "Trek",
     file: "src/pages/TrekTracker.tsx",
-    expectedOptions: 89,
+    expectedOptions: 92,
     lists: [
       "TREK_TYPES",
       "PLANNING_STAGES",
@@ -45,7 +44,7 @@ const trackers = [
   {
     name: "Craving",
     file: "src/pages/CravingTracker.tsx",
-    expectedOptions: 90,
+    expectedOptions: 91,
     lists: [
       "ONSET_TYPES",
       "TRIGGER_PRESETS",
@@ -63,7 +62,7 @@ const trackers = [
   {
     name: "Anxiety",
     file: "src/pages/AnxietyTracker.tsx",
-    expectedOptions: 51,
+    expectedOptions: 53,
     lists: [
       "ANXIETY_TYPES",
       "BODY_LOCATIONS",
@@ -78,7 +77,7 @@ const trackers = [
   {
     name: "Boredom",
     file: "src/pages/BoredomTracker.tsx",
-    expectedOptions: 71,
+    expectedOptions: 73,
     lists: [
       "RESTLESSNESS_TYPES",
       "STIMULATION_NEEDS",
@@ -98,7 +97,7 @@ const trackers = [
   {
     name: "Relapse",
     file: "src/pages/RelapseLog.tsx",
-    expectedOptions: 118,
+    expectedOptions: 120,
     lists: [
       "LABEL_OPTIONS",
       "DURATION_OPTIONS",
@@ -198,17 +197,24 @@ describe.each(trackers)("$name taxonomy", ({ file, expectedOptions, lists }) => 
 
 describe("safety option contracts", () => {
   it("exposes every selectable AcuteRisk value while keeping unanswered internal", () => {
-    const schemaValues = typeAliasStringLiterals("src/db/schema.ts", "AcuteRisk");
+    const schemaValues = readLiteralVariable(
+      "src/db/relapseSafety.ts",
+      "ACUTE_RISK_SELECTION_VALUES",
+    ) as string[];
+    const unanswered = readLiteralVariable(
+      "src/db/relapseSafety.ts",
+      "UNANSWERED_ACUTE_RISK",
+    );
     const uiValues = arrayObjectStringPropertyValuesContaining(
       "src/pages/RelapseLog.tsx",
       "value",
       "self-harm-risk",
     );
-    const selectableSchemaValues = schemaValues.filter((value) => value !== "unanswered");
-    expect(schemaValues).toContain("unanswered");
+    expect(unanswered).toBe("unanswered");
+    expect(schemaValues).not.toContain("unanswered");
     expect(uiValues).not.toContain("unanswered");
     expect(duplicateValues(uiValues)).toEqual([]);
-    expect([...uiValues].sort()).toEqual([...selectableSchemaValues].sort());
+    expect([...uiValues].sort()).toEqual([...schemaValues].sort());
   });
 
   it("keeps the national emergency and suicide-prevention numbers available", () => {
@@ -228,7 +234,7 @@ describe("safety option contracts", () => {
 
 describe("persisted option labels", () => {
   const persistedObjectLists = [
-    ["src/pages/TrekTracker.tsx", ["PLANNING_STAGES", "TREK_ACTIONS", "USE_OUTCOMES"]],
+    ["src/pages/TrekTracker.tsx", ["TREK_TYPES", "PLANNING_STAGES", "TREK_ACTIONS", "USE_OUTCOMES"]],
     ["src/pages/CravingTracker.tsx", ["BUILDUP_OPTIONS", "OUTCOME_ACTIONS", "OUTCOMES", "USE_OUTCOMES"]],
     ["src/pages/BoredomTracker.tsx", ["STIMULATION_NEEDS", "OUTCOMES"]],
     ["src/pages/RelapseLog.tsx", ["LABEL_OPTIONS", "DURATION_OPTIONS", "AMOUNT_OPTIONS", "WHAT_NEEDED_OPTIONS", "WHEN_OPTIONS"]],
@@ -239,8 +245,7 @@ describe("persisted option labels", () => {
       for (const list of lists) {
         const options = readLiteralVariable(file, list) as Array<string | { value: string }>;
         for (const option of options) {
-          if (typeof option === "string") continue;
-          const { value } = option;
+          const value = typeof option === "string" ? option : option.value;
           expect(optionEn, `${file} ${list} ${value}`).toHaveProperty(value);
           expect(optionNl, `${file} ${list} ${value}`).toHaveProperty(value);
         }
@@ -249,8 +254,10 @@ describe("persisted option labels", () => {
   });
 
   it("has explicit English and Dutch labels for every selectable safety value", () => {
-    const values = typeAliasStringLiterals("src/db/schema.ts", "AcuteRisk")
-      .filter((value) => value !== "unanswered");
+    const values = readLiteralVariable(
+      "src/db/relapseSafety.ts",
+      "ACUTE_RISK_SELECTION_VALUES",
+    ) as string[];
     for (const value of values) {
       expect(optionEn).toHaveProperty(value);
       expect(optionNl).toHaveProperty(value);

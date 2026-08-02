@@ -1,5 +1,5 @@
 /**
- * Stable, language-neutral identifiers used in registration v2 `answers`.
+ * Stable, language-neutral identifiers used in versioned registration `answers`.
  *
  * Legacy fields continue to keep their original display values for backwards
  * compatibility. New analysis should prefer `answers`, whose IDs no longer expose

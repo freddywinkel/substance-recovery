@@ -1,0 +1,147 @@
+import type { CravingLog, RelapseLog } from "../../src/db/schema";
+
+export const DEPLOYED_V2_TREK_OCCURRED_AT = 1_700_000_000_000;
+export const DEPLOYED_V2_TREK_COMPLETED_AT = DEPLOYED_V2_TREK_OCCURRED_AT + 120_000;
+
+/**
+ * Exact persisted shape produced by deployed HEAD's TrekTracker save object,
+ * with the ID/timing defaults added by useLogs + prepareRegistrationRecord.
+ * Display strings remain at top level; stable IDs are in `answers`.
+ */
+export const headTrekV2 = {
+  id: "deployed-head-trek-v2",
+  cravingType: "active",
+  timestamp: DEPLOYED_V2_TREK_OCCURRED_AT,
+  occurredAt: DEPLOYED_V2_TREK_OCCURRED_AT,
+  startedAt: DEPLOYED_V2_TREK_OCCURRED_AT,
+  completedAt: DEPLOYED_V2_TREK_COMPLETED_AT,
+  dataVersion: 2,
+  contentVersion: "registration-v2",
+  answers: {
+    trekTypes: ["boredom-driven", "social-pressure"],
+    intensity: 8,
+    confidenceBefore: 3,
+    planningStage: "on-my-way-there",
+    location: "outside",
+    triggers: ["stress", "other"],
+    emotions: ["tense"],
+    physicalSensations: ["nervous-energy"],
+    thoughts: ["i-cant-handle-this"],
+    needs: ["relief", "other"],
+    targets: ["alcohol"],
+    chosenAction: "change-location",
+    actionAttempted: true,
+    confidenceAfter: 6,
+    useOutcome: "not_used",
+  },
+  status: "completed",
+  intensity: 8,
+  distressLevel: null,
+  riskLevel: "",
+  situationPresets: [],
+  situationOther: "",
+  emotions: ["Tense"],
+  emotionOther: "",
+  physicalSensations: ["Nervous energy"],
+  thoughtPresets: ["I can't handle this"],
+  thoughtFreeText: "I know the shortcut",
+  location: "Outside",
+  locationOther: "",
+  socialContext: [],
+  substances: ["Alcohol"],
+  primarySubstance: "",
+  buildupDuration: "",
+  chosenAction: "change-location",
+  chosenActionOther: "",
+  actionAttempted: true,
+  toolUsed: null,
+  confidenceBefore: 3,
+  intensityAfter: null,
+  confidenceAfter: 6,
+  cravingOutcome: null,
+  interventionUsed: true,
+  markAsPattern: false,
+  highRiskFlag: true,
+  note: "",
+  planningStage: "On my way there",
+  needType: "Relief",
+  needTypes: ["Relief", "Other"],
+  needOther: "quiet",
+  triggers: ["Stress", "Other"],
+  triggerNote: "near the station",
+  trekTypes: ["Boredom-driven", "Social pressure"],
+  useOutcome: "not_used",
+} satisfies CravingLog;
+
+export const DEPLOYED_V2_RELAPSE_OCCURRED_AT = 1_700_010_000_000;
+export const DEPLOYED_V2_RELAPSE_STARTED_AT = DEPLOYED_V2_RELAPSE_OCCURRED_AT + 10_000;
+export const DEPLOYED_V2_RELAPSE_COMPLETED_AT = DEPLOYED_V2_RELAPSE_STARTED_AT + 180_000;
+
+/**
+ * Exact initial persisted shape produced by deployed HEAD's RelapseLog save.
+ * HEAD used one safety value and mirrored one help selection into all phases.
+ */
+export const headRelapseV2 = {
+  id: "deployed-head-relapse-v2",
+  label: "no-label",
+  when: "just-now",
+  episodeDuration: "unanswered",
+  substances: ["Alcohol"],
+  primarySubstance: "",
+  amountCategory: "small",
+  firstTriggerType: "External event",
+  firstTriggerText: "argument",
+  preUseFactors: ["Poor sleep"],
+  missedWarnings: ["Withdrawing from others"],
+  preUseThoughtPreset: "I'll stop tomorrow",
+  preUseThoughtPresets: ["I'll stop tomorrow"],
+  preUseThoughtFreeText: "I told myself it was only once",
+  couldHaveHelpedEarly: ["Text or call someone"],
+  couldHaveHelpedMiddle: ["Text or call someone"],
+  couldHaveHelpedLast: ["Text or call someone"],
+  supportContact: "Friend",
+  supportContactOther: "",
+  nextStep: "Water, food, rest first",
+  nextStepOther: "",
+  note: "kept note",
+  context: "poor sleep",
+  emotionAfter: null,
+  whatNeeded: "",
+  repairActions: [],
+  acuteRisk: "none",
+  timestamp: DEPLOYED_V2_RELAPSE_OCCURRED_AT,
+  occurredAt: DEPLOYED_V2_RELAPSE_OCCURRED_AT,
+  startedAt: DEPLOYED_V2_RELAPSE_STARTED_AT,
+  completedAt: DEPLOYED_V2_RELAPSE_COMPLETED_AT,
+  dataVersion: 2,
+  contentVersion: "registration-v2",
+  answers: {
+    acuteRisk: "none",
+    label: "no-label",
+    when: "just-now",
+    episodeDuration: "unanswered",
+    substances: ["alcohol"],
+    primarySubstance: "",
+    amountCategory: "small",
+    firstTriggerType: "external-event",
+    preUseFactors: ["poor-sleep"],
+    missedWarnings: ["withdrawing-from-others"],
+    preUseThoughts: ["ill-stop-tomorrow"],
+    couldHaveHelpedEarly: ["text-or-call-someone"],
+    couldHaveHelpedMiddle: ["text-or-call-someone"],
+    couldHaveHelpedLast: ["text-or-call-someone"],
+    supportContact: "friend",
+    nextStep: "water-food-rest-first",
+    emotionAfter: null,
+    whatNeeded: "",
+    repairActions: [],
+  },
+  status: "completed",
+} satisfies Omit<RelapseLog, "acuteRisks">;
+
+/** Exact subsequent HEAD state after its done-screen top-level-only updates. */
+export const headRelapseV2WithFollowUp = {
+  ...headRelapseV2,
+  whatNeeded: "Relief",
+  repairActions: ["Drink water or eat something"],
+};

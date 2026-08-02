@@ -11,6 +11,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { useStore } from "@/hooks/useStore";
 import { getBoredomLogs, type BoredomLog } from "@/db";
+import {
+  CURRENT_REGISTRATION_CONTENT_VERSION,
+  CURRENT_REGISTRATION_DATA_VERSION,
+} from "@/db/migrations";
 import { useActiveRegistration } from "@/contexts/ActiveRegistrationContext";
 import { useT } from "@/hooks/useTranslation";
 import { IntensitySlider } from "@/components/tracker/IntensitySlider";
@@ -21,11 +25,13 @@ import { ActionBar } from "@/components/tracker/ActionBar";
 import { CheckCircle2, Timer, Zap, Wind, ArrowRight } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { removeHiddenOtherText, toStableOptionId, toStableOptionIds } from "@/lib/registrationIds";
+import { beginBoredomDelay } from "@/lib/delayCompletion";
 
 // ─────────────────────────────────────────────────────────────
 // Step types
 // ─────────────────────────────────────────────────────────────
-type Step = "type" | "need" | "situation" | "action" | "done";
+export type BoredomTrackerStep = "type" | "need" | "situation" | "action" | "done";
+type Step = BoredomTrackerStep;
 const STEP_ORDER: Step[] = ["type", "need", "situation", "action"];
 
 // ─────────────────────────────────────────────────────────────
@@ -51,7 +57,19 @@ const STIMULATION_NEEDS = [
   { value: "hands", label: "Hands busy", sub: "Something to do with my hands" },
   { value: "mental", label: "Light mental", sub: "Easy thinking or reading" },
   { value: "social", label: "Social contact", sub: "A voice or presence" },
+  { value: "not-sure", label: "Not sure", sub: "I don't know what might help yet" },
 ];
+const UNKNOWN_STIMULATION_NEED = "not-sure";
+
+export function toggleBoredomStimulationNeed(values: string[], value: string): string[] {
+  if (value === UNKNOWN_STIMULATION_NEED) {
+    return values.includes(value) ? [] : [value];
+  }
+  const withoutUnknown = values.filter((item) => item !== UNKNOWN_STIMULATION_NEED);
+  return withoutUnknown.includes(value)
+    ? withoutUnknown.filter((item) => item !== value)
+    : [...withoutUnknown, value];
+}
 
 const CONVERT_CHECKS = [
   "Yes — this feels like restlessness",
@@ -59,8 +77,56 @@ const CONVERT_CHECKS = [
   "Maybe anxiety",
   "Maybe loneliness",
   "Maybe exhaustion",
-  "Not sure",
+  "classification-not-sure",
 ];
+const TRACKER_CONVERSIONS = new Set(["Maybe a craving", "Maybe anxiety"]);
+
+export function isBoredomTrackerConversion(value: string): boolean {
+  return TRACKER_CONVERSIONS.has(value);
+}
+
+export function boredomStepCount(convertCheck: string): number {
+  return isBoredomTrackerConversion(convertCheck)
+    ? STEP_ORDER.length - 1
+    : STEP_ORDER.length;
+}
+
+export function boredomFollowUpTrackers(
+  convertCheck: string,
+  urge: string,
+): Array<"craving" | "anxiety"> {
+  const trackers: Array<"craving" | "anxiety"> = [];
+  if (convertCheck === "Maybe a craving" || urge === "Use substances") trackers.push("craving");
+  if (convertCheck === "Maybe anxiety") trackers.push("anxiety");
+  return trackers;
+}
+
+export function normalizeBoredomStep(
+  step: BoredomTrackerStep,
+  convertCheck: string,
+): BoredomTrackerStep {
+  return step === "action" && isBoredomTrackerConversion(convertCheck)
+    ? "situation"
+    : step;
+}
+
+export function canProceedBoredomStep(
+  step: BoredomTrackerStep,
+  restlessnessTypes: string[],
+  stimulationNeeds: string[],
+  convertCheck: string,
+  situation: string,
+  situationOther: string,
+  action: string,
+): boolean {
+  switch (step) {
+    case "type":      return restlessnessTypes.length > 0;
+    case "need":      return stimulationNeeds.length > 0 && convertCheck !== "";
+    case "situation": return situation !== "" && (situation !== "Other" || situationOther.trim() !== "");
+    case "action":    return isBoredomTrackerConversion(convertCheck) || action !== "";
+    default:          return true;
+  }
+}
 
 const SITUATIONS = [
   "Doing nothing",
@@ -88,11 +154,84 @@ const RESCUE_MENTAL = ["Simple reading", "Podcast", "Low-intensity game", "Recip
 const RESCUE_SENSORY = ["Hold something textured", "Notice one scent", "Cold or warm water on hands", "Listen to one sound", "Fresh air or softer light"];
 const RESCUE_SOCIAL = ["Call or text someone", "Sit near other people", "Ask someone to join a short walk", "Send a simple check-in message"];
 
+export function removeIncompatibleBoredomRescues(values: string[], urge: string): string[] {
+  return values.filter((value) =>
+    !(urge === "Gaming" && value === "Low-intensity game") &&
+    !(urge === "Eat" && value === "Snack prep"));
+}
+
+export function withBoredomOutcome(
+  log: BoredomLog,
+  outcomeAfter: BoredomLog["outcomeAfter"],
+): BoredomLog {
+  return {
+    ...log,
+    outcomeAfter,
+    answers: { ...log.answers, outcomeAfter: outcomeAfter ?? null },
+  };
+}
+
+interface BoredomAnswersInput {
+  restlessnessTypes: string[];
+  intensity: number | null;
+  stimulationNeeds: string[];
+  convertCheck: string;
+  situation: string;
+  situationOther: string;
+  urge: string;
+  urgeOther: string;
+  rescueMenu: string[];
+  action: string;
+  note: string;
+}
+
+function optionalBoredomStableOptionId(value: string): string | null {
+  return value === "" ? null : toStableOptionId(value);
+}
+
+function optionalBoredomStableOptionIds(values: string[]): string[] | null {
+  return values.length === 0 ? null : toStableOptionIds(values);
+}
+
+function optionalBoredomText(value: string): string | null {
+  const trimmed = value.trim();
+  return trimmed === "" ? null : trimmed;
+}
+
+export function buildBoredomAnswers(
+  input: BoredomAnswersInput,
+): NonNullable<BoredomLog["answers"]> {
+  const trackerConversion = isBoredomTrackerConversion(input.convertCheck);
+  return {
+    restlessnessTypes: toStableOptionIds(input.restlessnessTypes),
+    intensity: input.intensity,
+    stimulationNeeds: [...input.stimulationNeeds],
+    convertCheck: toStableOptionId(input.convertCheck),
+    situation: toStableOptionId(input.situation),
+    situationOther: input.situation === "Other"
+      ? optionalBoredomText(input.situationOther)
+      : null,
+    urge: optionalBoredomStableOptionId(input.urge),
+    urgeOther: input.urge === "Other stimulation"
+      ? optionalBoredomText(input.urgeOther)
+      : null,
+    rescueMenu: trackerConversion
+      ? null
+      : optionalBoredomStableOptionIds(input.rescueMenu),
+    action: trackerConversion ? null : optionalBoredomStableOptionId(input.action),
+    // Written only after the DelayScreen countdown actually reaches zero.
+    delayDuration: null,
+    note: trackerConversion ? null : optionalBoredomText(input.note),
+    outcomeAfter: null,
+  };
+}
+
 const MAIN_ACTIONS = [
   "Sat with it — didn't react",
   "Delayed action",
   "Replaced with healthy routine",
   "Escaped immediately",
+  "Not yet / just logging",
 ];
 
 const OUTCOMES = [
@@ -121,6 +260,7 @@ function RescueSection({
         {items.map((item) => (
           <button
             key={item}
+            type="button"
             onClick={() => onToggle(item)}
             aria-pressed={value.includes(item)}
             className={`w-full text-left px-4 py-2.5 rounded-xl border text-sm font-medium transition-all touch-target ${
@@ -153,6 +293,8 @@ interface BoredomDraft {
   action: string;
   showNote: boolean;
   note: string;
+  delayTimerStartedAt: number | null;
+  delayDuration: number | null;
 }
 
 export function BoredomTracker() {
@@ -168,8 +310,11 @@ export function BoredomTracker() {
   const m = matchedRef.current;
   const md = m?.draft as BoredomDraft | undefined;
 
-  const [step, setStep] = useState<Step>(() => (m ? (m.step as Step) : "type"));
+  const initialConvertCheck = md?.convertCheck ?? "";
+  const [step, setStep] = useState<Step>(() =>
+    normalizeBoredomStep(m ? (m.step as Step) : "type", initialConvertCheck));
   const [saving, setSaving] = useState(false);
+  const saveWriteLock = useRef(false);
 
   // Step 1 — type + intensity
   const [restlessnessTypes, setRestlessnessTypes] = useState<string[]>(() => md?.restlessnessTypes ?? []);
@@ -177,7 +322,7 @@ export function BoredomTracker() {
 
   // Step 2 — need + convert check
   const [stimulationNeeds, setStimulationNeeds] = useState<string[]>(() => md?.stimulationNeeds ?? []);
-  const [convertCheck, setConvertCheck] = useState(() => md?.convertCheck ?? "");
+  const [convertCheck, setConvertCheck] = useState(() => initialConvertCheck);
 
   // Step 3 — situation + urge
   const [situation, setSituation] = useState(() => md?.situation ?? "");
@@ -190,6 +335,8 @@ export function BoredomTracker() {
   const [action, setAction] = useState(() => md?.action ?? "");
   const [showNote, setShowNote] = useState(() => md?.showNote ?? false);
   const [note, setNote] = useState(() => md?.note ?? "");
+  const delayTimerStartedAt = md?.delayTimerStartedAt ?? null;
+  const delayDuration = md?.delayDuration ?? null;
 
   // Done — outcome follow-up
   const [savedLog, setSavedLog] = useState<BoredomLog | null>(null);
@@ -198,15 +345,20 @@ export function BoredomTracker() {
   const [navigationSaving, setNavigationSaving] = useState(false);
   const outcomeWriteLock = useRef(false);
   const navigationWriteLock = useRef(false);
+  const trackerConversion = isBoredomTrackerConversion(convertCheck);
+  const stepIdx = STEP_ORDER.indexOf(step);
+  const totalSteps = boredomStepCount(convertCheck);
 
   // Persisted draft snapshot — resume after tab switch / reload.
   const draft = useMemo<BoredomDraft>(
     () => ({
       restlessnessTypes, intensity, stimulationNeeds, convertCheck, situation,
       situationOther, urge, urgeOther, rescueMenu, action, showNote, note,
+      delayTimerStartedAt, delayDuration,
     }),
     [restlessnessTypes, intensity, stimulationNeeds, convertCheck, situation,
-     situationOther, urge, urgeOther, rescueMenu, action, showNote, note],
+     situationOther, urge, urgeOther, rescueMenu, action, showNote, note,
+     delayTimerStartedAt, delayDuration],
   );
 
   useEffect(() => {
@@ -216,8 +368,8 @@ export function BoredomTracker() {
         route: "/boredom",
         step,
         draft,
-        stepIndex: STEP_ORDER.indexOf(step) + 1 || STEP_ORDER.length,
-        stepCount: STEP_ORDER.length,
+        stepIndex: STEP_ORDER.indexOf(step) + 1 || totalSteps,
+        stepCount: totalSteps,
       });
     } else if (matchedRef.current.pendingReturn) {
       void reg.patchSession({ pendingReturn: undefined });
@@ -234,8 +386,8 @@ export function BoredomTracker() {
     void reg.patchSession({
       step,
       draft,
-      stepIndex: STEP_ORDER.indexOf(step) + 1 || STEP_ORDER.length,
-      stepCount: STEP_ORDER.length,
+      stepIndex: STEP_ORDER.indexOf(step) + 1 || totalSteps,
+      stepCount: totalSteps,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step, draft]);
@@ -281,31 +433,40 @@ export function BoredomTracker() {
       social: RESCUE_SOCIAL,
     };
     const removing = stimulationNeeds.includes(value);
-    setStimulationNeeds((previous) => removing
-      ? previous.filter((item) => item !== value)
-      : [...previous, value]);
+    setStimulationNeeds((previous) => toggleBoredomStimulationNeed(previous, value));
     if (removing) {
       const hidden = new Set(groupByNeed[value] ?? []);
       setRescueMenu((previous) => previous.filter((item) => !hidden.has(item)));
+    } else if (value === UNKNOWN_STIMULATION_NEED) {
+      setRescueMenu([]);
     }
   };
 
-  const stepIdx = STEP_ORDER.indexOf(step);
-  const totalSteps = STEP_ORDER.length;
-
   // Gate "Next": every required question on the current step must be answered.
-  const canProceed = useMemo(() => {
-    switch (step) {
-      case "type":      return restlessnessTypes.length > 0;
-      case "need":      return stimulationNeeds.length > 0 && convertCheck !== "";
-      case "situation": return situation !== "" && (situation !== "Other" || situationOther.trim() !== "");
-      case "action":    return action !== "";
-      default:          return true;
-    }
-  }, [step, restlessnessTypes, stimulationNeeds, convertCheck, situation, situationOther, action]);
+  const canProceed = useMemo(
+    () => canProceedBoredomStep(
+      step,
+      restlessnessTypes,
+      stimulationNeeds,
+      convertCheck,
+      situation,
+      situationOther,
+      action,
+    ),
+    [step, restlessnessTypes, stimulationNeeds, convertCheck, situation, situationOther, action],
+  );
 
   async function handleSave() {
-    if (saving) return;
+    if (
+      saveWriteLock.current ||
+      restlessnessTypes.length === 0 ||
+      stimulationNeeds.length === 0 ||
+      convertCheck === "" ||
+      situation === "" ||
+      (situation === "Other" && situationOther.trim() === "") ||
+      (!trackerConversion && action === "")
+    ) return;
+    saveWriteLock.current = true;
     setSaving(true);
     const completedAt = Date.now();
     const startedAt = reg.session?.startedAt ?? completedAt;
@@ -315,31 +476,35 @@ export function BoredomTracker() {
         occurredAt: startedAt,
         startedAt,
         completedAt,
-        dataVersion: 2,
-        contentVersion: "registration-v2",
-        answers: {
-          restlessnessTypes: toStableOptionIds(restlessnessTypes),
+        dataVersion: CURRENT_REGISTRATION_DATA_VERSION,
+        contentVersion: CURRENT_REGISTRATION_CONTENT_VERSION,
+        answers: buildBoredomAnswers({
+          restlessnessTypes,
           intensity,
           stimulationNeeds,
-          convertCheck: toStableOptionId(convertCheck),
-          situation: toStableOptionId(situation),
-          urge: toStableOptionId(urge),
-          rescueMenu: toStableOptionIds(rescueMenu),
-          action: toStableOptionId(action),
-        },
+          convertCheck,
+          situation,
+          situationOther,
+          urge,
+          urgeOther,
+          rescueMenu,
+          action,
+          note,
+        }),
         intensity,
         feelingTypes: restlessnessTypes,
         situation,
         situationOther: removeHiddenOtherText(situation, situationOther),
         urge,
         urgeOther: removeHiddenOtherText(urge === "Other stimulation" ? "Other" : urge, urgeOther),
-        action,
+        action: trackerConversion ? "" : action,
         delayDuration: null,
-        note: note.trim(),
+        note: trackerConversion ? "" : note.trim(),
         restlessnessTypes,
-        stimulationNeed: stimulationNeeds[0] ?? "",
+        // No primary need is requested; the array is the authoritative answer.
+        stimulationNeed: "",
         stimulationNeeds,
-        rescueMenu,
+        rescueMenu: trackerConversion ? [] : rescueMenu,
         convertCheck,
         environmentReset: [],
         outcomeAfter: null,
@@ -350,6 +515,7 @@ export function BoredomTracker() {
     } catch {
       toast({ title: t("common.save_error"), variant: "destructive" });
     } finally {
+      saveWriteLock.current = false;
       setSaving(false);
     }
   }
@@ -360,7 +526,7 @@ export function BoredomTracker() {
     setOutcomeSaving(true);
     const normalized = next === "dont-know" ? "unknown" : next;
     const real = (["decreased", "same", "increased", "unknown"] as const).find((o) => o === normalized) ?? null;
-    const updated: BoredomLog = { ...savedLog, outcomeAfter: real };
+    const updated = withBoredomOutcome(savedLog, real);
     try {
       await updateBoredom(updated);
       setSavedLog(updated);
@@ -374,18 +540,13 @@ export function BoredomTracker() {
   }, [savedLog, t, toast, updateBoredom]);
 
   const openDelay = useCallback(async () => {
-    if (!savedLog || navigationWriteLock.current || outcomeWriteLock.current) {
-      if (!savedLog) toast({ title: t("common.save_error"), variant: "destructive" });
-      return;
-    }
+    if (navigationWriteLock.current || outcomeWriteLock.current) return;
     navigationWriteLock.current = true;
     setNavigationSaving(true);
     try {
-      const updated: BoredomLog = { ...savedLog, delayDuration: "10" };
-      await updateBoredom(updated);
-      setSavedLog(updated);
       const returnSaved = await reg.patchSession({
         pendingReturn: { returnRoute: "/boredom", returnStep: "done" },
+        draft: beginBoredomDelay(draft, Date.now()),
       });
       if (!returnSaved) {
         toast({ title: t("common.save_error"), variant: "destructive" });
@@ -398,7 +559,7 @@ export function BoredomTracker() {
       navigationWriteLock.current = false;
       setNavigationSaving(false);
     }
-  }, [navigate, reg, savedLog, t, toast, updateBoredom]);
+  }, [draft, navigate, reg, t, toast]);
 
   const openTools = useCallback(async () => {
     if (navigationWriteLock.current || outcomeWriteLock.current) return;
@@ -419,11 +580,28 @@ export function BoredomTracker() {
     }
   }, [navigate, reg, t, toast]);
 
+  const openFollowUpTracker = useCallback(async (tracker: "craving" | "anxiety") => {
+    if (navigationWriteLock.current || outcomeWriteLock.current) return;
+    navigationWriteLock.current = true;
+    setNavigationSaving(true);
+    try {
+      await reg.clearSession();
+      navigate(tracker === "craving" ? "/craving" : "/anxiety");
+    } catch {
+      toast({ title: t("common.save_error"), variant: "destructive" });
+    } finally {
+      navigationWriteLock.current = false;
+      setNavigationSaving(false);
+    }
+  }, [navigate, reg, t, toast]);
+
   function goNext() {
     if (step === "type") setStep("need");
     else if (step === "need") setStep("situation");
-    else if (step === "situation") setStep("action");
-    else if (step === "action") handleSave();
+    else if (step === "situation") {
+      if (trackerConversion) void handleSave();
+      else setStep("action");
+    } else if (step === "action") void handleSave();
   }
   function goBack() {
     if (step === "need") setStep("type");
@@ -431,7 +609,11 @@ export function BoredomTracker() {
     else if (step === "action") setStep("situation");
   }
 
-  const completionMsg = MESSAGES[action] ?? t("boredom.msg.default");
+  const completionMsg = convertCheck === "Maybe a craving"
+    ? t("boredom.route.craving_sub")
+    : convertCheck === "Maybe anxiety"
+      ? t("boredom.route.anxiety_sub")
+      : MESSAGES[action] ?? t("boredom.msg.default");
 
   return (
     <StepLayout
@@ -446,7 +628,7 @@ export function BoredomTracker() {
             showBack={step !== "type"}
             onBack={goBack}
             onNext={goNext}
-            nextIsSubmit={step === "action"}
+            nextIsSubmit={step === "action" || (step === "situation" && trackerConversion)}
             saving={saving}
             canProceed={canProceed}
             backLabel={t("common.back")}
@@ -462,7 +644,10 @@ export function BoredomTracker() {
         {step === "type" && (
           <>
             <div>
-              <h2 className="text-xl font-semibold text-foreground mb-1">{t("boredom.q.type")}</h2>
+              <h2 className="text-xl font-semibold text-foreground mb-1">
+                {t("boredom.q.type")}{" "}
+                <span className="text-muted-foreground font-normal text-sm">({t("common.required")})</span>
+              </h2>
               <p className="text-sm text-muted-foreground">{t("boredom.q.type_sub")}</p>
             </div>
             <MultiSelectGrid
@@ -477,7 +662,10 @@ export function BoredomTracker() {
             <div className="h-px bg-border" />
 
             <div>
-              <h3 className="text-base font-medium text-foreground mb-1">{t("boredom.q.intensity")}</h3>
+              <h3 className="text-base font-medium text-foreground mb-1">
+                {t("boredom.q.intensity")}{" "}
+                <span className="text-muted-foreground font-normal text-sm">({t("common.optional")})</span>
+              </h3>
               <p className="text-xs text-muted-foreground mb-3">{t("boredom.q.intensity_note")}</p>
               <IntensitySlider
                 value={intensity}
@@ -495,13 +683,17 @@ export function BoredomTracker() {
         {step === "need" && (
           <>
             <div>
-              <h2 className="text-xl font-semibold text-foreground mb-1">{t("boredom.q.need")}</h2>
+              <h2 className="text-xl font-semibold text-foreground mb-1">
+                {t("boredom.q.need")}{" "}
+                <span className="text-muted-foreground font-normal text-sm">({t("common.required")})</span>
+              </h2>
               <p className="text-sm text-muted-foreground">{t("boredom.q.need_sub")}</p>
             </div>
             <div className="grid grid-cols-2 gap-2">
               {STIMULATION_NEEDS.map(({ value: val, label, sub }) => (
                 <button
                   key={val}
+                  type="button"
                   onClick={() => toggleStimulationNeed(val)}
                   aria-pressed={stimulationNeeds.includes(val)}
                   className={`flex flex-col p-4 rounded-2xl border text-left transition-all touch-target ${
@@ -519,7 +711,10 @@ export function BoredomTracker() {
             <div className="h-px bg-border" />
 
             <div>
-              <h3 className="text-base font-medium text-foreground mb-1">{t("boredom.q.convert")}</h3>
+              <h3 className="text-base font-medium text-foreground mb-1">
+                {t("boredom.q.convert")}{" "}
+                <span className="text-muted-foreground font-normal text-sm">({t("common.required")})</span>
+              </h3>
               <p className="text-xs text-muted-foreground mb-3">{t("boredom.q.convert_sub")}</p>
               <ChipCol options={CONVERT_CHECKS} value={convertCheck} onChange={setConvertCheck} translate={tOpt} />
             </div>
@@ -562,7 +757,10 @@ export function BoredomTracker() {
         {step === "situation" && (
           <>
             <div>
-              <h2 className="text-xl font-semibold text-foreground mb-1">{t("boredom.q.situation")}</h2>
+              <h2 className="text-xl font-semibold text-foreground mb-1">
+                {t("boredom.q.situation")}{" "}
+                <span className="text-muted-foreground font-normal text-sm">({t("common.required")})</span>
+              </h2>
             </div>
             <ChipCol
               options={SITUATIONS}
@@ -574,13 +772,19 @@ export function BoredomTracker() {
               translate={tOpt}
             />
             {situation === "Other" && (
-              <textarea
-                value={situationOther}
-                onChange={(event) => setSituationOther(event.target.value)}
-                placeholder={t("boredom.other_situation")}
-                rows={2}
-                className="w-full rounded-2xl border border-input bg-card px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-ring"
-              />
+              <div className="flex flex-col gap-2">
+                <label htmlFor="boredom-situation-other" className="text-sm font-medium text-foreground">
+                  {t("boredom.other_situation")} ({t("common.required")})
+                </label>
+                <textarea
+                  id="boredom-situation-other"
+                  value={situationOther}
+                  onChange={(event) => setSituationOther(event.target.value)}
+                  placeholder={t("boredom.other_situation")}
+                  rows={2}
+                  className="w-full rounded-2xl border border-input bg-card px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-ring"
+                />
+              </div>
             )}
 
             <div className="h-px bg-border" />
@@ -595,18 +799,25 @@ export function BoredomTracker() {
                 value={urge}
                 onChange={(value) => {
                   setUrge(value);
+                  setRescueMenu((previous) => removeIncompatibleBoredomRescues(previous, value));
                   if (value !== "Other stimulation") setUrgeOther("");
                 }}
                 translate={tOpt}
               />
               {urge === "Other stimulation" && (
-                <textarea
-                  value={urgeOther}
-                  onChange={(event) => setUrgeOther(event.target.value)}
-                  placeholder={t("boredom.other_urge")}
-                  rows={2}
-                  className="w-full rounded-2xl border border-input bg-card px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-ring"
-                />
+                <div className="mt-3 flex flex-col gap-2">
+                  <label htmlFor="boredom-urge-other" className="text-sm font-medium text-foreground">
+                    {t("boredom.other_urge")} ({t("common.optional")})
+                  </label>
+                  <textarea
+                    id="boredom-urge-other"
+                    value={urgeOther}
+                    onChange={(event) => setUrgeOther(event.target.value)}
+                    placeholder={t("boredom.other_urge")}
+                    rows={2}
+                    className="w-full rounded-2xl border border-input bg-card px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-ring"
+                  />
+                </div>
               )}
             </div>
           </>
@@ -616,7 +827,10 @@ export function BoredomTracker() {
         {step === "action" && (
           <>
             <div>
-              <h2 className="text-xl font-semibold text-foreground mb-1">{t("boredom.q.action")}</h2>
+              <h2 className="text-xl font-semibold text-foreground mb-1">
+                {t("boredom.q.action")}{" "}
+                <span className="text-muted-foreground font-normal text-sm">({t("common.optional")})</span>
+              </h2>
               <p className="text-sm text-muted-foreground">{t("boredom.q.action_sub")}</p>
             </div>
 
@@ -642,16 +856,20 @@ export function BoredomTracker() {
             <div className="h-px bg-border" />
 
             <div>
-              <h3 className="text-base font-medium text-foreground mb-3">{t("boredom.q.action_handled")}</h3>
+              <h3 className="text-base font-medium text-foreground mb-3">
+                {t("boredom.q.action_handled")}{" "}
+                <span className="text-muted-foreground font-normal text-sm">({t("common.required")})</span>
+              </h3>
               <ChipCol options={MAIN_ACTIONS} value={action} onChange={setAction} translate={tOpt} />
             </div>
 
             {!showNote ? (
               <button
+                type="button"
                 onClick={() => setShowNote(true)}
                 className="text-xs text-muted-foreground hover:text-foreground transition-colors text-left"
               >
-                {t("common.add_note")}
+                {t("common.add_note")} ({t("common.optional")})
               </button>
             ) : (
               <textarea
@@ -692,7 +910,7 @@ export function BoredomTracker() {
                   <button
                     key={value}
                     type="button"
-                    disabled={outcomeSaving || navigationSaving}
+                    disabled={outcomeSaving || navigationSaving || !savedLog}
                     onClick={() => {
                       const next = outcome === value ? "" : value;
                       void applyOutcome(next);
@@ -711,33 +929,21 @@ export function BoredomTracker() {
             </div>
 
             <div className="flex flex-col gap-3 w-full max-w-xs">
-              {(convertCheck === "Maybe a craving" || convertCheck === "Maybe anxiety") && (
+              {boredomFollowUpTrackers(convertCheck, urge).map((tracker) => (
                 <button
+                  key={tracker}
                   type="button"
                   disabled={navigationSaving || outcomeSaving}
-                  onClick={async () => {
-                    if (navigationWriteLock.current || outcomeWriteLock.current) return;
-                    navigationWriteLock.current = true;
-                    setNavigationSaving(true);
-                    try {
-                      await reg.clearSession();
-                      navigate(convertCheck === "Maybe a craving" ? "/craving" : "/anxiety");
-                    } catch {
-                      toast({ title: t("common.save_error"), variant: "destructive" });
-                    } finally {
-                      navigationWriteLock.current = false;
-                      setNavigationSaving(false);
-                    }
-                  }}
+                  onClick={() => { void openFollowUpTracker(tracker); }}
                   className="flex items-center justify-center gap-2 bg-primary text-primary-foreground rounded-2xl px-5 py-3.5 text-sm font-semibold touch-target disabled:opacity-60"
                 >
-                  {convertCheck === "Maybe a craving" ? t("boredom.route.craving_title") : t("boredom.route.anxiety_title")}
+                  {tracker === "craving" ? t("boredom.route.craving_title") : t("boredom.route.anxiety_title")}
                   <ArrowRight size={15} />
                 </button>
-              )}
+              ))}
               <button
                 type="button"
-                disabled={navigationSaving || outcomeSaving || !savedLog}
+                disabled={navigationSaving || outcomeSaving}
                 onClick={() => { void openDelay(); }}
                 className="flex items-center justify-center gap-2 bg-card border border-border rounded-2xl px-5 py-3.5 text-sm font-medium text-foreground hover:border-primary/40 transition-colors touch-target disabled:opacity-60"
               >

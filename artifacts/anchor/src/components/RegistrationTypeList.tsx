@@ -4,6 +4,9 @@ import { useStore } from "@/hooks/useStore";
 import { useT } from "@/hooks/useTranslation";
 import { CATEGORY_META } from "@/lib/constants";
 import { useActiveRegistration } from "@/contexts/ActiveRegistrationContext";
+import { cravingRegistrationKind } from "@/lib/canonicalRegistration";
+import { logicalTimestamp } from "@/lib/registrationIds";
+import { completedStatusEntries } from "@/lib/analytics";
 
 type RegistrationType = "trek" | "craving" | "boredom" | "anxiety" | "relapse";
 
@@ -44,9 +47,11 @@ export function RegistrationTypeList({ onSelect }: RegistrationTypeListProps) {
     navigate(next.to);
   };
 
-  const lastActiveCraving = cravingLogs.find((log) => log.cravingType === "active");
-  const lastPassiveCraving = cravingLogs.find((log) => log.cravingType !== "active");
-  const lastRelapse = relapseLogs[0];
+  const completedCravings = completedStatusEntries(cravingLogs);
+  const completedRelapses = completedStatusEntries(relapseLogs);
+  const lastActiveCraving = completedCravings.find((log) => cravingRegistrationKind(log) === "trek");
+  const lastPassiveCraving = completedCravings.find((log) => cravingRegistrationKind(log) === "craving");
+  const lastRelapse = completedRelapses[0];
   const lastAnxiety = anxietyLogs[0];
   const lastBoredom = boredomLogs[0];
 
@@ -62,14 +67,14 @@ export function RegistrationTypeList({ onSelect }: RegistrationTypeListProps) {
       type: "trek",
       label: t("registrations.trek.title"),
       sub: t("registrations.trek.sub"),
-      lastLog: lastActiveCraving?.timestamp,
+      lastLog: lastActiveCraving ? logicalTimestamp(lastActiveCraving) : undefined,
     },
     {
       to: "/craving",
       type: "craving",
       label: t("registrations.craving.title"),
       sub: t("registrations.craving.sub"),
-      lastLog: lastPassiveCraving?.timestamp,
+      lastLog: lastPassiveCraving ? logicalTimestamp(lastPassiveCraving) : undefined,
     },
     {
       to: "/boredom",

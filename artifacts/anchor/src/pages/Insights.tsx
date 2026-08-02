@@ -14,10 +14,13 @@ import {
 } from "recharts";
 import {
   computeAnxietyStats,
+  computeAttentionStats,
   computeBoredomStats,
   computeCravingStats,
+  computeCurrentStreakDays,
   computeRelapseStats,
   computeWeeklyTrend,
+  completedStatusEntries,
   filterByRange,
   type FreqItem,
   type TimeRange,
@@ -89,13 +92,7 @@ export function Insights() {
   const [range, setRange] = useState<TimeRange>("30d");
 
   const currentStreak = useMemo(() => {
-    if (!sobrietyStartDate) return null;
-    const start = new Date(`${sobrietyStartDate}T00:00:00`).getTime();
-    if (!Number.isFinite(start) || start > Date.now()) return null;
-    const latestRelapse = relapseLogs
-      .filter((entry) => logicalTimestamp(entry) >= start)
-      .reduce((latest, entry) => Math.max(latest, logicalTimestamp(entry)), start);
-    return Math.max(0, Math.floor((Date.now() - latestRelapse) / 86_400_000));
+    return computeCurrentStreakDays(sobrietyStartDate, relapseLogs);
   }, [relapseLogs, sobrietyStartDate]);
 
   const rangeOpts: { v: TimeRange; label: string }[] = [
@@ -105,8 +102,14 @@ export function Insights() {
     { v: "all", label: t("progress.range.all") },
   ];
 
-  const filteredCravings = useMemo(() => filterByRange(cravingLogs, range), [cravingLogs, range]);
-  const filteredRelapses = useMemo(() => filterByRange(relapseLogs, range), [relapseLogs, range]);
+  const filteredCravings = useMemo(
+    () => filterByRange(completedStatusEntries(cravingLogs), range),
+    [cravingLogs, range],
+  );
+  const filteredRelapses = useMemo(
+    () => filterByRange(completedStatusEntries(relapseLogs), range),
+    [relapseLogs, range],
+  );
   const filteredAnxiety = useMemo(() => filterByRange(anxietyLogs, range), [anxietyLogs, range]);
   const filteredBoredom = useMemo(() => filterByRange(boredomLogs, range), [boredomLogs, range]);
 
@@ -114,6 +117,12 @@ export function Insights() {
   const rStats = useMemo(() => computeRelapseStats(filteredRelapses), [filteredRelapses]);
   const aStats = useMemo(() => computeAnxietyStats(filteredAnxiety), [filteredAnxiety]);
   const bStats = useMemo(() => computeBoredomStats(filteredBoredom), [filteredBoredom]);
+  const attentionStats = useMemo(() => computeAttentionStats({
+    cravingLogs: filteredCravings,
+    relapseLogs: filteredRelapses,
+    anxietyLogs: filteredAnxiety,
+    boredomLogs: filteredBoredom,
+  }), [filteredAnxiety, filteredBoredom, filteredCravings, filteredRelapses]);
   const weekly = useMemo(
     () => computeWeeklyTrend(filteredCravings, 10, language === "nl" ? "nl-NL" : "en-GB"),
     [filteredCravings, language],
@@ -151,7 +160,12 @@ export function Insights() {
   }, [cStats.topSituations, tOpt]);
 
   const impactItems = useMemo(
-    () => buildImpactInsights({ cravingLogs, relapseLogs, anxietyLogs, boredomLogs }, range),
+    () => buildImpactInsights({
+      cravingLogs: completedStatusEntries(cravingLogs),
+      relapseLogs: completedStatusEntries(relapseLogs),
+      anxietyLogs,
+      boredomLogs,
+    }, range),
     [anxietyLogs, boredomLogs, cravingLogs, relapseLogs, range],
   );
 
@@ -227,6 +241,15 @@ export function Insights() {
 
           <TabsContent value="patterns" className="mt-3 flex flex-col gap-4">
             <div className="grid grid-cols-2 gap-3">
+              <StatCard
+                label={t("insights.attention.title")}
+                value={attentionStats.answeredCount === 0 ? "-" : attentionStats.needsAttentionCount}
+                sub={attentionStats.answeredCount === 0
+                  ? t("insights.attention.empty")
+                  : t("insights.attention.sub")
+                    .replace("{attention}", String(attentionStats.needsAttentionCount))
+                    .replace("{answered}", String(attentionStats.answeredCount))}
+              />
               <StatCard label={t("progress.stat.streak")} value={currentStreak ?? "-"} sub={t("progress.stat.streak_sub")} />
               <StatCard label={t("progress.stat.cravings")} value={cStats.total} />
               <StatCard label={t("progress.stat.lapses")} value={rStats.total} sub={t("progress.stat.in_period")} />
