@@ -18,6 +18,7 @@ import {
 } from "@/db/migrations";
 import { removeHiddenOtherText, toStableOptionId, toStableOptionIds } from "@/lib/registrationIds";
 import { getSubstanceSafetyWarnings, getUrgentSafetyCopy } from "@/lib/registrationSafety";
+import { useRecoveryFeatures } from "@/contexts/RecoveryFeaturesContext";
 
 // ── Step type ────────────────────────────────────────────────
 type Step = "type" | "planning" | "inner" | "need" | "substance" | "action" | "outcome" | "done";
@@ -279,6 +280,7 @@ function RequiredMarker({ language }: { language: "en" | "nl" }) {
 
 // ── Main component ────────────────────────────────────────────
 export function TrekTracker() {
+  const { completeQuickReflection } = useRecoveryFeatures();
   const { step, setStep, draft, setDraft, reg } = useResumableDraft<Step, TrekDraft>({
     type: "trek",
     route: "/trek",
@@ -411,17 +413,21 @@ export function TrekTracker() {
     setSaving(true);
     const completedAt = Date.now();
     const startedAt = reg.session?.startedAt ?? completedAt;
+    const occurredAt = reg.session?.quickRegistrationTimestamp ?? startedAt;
     const confidenceAfter = confidenceAfterForAttempt(draft.actionAttempted, draft.confidenceAfter);
     try {
       const saved = await logCraving({
         cravingType: "active",
-        timestamp: startedAt,
-        occurredAt: startedAt,
+        timestamp: occurredAt,
+        occurredAt,
         startedAt,
         completedAt,
         dataVersion: CURRENT_REGISTRATION_DATA_VERSION,
         contentVersion: CURRENT_REGISTRATION_CONTENT_VERSION,
-        answers: buildTrekAnswers(draft),
+        answers: {
+          ...buildTrekAnswers(draft),
+          quickRegistrationId: reg.session?.quickRegistrationId ?? null,
+        },
         status: "completed",
         intensity: draft.intensity,
         distressLevel: null,
@@ -468,6 +474,10 @@ export function TrekTracker() {
       });
       reg.patchSession({ savedLogId: saved.id, step: "done" });
       setStep("done");
+      // The detailed record is already durable. Linking the earlier quick
+      // entry is secondary and must never turn success into a duplicate-prone
+      // save error.
+      void completeQuickReflection(reg.session?.quickRegistrationId, "trek", saved.id).catch(() => undefined);
     } catch {
       toast({ title: t("common.save_error"), variant: "destructive" });
     } finally {

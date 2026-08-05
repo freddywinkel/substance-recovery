@@ -120,7 +120,9 @@ function withSessionMetadata<T extends RegistrationLog>(
   const matching = session?.type === expectedType ? session : null;
   const occurredAt =
     entry.occurredAt ??
-    (matching && expectedType !== "relapse" ? matching.startedAt : entry.timestamp);
+    (matching && expectedType !== "relapse"
+      ? matching.quickRegistrationTimestamp ?? matching.startedAt
+      : entry.timestamp);
   const startedAt = entry.startedAt ?? matching?.startedAt ?? occurredAt;
   const completedAt = entry.completedAt ?? Date.now();
 

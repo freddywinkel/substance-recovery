@@ -8,6 +8,7 @@ import {
 } from "react";
 import { getSetting, setSetting } from "@/db";
 import { setRegistrationSessionState } from "@/db/registrationSessionSettings";
+import { QUICK_REFLECTION_HANDOFF_KEY } from "@/lib/recoveryFeatures";
 import {
   ACTIVE_REGISTRATION_VERSION,
   parseActiveRegistration,
@@ -29,6 +30,41 @@ export type {
 
 const SETTING_KEY = "activeRegistration";
 const SUSPENDED_SETTING_KEY = "suspendedRegistrations";
+
+function consumeQuickReflectionHandoff(type: RegistrationType): {
+  id: string;
+  timestamp: number;
+} | undefined {
+  try {
+    const raw = sessionStorage.getItem(QUICK_REFLECTION_HANDOFF_KEY);
+    if (!raw) return undefined;
+    const value = JSON.parse(raw) as unknown;
+    if (
+      !value
+      || typeof value !== "object"
+      || Array.isArray(value)
+      || (value as Record<string, unknown>).type !== type
+      || typeof (value as Record<string, unknown>).id !== "string"
+      || ((value as Record<string, unknown>).id as string).trim() === ""
+      || typeof (value as Record<string, unknown>).timestamp !== "number"
+      || !Number.isFinite((value as Record<string, unknown>).timestamp)
+      || ((value as Record<string, unknown>).timestamp as number) < 0
+      || ((value as Record<string, unknown>).timestamp as number) > 8_640_000_000_000_000
+    ) return undefined;
+    return {
+      id: (value as Record<string, unknown>).id as string,
+      timestamp: (value as Record<string, unknown>).timestamp as number,
+    };
+  } catch {
+    return undefined;
+  } finally {
+    try {
+      sessionStorage.removeItem(QUICK_REFLECTION_HANDOFF_KEY);
+    } catch {
+      // A blocked session store means no quick-to-detailed handoff is possible.
+    }
+  }
+}
 
 interface StartArgs {
   type: RegistrationType;
@@ -53,6 +89,10 @@ interface ActiveRegistrationValue {
   patchSession: (updates: PatchArgs) => Promise<boolean>;
   clearSession: () => Promise<void>;
   suspendSession: () => Promise<boolean>;
+  resumeQuickSession: (
+    quickRegistrationId: string,
+    type: ActiveRegistration["type"],
+  ) => Promise<ActiveRegistration | null>;
   completeSession: () => Promise<boolean>;
   discardSession: (options?: { restoreSuspended?: boolean }) => Promise<boolean>;
   resetSessions: () => Promise<boolean>;
@@ -222,6 +262,7 @@ export function ActiveRegistrationProvider({ children }: { children: React.React
   const startSession = useCallback(
     (args: StartArgs): Promise<boolean> => {
       const now = Date.now();
+      const quickHandoff = consumeQuickReflectionHandoff(args.type);
       const candidate = parseActiveRegistration({
         version: ACTIVE_REGISTRATION_VERSION,
         type: args.type,
@@ -229,6 +270,8 @@ export function ActiveRegistrationProvider({ children }: { children: React.React
         step: args.step,
         draft: args.draft,
         recordId: crypto.randomUUID(),
+        quickRegistrationId: quickHandoff?.id,
+        quickRegistrationTimestamp: quickHandoff?.timestamp,
         stepIndex: args.stepIndex,
         stepCount: args.stepCount,
         startedAt: now,
@@ -292,6 +335,41 @@ export function ActiveRegistrationProvider({ children }: { children: React.React
     return true;
   }, [enqueueStateWrite]);
 
+  const resumeQuickSession = useCallback(async (
+    quickRegistrationId: string,
+    type: ActiveRegistration["type"],
+  ): Promise<ActiveRegistration | null> => {
+    const current = sessionRef.current;
+    if (current?.quickRegistrationId === quickRegistrationId && current.type === type) {
+      return current;
+    }
+
+    const candidates = suspendedRef.current.filter(
+      (item) => item.quickRegistrationId === quickRegistrationId && item.type === type,
+    );
+    if (candidates.length === 0) return null;
+    const restored = candidates.reduce((latest, candidate) =>
+      candidate.updatedAt > latest.updatedAt ? candidate : latest,
+    );
+    const nextSuspended = suspendedRef.current.filter(
+      (item) => item.quickRegistrationId !== quickRegistrationId || item.type !== type,
+    );
+    if (current && !current.savedLogId && current.step !== "done") {
+      nextSuspended.push({
+        ...current,
+        pendingReturn: undefined,
+        updatedAt: Date.now(),
+      });
+    }
+
+    const persisted = await enqueueStateWrite(restored, nextSuspended);
+    if (!persisted) return null;
+    suspendedRef.current = nextSuspended;
+    sessionRef.current = restored;
+    setSession(restored);
+    return restored;
+  }, [enqueueStateWrite]);
+
   const completeSession = useCallback(async (): Promise<boolean> => {
     const nextSuspended = [...suspendedRef.current];
     const restored = nextSuspended.pop() ?? null;
@@ -344,6 +422,7 @@ export function ActiveRegistrationProvider({ children }: { children: React.React
         patchSession,
         clearSession,
         suspendSession,
+        resumeQuickSession,
         completeSession,
         discardSession,
         resetSessions,

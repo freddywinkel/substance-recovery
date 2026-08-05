@@ -10,15 +10,24 @@ import {
   getRelapseLogs,
   getCrisisService,
   getEmergencyContacts,
+  getFeatureRecords,
   getSetting,
   importAllData,
+  reconcileQuickReflectionLinks,
   saveCrisisService,
+  saveFeatureRecord,
   setSetting,
   updateCravingLog,
 } from "../src/db/crud";
 import type { CravingLog, RelapseLog } from "../src/db/schema";
 import { setRegistrationSessionState } from "../src/db/registrationSessionSettings";
 import { withCanonicalNote } from "../src/lib/canonicalRegistration";
+import {
+  DEFAULT_HOME_PREFERENCES,
+  DEFAULT_RECOVERY_PLAN,
+} from "../src/lib/recoveryFeatures";
+import { ACTIVE_REGISTRATION_VERSION } from "../src/contexts/activeRegistrationValidation";
+import { createBlankCravingDraft } from "../src/pages/CravingTracker";
 
 const TEST_TIMESTAMP = 1_700_000_000_000;
 
@@ -179,7 +188,7 @@ describe("IndexedDB backup and retry integration", () => {
     expect(await getCravingLogs()).toHaveLength(1);
     const backup = await exportAllData();
     expect(backup).toMatchObject({
-      version: 1,
+      version: 2,
       cravingLogs: [
         {
           id: "craving-roundtrip",
@@ -205,6 +214,160 @@ describe("IndexedDB backup and retry integration", () => {
       },
     ]);
     expect(await getSetting("theme")).toBe("light");
+  });
+
+  it("backs up and restores offline recovery feature records", async () => {
+    await saveFeatureRecord({
+      id: "quick-backup",
+      recordType: "quick-registration",
+      timestamp: TEST_TIMESTAMP,
+      updatedAt: TEST_TIMESTAMP,
+      registrationType: "craving",
+      intensity: 8,
+      immediateSafety: "safe-for-now",
+      chosenAction: "use-a-tool",
+      chosenActionOther: "",
+      note: "private note",
+      reflectionStatus: "pending",
+      reflectionDueAt: TEST_TIMESTAMP + 60_000,
+      reflectionStartedAt: null,
+      reflectionCompletedAt: null,
+      linkedDetailedRecordId: null,
+    });
+    await saveFeatureRecord({
+      id: "action-backup",
+      recordType: "recovery-action",
+      timestamp: TEST_TIMESTAMP + 1,
+      updatedAt: TEST_TIMESTAMP + 1,
+      actionType: "contact",
+      label: "Called support",
+      note: "private action note",
+      sourceId: null,
+    });
+    await saveFeatureRecord({
+      id: "tool-backup",
+      recordType: "tool-follow-up",
+      timestamp: TEST_TIMESTAMP + 2,
+      updatedAt: TEST_TIMESTAMP + 2,
+      dueAt: TEST_TIMESTAMP + 60_002,
+      toolId: "/tools/breathing",
+      toolLabel: "Box breathing",
+      feelingBefore: 8,
+      feelingAfter: null,
+      attempted: null,
+      status: "pending",
+      completedAt: null,
+    });
+    await saveFeatureRecord({
+      id: "weekly-backup",
+      recordType: "weekly-review",
+      timestamp: TEST_TIMESTAMP + 3,
+      updatedAt: TEST_TIMESTAMP + 3,
+      periodStart: TEST_TIMESTAMP,
+      periodEnd: TEST_TIMESTAMP + 7 * 86_400_000 - 1,
+      chosenPattern: "Craving was frequently recorded (1/1)",
+      nextWeekPlan: "Contact support early.",
+    });
+    await setSetting("homePreferences", JSON.stringify(DEFAULT_HOME_PREFERENCES));
+    await setSetting("recoveryPlan", JSON.stringify(DEFAULT_RECOVERY_PLAN));
+
+    const backup = await exportAllData();
+    expect(backup).toMatchObject({ version: 2 });
+    if (!Array.isArray(backup.featureRecords)) throw new Error("Expected feature records in backup");
+    expect(backup.featureRecords).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: "quick-backup", recordType: "quick-registration" }),
+      expect.objectContaining({ id: "action-backup", recordType: "recovery-action" }),
+      expect.objectContaining({ id: "tool-backup", recordType: "tool-follow-up" }),
+      expect.objectContaining({ id: "weekly-backup", recordType: "weekly-review" }),
+    ]));
+    const quickInBackup = backup.featureRecords.find((record): record is Record<string, unknown> =>
+      Boolean(record)
+      && typeof record === "object"
+      && !Array.isArray(record)
+      && (record as Record<string, unknown>).id === "quick-backup",
+    );
+    if (!quickInBackup || quickInBackup.recordType !== "quick-registration") {
+      throw new Error("Expected quick registration in backup");
+    }
+    // Deployed v2 backups predate the explicit link field. Import must
+    // normalize them instead of skipping the otherwise valid record.
+    delete quickInBackup.linkedDetailedRecordId;
+
+    await clearAllData();
+    expect(await getFeatureRecords()).toEqual([]);
+    expect(await importAllData(backup)).toMatchObject({ skipped: 0, errors: [] });
+    expect(await getFeatureRecords()).toHaveLength(4);
+    expect((await getFeatureRecords()).find((record) => record.id === "quick-backup")).toMatchObject({
+      id: "quick-backup",
+      intensity: 8,
+      reflectionStatus: "pending",
+      linkedDetailedRecordId: null,
+    });
+    expect(JSON.parse(String(await getSetting("homePreferences")))).toEqual(DEFAULT_HOME_PREFERENCES);
+    expect(JSON.parse(String(await getSetting("recoveryPlan")))).toEqual(DEFAULT_RECOVERY_PLAN);
+  });
+
+  it("backs up and restores a validated suspended registration stack", async () => {
+    const suspended = [{
+      version: ACTIVE_REGISTRATION_VERSION,
+      type: "craving" as const,
+      route: "/craving",
+      step: "onset",
+      draft: createBlankCravingDraft(),
+      recordId: "suspended-craving",
+      startedAt: TEST_TIMESTAMP,
+      updatedAt: TEST_TIMESTAMP,
+    }];
+    await setRegistrationSessionState("", JSON.stringify(suspended));
+
+    const backup = await exportAllData();
+    await clearAllData();
+    expect(await importAllData(backup)).toMatchObject({ skipped: 0, errors: [] });
+    expect(JSON.parse(String(await getSetting("suspendedRegistrations")))).toMatchObject([
+      { recordId: "suspended-craving", type: "craving", step: "onset" },
+    ]);
+  });
+
+  it("repairs and round-trips an exact quick-to-detailed link from the durable answer envelope", async () => {
+    await saveFeatureRecord({
+      id: "quick-linked-roundtrip",
+      recordType: "quick-registration",
+      timestamp: TEST_TIMESTAMP,
+      updatedAt: TEST_TIMESTAMP,
+      registrationType: "craving",
+      intensity: 9,
+      immediateSafety: "need-support",
+      chosenAction: "contact-support",
+      chosenActionOther: "",
+      note: "Initial note",
+      reflectionStatus: "started",
+      reflectionDueAt: TEST_TIMESTAMP + 600_000,
+      reflectionStartedAt: TEST_TIMESTAMP + 1,
+      reflectionCompletedAt: null,
+      linkedDetailedRecordId: null,
+    });
+    const base = cravingRecord();
+    await addCravingLog({
+      ...base,
+      id: "detailed-linked-roundtrip",
+      answers: {
+        ...base.answers,
+        quickRegistrationId: "quick-linked-roundtrip",
+      },
+    });
+
+    expect(await reconcileQuickReflectionLinks()).toBe(1);
+    expect((await getFeatureRecords()).find((record) => record.id === "quick-linked-roundtrip"))
+      .toMatchObject({
+        reflectionStatus: "completed",
+        linkedDetailedRecordId: "detailed-linked-roundtrip",
+      });
+
+    const backup = await exportAllData();
+    await clearAllData();
+    expect(await importAllData(backup)).toMatchObject({ skipped: 0, errors: [] });
+    expect((await getCravingLogs()).find((record) => record.id === "detailed-linked-roundtrip")?.answers)
+      .toMatchObject({ quickRegistrationId: "quick-linked-roundtrip" });
   });
 
   it("reuses a stable record ID so a retried save cannot duplicate a registration", async () => {

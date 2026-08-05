@@ -26,6 +26,35 @@ function legacySession(type: RegistrationType, route: string, step: string) {
 }
 
 describe("parseActiveRegistration", () => {
+  it("retains an exact quick-registration link and rejects an empty one", () => {
+    const base = parseActiveRegistration(legacySession("craving", "/craving", "onset"));
+    expect(base.ok && base.value).toBeTruthy();
+    if (!base.ok || !base.value) return;
+
+    expect(parseActiveRegistration({
+      ...base.value,
+      quickRegistrationId: "quick-123",
+      quickRegistrationTimestamp: 1_699_999_000_000,
+    })).toMatchObject({
+      ok: true,
+      value: {
+        quickRegistrationId: "quick-123",
+        quickRegistrationTimestamp: 1_699_999_000_000,
+      },
+    });
+    expect(parseActiveRegistration({ ...base.value, quickRegistrationId: "" }))
+      .toMatchObject({ ok: false });
+    expect(parseActiveRegistration({
+      ...base.value,
+      quickRegistrationTimestamp: 1_699_999_000_000,
+    })).toMatchObject({ ok: false });
+    expect(parseActiveRegistration({
+      ...base.value,
+      quickRegistrationId: "quick-123",
+      quickRegistrationTimestamp: 8_640_000_000_000_001,
+    })).toMatchObject({ ok: false });
+  });
+
   it.each([null, "", "null"])("treats %j as no active session", (raw) => {
     expect(parseActiveRegistration(raw)).toEqual({ ok: true, value: null, migrated: false });
   });
@@ -231,7 +260,7 @@ describe("parseActiveRegistration", () => {
     (acuteRisk, expected, expectedAlias) => {
       const migrated = parseActiveRegistration(legacySession("relapse", "/relapse", "label"));
       if (!migrated.ok || !migrated.value) throw new Error("Expected migration to succeed");
-      const draft = {
+      const draft: Record<string, unknown> = {
         ...(migrated.value.draft as Record<string, unknown>),
         acuteRisk,
       };
@@ -256,7 +285,7 @@ describe("parseActiveRegistration", () => {
 
     const base = parseActiveRegistration(legacySession("relapse", "/relapse", "label"));
     if (!base.ok || !base.value) throw new Error("Expected migration to succeed");
-    const draft = {
+    const draft: Record<string, unknown> = {
       ...(base.value.draft as Record<string, unknown>),
       acuteRisks: ["none"],
     };
@@ -275,7 +304,7 @@ describe("parseActiveRegistration", () => {
     const localOccurrence = new Date(
       occurrence.getTime() - occurrence.getTimezoneOffset() * 60_000,
     ).toISOString().slice(0, 16);
-    const draft = {
+    const draft: Record<string, unknown> = {
       ...(current.value.draft as Record<string, unknown>),
       label: "no-label",
       when: "just-now",

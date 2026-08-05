@@ -327,7 +327,7 @@ describe("canonical registration consumers", () => {
       answers: { intensity: 6 },
     };
     const migrated = migrateCravingRegistrationType(record);
-    expect(migrated.answers.registrationType).toBe("trek");
+    expect((migrated.answers as Record<string, unknown>).registrationType).toBe("trek");
     expect(record.answers).not.toHaveProperty("registrationType");
 
     const stats = computeCravingStats([{

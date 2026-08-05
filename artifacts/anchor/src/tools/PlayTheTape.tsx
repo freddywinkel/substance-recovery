@@ -3,6 +3,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { useLocation } from "wouter";
 import { useT } from "@/hooks/useTranslation";
 import { CheckCircle2, ArrowRight } from "lucide-react";
+import { ToolFollowUpButton } from "@/components/ToolFollowUpButton";
 
 export function PlayTheTape() {
   const { t } = useT();
@@ -60,6 +61,10 @@ export function PlayTheTape() {
           <CheckCircle2 size={56} strokeWidth={1.5} className="text-primary" />
           <h2 className="text-2xl font-semibold">{t("tape.done_title")}</h2>
           <p className="text-muted-foreground leading-relaxed max-w-xs">{t("tape.done_body")}</p>
+          <ToolFollowUpButton
+            toolId="/tools/tape"
+            toolLabel={t("tape.title")}
+          />
           <button
             onClick={() => navigate("/")}
             className="mt-4 bg-primary text-primary-foreground rounded-2xl px-8 py-3 font-semibold touch-target hover:opacity-90 active:scale-95 transition-all"

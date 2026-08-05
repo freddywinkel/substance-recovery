@@ -26,8 +26,11 @@ import {
   type TimeRange,
 } from "@/lib/analytics";
 import { buildImpactInsights } from "@/lib/impactInsights";
+import { useRecoveryFeatures } from "@/contexts/RecoveryFeaturesContext";
 import { logicalTimestamp } from "@/lib/registrationIds";
 import { BarChart3, TrendingUp } from "lucide-react";
+import { Link } from "wouter";
+import { recoveryToolLabel, type RecoveryToolId } from "@/lib/recoveryFeatures";
 
 function StatCard({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
   return (
@@ -89,6 +92,7 @@ export function Insights() {
     loading,
   } = useStore();
   const { t, tOpt, language } = useT();
+  const { recoveryActions, toolFollowUps } = useRecoveryFeatures();
   const [range, setRange] = useState<TimeRange>("30d");
 
   const currentStreak = useMemo(() => {
@@ -169,6 +173,25 @@ export function Insights() {
     [anxietyLogs, boredomLogs, cravingLogs, relapseLogs, range],
   );
 
+  const toolOutcomeSummaries = useMemo(() => {
+    const groups = new Map<RecoveryToolId, { total: number; improved: number }>();
+    for (const followUp of filterByRange(toolFollowUps, range)) {
+      if (
+        followUp.status !== "completed"
+        || followUp.attempted !== true
+        || followUp.feelingBefore === null
+        || followUp.feelingAfter === null
+      ) continue;
+      const current = groups.get(followUp.toolId) ?? { total: 0, improved: 0 };
+      current.total += 1;
+      if (followUp.feelingAfter < followUp.feelingBefore) current.improved += 1;
+      groups.set(followUp.toolId, current);
+    }
+    return [...groups.entries()]
+      .map(([toolId, summary]) => ({ toolId, ...summary }))
+      .sort((left, right) => right.total - left.total || left.toolId.localeCompare(right.toolId));
+  }, [range, toolFollowUps]);
+
   if (loading) {
     return (
       <div role="status" className="flex items-center justify-center min-h-dvh">
@@ -237,6 +260,31 @@ export function Insights() {
                 </div>
               ))
             )}
+
+            {toolOutcomeSummaries.length > 0 && (
+              <section className="rounded-[1.5rem] border border-border/50 bg-card/50 p-4">
+                <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                  {language === "nl" ? "Gerapporteerde check-ins na hulpmiddelen" : "Reported check-ins after tools"}
+                </p>
+                <div className="mt-3 flex flex-col gap-3">
+                  {toolOutcomeSummaries.map((summary) => (
+                    <div key={summary.toolId} className="rounded-2xl border border-border/50 bg-background/40 p-3">
+                      <p className="text-sm font-semibold text-foreground">{recoveryToolLabel(summary.toolId, language)}</p>
+                      <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                        {language === "nl"
+                          ? `In ${summary.improved} van ${summary.total} check-ins rapporteerde je later een lagere score.`
+                          : `In ${summary.improved} of ${summary.total} check-ins, you later reported a lower score.`}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+                <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">
+                  {language === "nl"
+                    ? "Dit beschrijft jouw antwoorden en bewijst niet waardoor een verandering kwam."
+                    : "This describes your reports and does not show what caused a change."}
+                </p>
+              </section>
+            )}
           </TabsContent>
 
           <TabsContent value="patterns" className="mt-3 flex flex-col gap-4">
@@ -256,7 +304,19 @@ export function Insights() {
               <StatCard label={t("progress.stat.avg_intensity")} value={cStats.avgIntensity?.toFixed(1) ?? "-"} sub={t("progress.stat.avg_intensity_sub")} />
               <StatCard label={t("progress.stat.anxiety")} value={aStats.total} sub={t("progress.stat.in_period")} />
               <StatCard label={t("progress.stat.boredom")} value={bStats.total} sub={t("progress.stat.in_period")} />
+              <StatCard
+                label={language === "nl" ? "Steunende acties" : "Supportive actions"}
+                value={filterByRange(recoveryActions, range).length}
+                sub={t("progress.stat.in_period")}
+              />
             </div>
+
+            <Link href="/weekly-review" asChild>
+              <a className="flex min-h-12 items-center justify-between rounded-2xl border border-primary/25 bg-primary/10 px-4 py-3 text-sm font-semibold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50">
+                <span>{language === "nl" ? "Start de begeleide wekelijkse terugblik" : "Start the guided weekly review"}</span>
+                <span className="text-primary" aria-hidden="true">→</span>
+              </a>
+            </Link>
 
             <div className="rounded-[1.5rem] border border-border/50 bg-card/50 p-4">
               <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground mb-3">{t("progress.section.checkins")}</p>

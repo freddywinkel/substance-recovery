@@ -3,6 +3,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { useLocation } from "wouter";
 import { useT } from "@/hooks/useTranslation";
 import { Shuffle, CheckCircle2 } from "lucide-react";
+import { ToolFollowUpButton } from "@/components/ToolFollowUpButton";
 
 function shuffle<T>(arr: T[]): T[] {
   return [...arr].sort(() => Math.random() - 0.5);
@@ -40,6 +41,10 @@ export function Distraction() {
           <CheckCircle2 size={56} strokeWidth={1.5} className="text-primary" />
           <h2 className="text-2xl font-semibold">{t("dist.done_title")}</h2>
           <p className="text-muted-foreground leading-relaxed max-w-xs">{t("dist.done_body")}</p>
+          <ToolFollowUpButton
+            toolId="/tools/distraction"
+            toolLabel={t("dist.title")}
+          />
           <button
             onClick={() => navigate("/")}
             className="mt-4 bg-primary text-primary-foreground rounded-2xl px-8 py-3 font-semibold touch-target hover:opacity-90 active:scale-95 transition-all"

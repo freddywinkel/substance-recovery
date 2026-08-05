@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { PageHeader } from "@/components/PageHeader";
 import { useT } from "@/hooks/useTranslation";
 import { Play, Pause, RotateCcw } from "lucide-react";
+import { ToolFollowUpButton } from "@/components/ToolFollowUpButton";
 
 type Phase = "inhale" | "hold1" | "exhale" | "hold2";
 
@@ -142,6 +143,13 @@ export function BoxBreathing() {
             {t("breath.tip")}
           </p>
         </div>
+
+        {cycles > 0 && (
+          <ToolFollowUpButton
+            toolId="/tools/breathing"
+            toolLabel={t("breath.title")}
+          />
+        )}
       </div>
     </div>
   );

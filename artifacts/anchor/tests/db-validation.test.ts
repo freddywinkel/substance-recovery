@@ -15,6 +15,7 @@ function backup(overrides: Record<string, unknown> = {}) {
     anxietyLogs: [],
     boredomLogs: [],
     settings: [],
+    featureRecords: [],
     ...overrides,
   };
 }
@@ -298,26 +299,28 @@ describe("validateImportedStoreRecord", () => {
         dataVersion: 3,
         contentVersion: "registration-v3",
         cravingType: "passive",
-        answers: cravingV3Answers("craving"),
+        answers: { ...cravingV3Answers("craving"), quickRegistrationId: "q-craving" },
       })],
       ["cravingLogs", cravingRecord({
         dataVersion: 3,
         contentVersion: "registration-v3",
         cravingType: "active",
         needType: "",
-        answers: cravingV3Answers("trek"),
+        answers: { ...cravingV3Answers("trek"), quickRegistrationId: "q-trek" },
       })],
       ["anxietyLogs", anxietyRecord({
         dataVersion: 3,
         contentVersion: "registration-v3",
-        answers: anxietyV3Answers(),
+        answers: { ...anxietyV3Answers(), quickRegistrationId: "q-anxiety" },
       })],
       ["boredomLogs", boredomRecord({
         dataVersion: 3,
         contentVersion: "registration-v3",
-        answers: boredomV3Answers(),
+        answers: { ...boredomV3Answers(), quickRegistrationId: "q-boredom" },
       })],
-      ["relapseLogs", relapseV3Record()],
+      ["relapseLogs", relapseV3Record({
+        answers: relapseV3Answers({ quickRegistrationId: "q-relapse" }),
+      })],
     ] as const;
 
     for (const [store, record] of records) {
@@ -611,7 +614,7 @@ describe("validateImportedStoreRecord", () => {
       },
     });
     expect(legacy).not.toHaveProperty("acuteRisks");
-    expect(legacy.answers).toEqual({ acuteRisk: "withdrawal" });
+    expect((legacy as Record<string, unknown>).answers).toEqual({ acuteRisk: "withdrawal" });
   });
 
   it("treats a singular legacy none as unanswered but preserves canonical none", () => {
@@ -1048,5 +1051,16 @@ describe("validateImportedStoreRecord", () => {
     ["cigaretteLogs", { id: "", timestamp: 0 }, "id must be a non-empty string"],
   ] as const)("rejects malformed %s records", (key, value, error) => {
     expect(validateImportedStoreRecord(key as ImportStoreKey, value)).toEqual({ ok: false, error });
+  });
+
+  it("rejects timestamps outside JavaScript's supported Date range", () => {
+    expect(validateImportedStoreRecord("cravingLogs", cravingRecord({
+      timestamp: 8_640_000_000_000_001,
+      occurredAt: 8_640_000_000_000_001,
+    }))).toMatchObject({ ok: false });
+    expect(validateImportedStoreRecord("cigaretteLogs", {
+      id: "future-cigarette",
+      timestamp: 8_640_000_000_000_001,
+    })).toMatchObject({ ok: false });
   });
 });

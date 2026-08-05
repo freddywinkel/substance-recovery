@@ -3,6 +3,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { LanguageProvider } from "@/contexts/LanguageContext";
 import { ActiveRegistrationProvider } from "@/contexts/ActiveRegistrationContext";
 import { RegistrationLauncherProvider } from "@/contexts/RegistrationLauncherContext";
+import { RecoveryFeaturesProvider } from "@/contexts/RecoveryFeaturesContext";
 import { useT } from "@/hooks/useTranslation";
 import { BottomNav } from "@/components/BottomNav";
 import { PwaUpdatePrompt } from "@/components/PwaUpdatePrompt";
@@ -22,6 +23,12 @@ import { Registraties } from "@/pages/Registraties";
 import { Insights } from "@/pages/Insights";
 import { Settings } from "@/pages/Settings";
 import { More } from "@/pages/More";
+import { QuickRegistration } from "@/pages/QuickRegistration";
+import { RecoveryPlan } from "@/pages/RecoveryPlan";
+import { HomeCustomization } from "@/pages/HomeCustomization";
+import { RecoveryActions } from "@/pages/RecoveryActions";
+import { WeeklyReview } from "@/pages/WeeklyReview";
+import { ReportBuilder } from "@/pages/ReportBuilder";
 import { CravingTracker } from "@/pages/CravingTracker";
 import { RelapseLog } from "@/pages/RelapseLog";
 import { AnxietyTracker } from "@/pages/AnxietyTracker";
@@ -54,6 +61,12 @@ function AppRoutes() {
     <Switch>
       <Route path="/" component={Home} />
       <Route path="/help" component={CrisisNow} />
+      <Route path="/quick" component={QuickRegistration} />
+      <Route path="/recovery-plan" component={RecoveryPlan} />
+      <Route path="/home-customization" component={HomeCustomization} />
+      <Route path="/actions" component={RecoveryActions} />
+      <Route path="/weekly-review" component={WeeklyReview} />
+      <Route path="/report" component={ReportBuilder} />
       <Route path="/trek" component={TrekTracker} />
       <Route path="/craving" component={CravingTracker} />
       <Route path="/relapse" component={RelapseLog} />
@@ -106,9 +119,11 @@ function AppShell() {
 
 function OfflineAppShell() {
   return (
-    <ActiveRegistrationProvider>
-      <AppShell />
-    </ActiveRegistrationProvider>
+    <RecoveryFeaturesProvider>
+      <ActiveRegistrationProvider>
+        <AppShell />
+      </ActiveRegistrationProvider>
+    </RecoveryFeaturesProvider>
   );
 }
 

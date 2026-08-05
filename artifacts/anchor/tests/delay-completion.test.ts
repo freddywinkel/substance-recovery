@@ -19,7 +19,7 @@ const boredomLog = {
 
 describe("Boredom delay completion", () => {
   it("records a start without claiming completion", () => {
-    const opened = beginBoredomDelay({ action: "Delayed action" }, 1_000);
+    const opened = beginBoredomDelay({ action: "Delayed action", delayTimerStartedAt: null }, 1_000);
     expect(opened).toEqual({ action: "Delayed action", delayTimerStartedAt: 1_000, delayDuration: null });
     expect(withCompletedBoredomDelay(boredomLog, 600)).toMatchObject({
       delayDuration: "600 seconds",

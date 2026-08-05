@@ -5,6 +5,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { useT } from "@/hooks/useTranslation";
 import { PageHeader } from "@/components/PageHeader";
 import { useActiveRegistration } from "@/contexts/ActiveRegistrationContext";
+import { useRecoveryFeatures } from "@/contexts/RecoveryFeaturesContext";
 import { useToast } from "@/hooks/use-toast";
 import {
   Moon, Sun, Download, Trash2, Shield, Calendar,
@@ -29,6 +30,7 @@ export function Settings() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const { resetSessions } = useActiveRegistration();
+  const { refresh: refreshRecoveryFeatures } = useRecoveryFeatures();
 
   const [confirmReset, setConfirmReset] = useState(false);
   const [dateInput, setDateInput] = useState(sobrietyStartDate ?? "");
@@ -126,8 +128,9 @@ export function Settings() {
         if (
           !payload ||
           typeof payload !== "object" ||
-          payload.version !== 1 ||
+          (payload.version !== 1 && payload.version !== 2) ||
           !requiredArrays.every((key) => Array.isArray(payload[key]))
+          || (payload.version === 2 && !Array.isArray(payload.featureRecords))
         ) {
           setImportStatus("error");
           setImportMessage(t("import.error"));
@@ -157,6 +160,12 @@ export function Settings() {
     setImportConfirm(false);
     try {
       const result = await importData(pendingImport);
+      try {
+        localStorage.removeItem("anchor-pinned-tools");
+      } catch {
+        // Imported IndexedDB settings remain authoritative.
+      }
+      await refreshRecoveryFeatures();
       const partial = result.skipped > 0 || result.errors.length > 0;
       setImportStatus(partial ? "error" : "success");
       setImportMessage(
@@ -176,8 +185,10 @@ export function Settings() {
         variant: partial ? "destructive" : undefined,
       });
       setPendingImport(null);
-      if (!partial) setTimeout(() => window.location.reload(), 800);
-      else setTimeout(() => setImportStatus("idle"), 5000);
+      // A reload rehydrates every provider, including language and active or
+      // suspended registration drafts. This is required after partial imports
+      // too: successfully restored settings must not remain stale in memory.
+      setTimeout(() => window.location.reload(), partial ? 2500 : 800);
     } catch {
       setImportStatus("error");
       setImportMessage(t("import.error"));

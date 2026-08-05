@@ -111,13 +111,16 @@ describe("registration safety copy", () => {
 
     expect(trackerSource).toContain("dataVersion: CURRENT_REGISTRATION_DATA_VERSION");
     expect(trackerSource).toContain("contentVersion: CURRENT_REGISTRATION_CONTENT_VERSION");
-    const expectedWriter = tracker === "RelapseLog"
-      ? "answers: buildRelapseAnswers"
+    const builder = tracker === "RelapseLog"
+      ? "buildRelapseAnswers"
       : tracker === "CravingTracker"
-        ? "answers: buildCravingAnswers"
+        ? "buildCravingAnswers"
         : tracker === "TrekTracker"
-          ? "answers: buildTrekAnswers"
-          : "answers: {";
-    expect(trackerSource).toContain(expectedWriter);
+          ? "buildTrekAnswers"
+          : tracker === "AnxietyTracker"
+            ? "buildAnxietyAnswers"
+            : "buildBoredomAnswers";
+    expect(trackerSource).toContain(`...${builder}`);
+    expect(trackerSource).toContain("quickRegistrationId: reg.session?.quickRegistrationId ?? null");
   });
 });

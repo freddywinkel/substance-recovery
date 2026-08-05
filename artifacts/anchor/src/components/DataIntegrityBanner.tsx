@@ -5,6 +5,7 @@ import {
   useLogIntegrityStatus,
 } from "@/hooks/useLogs";
 import { useT } from "@/hooks/useTranslation";
+import { useRecoveryFeatures } from "@/contexts/RecoveryFeaturesContext";
 
 /**
  * Global, persistent warning for log reads that failed. A committed-write
@@ -13,9 +14,10 @@ import { useT } from "@/hooks/useTranslation";
  */
 export function DataIntegrityBanner() {
   const { loadError, readbackIssue } = useLogIntegrityStatus();
+  const { loadError: featureLoadError, refresh: refreshRecoveryFeatures } = useRecoveryFeatures();
   const { t } = useT();
   const [retrying, setRetrying] = useState(false);
-  const visible = loadError !== null || readbackIssue !== null;
+  const visible = loadError !== null || featureLoadError !== null || readbackIssue !== null;
 
   useEffect(() => {
     const root = document.documentElement;
@@ -36,7 +38,7 @@ export function DataIntegrityBanner() {
     if (retrying) return;
     setRetrying(true);
     try {
-      await retryLogIntegrityChecks();
+      await Promise.all([retryLogIntegrityChecks(), refreshRecoveryFeatures()]);
     } finally {
       setRetrying(false);
     }
@@ -54,7 +56,7 @@ export function DataIntegrityBanner() {
       <div className="mx-auto flex min-h-16 w-full max-w-lg items-center gap-3 rounded-2xl border border-destructive/40 bg-card px-3 py-2.5 shadow-xl">
         <Database className="shrink-0 text-destructive" size={19} aria-hidden="true" />
         <p className="min-w-0 flex-1 text-xs font-medium leading-5 text-foreground">
-          {loadError
+          {loadError || featureLoadError
             ? t("data.warning.read_failed")
             : t("data.warning.readback_failed")}
         </p>

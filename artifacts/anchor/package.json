@@ -8,7 +8,8 @@
     "build": "vite build --config vite.config.ts",
     "serve": "vite preview --config vite.config.ts --host 0.0.0.0",
     "test": "vitest run --config vitest.config.ts",
-    "typecheck": "node ../../node_modules/typescript/lib/tsc.js -p tsconfig.json --noEmit"
+    "typecheck": "node ../../node_modules/typescript/lib/tsc.js -p tsconfig.json --noEmit",
+    "typecheck:tests": "node ../../node_modules/typescript/lib/tsc.js -p tsconfig.tests.json --noEmit"
   },
   "devDependencies": {
     "@radix-ui/react-accordion": "^1.2.4",

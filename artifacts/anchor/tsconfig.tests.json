@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.json",
+  "include": ["src/**/*", "tests/**/*"],
+  "exclude": ["node_modules", "build", "dist"],
+  "compilerOptions": {
+    "noEmit": true,
+    "types": ["node", "vite/client", "vite-plugin-pwa/react", "vitest/globals"]
+  }
+}

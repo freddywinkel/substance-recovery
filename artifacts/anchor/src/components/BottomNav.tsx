@@ -47,6 +47,11 @@ export function BottomNav() {
       label: t("nav.more"),
       match: (path) =>
         path.startsWith("/more") ||
+        path.startsWith("/recovery-plan") ||
+        path.startsWith("/home-customization") ||
+        path.startsWith("/actions") ||
+        path.startsWith("/weekly-review") ||
+        path.startsWith("/report") ||
         path.startsWith("/journal") ||
         path.startsWith("/insights") ||
         path.startsWith("/settings") ||
