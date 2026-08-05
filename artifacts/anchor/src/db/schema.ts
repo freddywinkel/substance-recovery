@@ -9,6 +9,7 @@ import {
 import { migrateRelapseSafetyRecord } from "./relapseSafety";
 import { normalizeRelapseTimingRecord } from "./relapseTiming";
 import { migrateCompletedTrekRecord } from "@/lib/trekMigration";
+import type { FeatureRecord } from "@/lib/recoveryFeatures";
 import type { AcuteRisk, AcuteRiskSelection } from "./relapseSafety";
 
 export type {
@@ -373,6 +374,11 @@ interface AnchorDB extends DBSchema {
     value: CigaretteLog;
     indexes: { byTimestamp: number };
   };
+  featureRecords: {
+    key: string;
+    value: FeatureRecord;
+    indexes: { byTimestamp: number; byRecordType: FeatureRecord["recordType"] };
+  };
   // Local-only sync bookkeeping (v5). Never affects offline behaviour.
   syncMeta: {
     key: string;
@@ -389,7 +395,7 @@ let dbInstance: IDBPDatabase<AnchorDB> | null = null;
 export async function getDB(): Promise<IDBPDatabase<AnchorDB>> {
   if (dbInstance) return dbInstance;
 
-  dbInstance = await openDB<AnchorDB>("anchor-recovery", 8, {
+  dbInstance = await openDB<AnchorDB>("anchor-recovery", 9, {
     upgrade(db, oldVersion, _newVersion, tx) {
       if (oldVersion < 1) {
         const journalStore = db.createObjectStore("journal", { keyPath: "id" });
@@ -511,6 +517,13 @@ export async function getDB(): Promise<IDBPDatabase<AnchorDB>> {
           ));
           return cursor.continue().then(migrateCravingCursor);
         });
+      }
+      // v9 — offline-only records for quick registrations, supportive actions,
+      // timed follow-ups and saved weekly plans. Existing stores are untouched.
+      if (oldVersion < 9 && !db.objectStoreNames.contains("featureRecords")) {
+        const records = db.createObjectStore("featureRecords", { keyPath: "id" });
+        records.createIndex("byTimestamp", "timestamp");
+        records.createIndex("byRecordType", "recordType");
       }
     },
   });

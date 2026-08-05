@@ -23,6 +23,7 @@ import { AlertTriangle, CheckCircle2, Zap, ChevronDown, ChevronUp, Info } from "
 import { useToast } from "@/hooks/use-toast";
 import { removeHiddenOtherText, toStableOptionId, toStableOptionIds } from "@/lib/registrationIds";
 import { getSubstanceSafetyWarnings, getUrgentSafetyCopy } from "@/lib/registrationSafety";
+import { useRecoveryFeatures } from "@/contexts/RecoveryFeaturesContext";
 
 // ── Step type ────────────────────────────────────────────────
 type Step = "onset" | "trigger" | "inner" | "substance" | "action" | "outcome" | "done";
@@ -252,6 +253,7 @@ function RequiredMarker({ language }: { language: "en" | "nl" }) {
 
 // ── Main component ────────────────────────────────────────────
 export function CravingTracker() {
+  const { completeQuickReflection } = useRecoveryFeatures();
   const { step, setStep, draft, setDraft, reg } = useResumableDraft<Step, CravingDraft>({
     type: "craving",
     route: "/craving",
@@ -365,16 +367,20 @@ export function CravingTracker() {
     setSaving(true);
     const completedAt = Date.now();
     const startedAt = reg.session?.startedAt ?? completedAt;
+    const occurredAt = reg.session?.quickRegistrationTimestamp ?? startedAt;
     try {
       const saved = await logCraving({
         cravingType: "passive",
-        timestamp: startedAt,
-        occurredAt: startedAt,
+        timestamp: occurredAt,
+        occurredAt,
         startedAt,
         completedAt,
         dataVersion: CURRENT_REGISTRATION_DATA_VERSION,
         contentVersion: CURRENT_REGISTRATION_CONTENT_VERSION,
-        answers: buildCravingAnswers(draft),
+        answers: {
+          ...buildCravingAnswers(draft),
+          quickRegistrationId: reg.session?.quickRegistrationId ?? null,
+        },
         status: "completed",
         onsetType: draft.onsetType,
         intensity: draft.intensity,
@@ -415,6 +421,7 @@ export function CravingTracker() {
       setSavedLog(saved);
       reg.patchSession({ savedLogId: saved.id, step: "done" });
       setStep("done");
+      void completeQuickReflection(reg.session?.quickRegistrationId, "craving", saved.id).catch(() => undefined);
     } catch {
       toast({ title: t("common.save_error"), variant: "destructive" });
     } finally {

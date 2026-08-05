@@ -40,7 +40,11 @@ export function RegistrationLauncherProvider({ children }: { children: React.Rea
       if (focusable.length === 0) return;
       const first = focusable[0];
       const last = focusable[focusable.length - 1];
-      if (event.shiftKey && document.activeElement === first) {
+      const activeElement = document.activeElement;
+      if (!dialogRef.current.contains(activeElement)) {
+        event.preventDefault();
+        (event.shiftKey ? last : first).focus();
+      } else if (event.shiftKey && activeElement === first) {
         event.preventDefault();
         last.focus();
       } else if (!event.shiftKey && document.activeElement === last) {

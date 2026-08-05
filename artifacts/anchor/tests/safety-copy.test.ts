@@ -113,6 +113,14 @@ describe("support-tool safety copy", () => {
     expect(toolsPage).toContain('<Link href="/help"');
   });
 
+  it("routes urgent follow-up support to the registered crisis page", () => {
+    const followUpCard = readFileSync(resolve(__dirname, "../src/components/DeferredFollowUpCard.tsx"), "utf8");
+    const app = readFileSync(resolve(__dirname, "../src/App.tsx"), "utf8");
+    expect(followUpCard).toContain('<Link href="/help"');
+    expect(followUpCard).not.toContain('href="/crisis-now"');
+    expect(app).toContain('<Route path="/help" component={CrisisNow} />');
+  });
+
   it("does not present the cold-water exercise as universally safe or as treatment", () => {
     expect(getTranslation("en", "cold.intro_sub")).toContain("may not suit everyone");
     expect(getTranslation("nl", "cold.intro_sub")).toContain("niet voor iedereen geschikt");

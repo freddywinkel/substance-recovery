@@ -3,6 +3,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { useLocation } from "wouter";
 import { useT } from "@/hooks/useTranslation";
 import { Play, Pause, CheckCircle2 } from "lucide-react";
+import { ToolFollowUpButton } from "@/components/ToolFollowUpButton";
 
 const TOTAL_SECONDS = 900;
 
@@ -58,6 +59,10 @@ export function UrgeSurfing() {
           <CheckCircle2 size={56} strokeWidth={1.5} className="text-primary" />
           <h2 className="text-2xl font-semibold">{t("urge.done_title")}</h2>
           <p className="text-muted-foreground leading-relaxed max-w-xs">{t("urge.done_body")}</p>
+          <ToolFollowUpButton
+            toolId="/tools/urge-surfing"
+            toolLabel={t("urge.title")}
+          />
           <button
             onClick={() => navigate("/")}
             className="mt-4 bg-primary text-primary-foreground rounded-2xl px-8 py-3 font-semibold touch-target hover:opacity-90 active:scale-95 transition-all"

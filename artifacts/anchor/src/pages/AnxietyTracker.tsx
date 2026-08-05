@@ -16,6 +16,7 @@ import {
   CURRENT_REGISTRATION_DATA_VERSION,
 } from "@/db/migrations";
 import { useActiveRegistration } from "@/contexts/ActiveRegistrationContext";
+import { useRecoveryFeatures } from "@/contexts/RecoveryFeaturesContext";
 import { useT } from "@/hooks/useTranslation";
 import { toStableOptionId, toStableOptionIds } from "@/lib/registrationIds";
 import { getUrgentSafetyCopy, phoneHref } from "@/lib/registrationSafety";
@@ -270,6 +271,7 @@ interface AnxietyDraft {
 }
 
 export function AnxietyTracker() {
+  const { completeQuickReflection } = useRecoveryFeatures();
   const [, navigate] = useLocation();
   const {
     logAnxiety,
@@ -413,26 +415,30 @@ export function AnxietyTracker() {
     try {
       const completedAt = Date.now();
       const startedAt = reg.session?.startedAt ?? completedAt;
+      const occurredAt = reg.session?.quickRegistrationTimestamp ?? startedAt;
       const saved = await logAnxiety({
-        timestamp: startedAt,
-        occurredAt: startedAt,
+        timestamp: occurredAt,
+        occurredAt,
         startedAt,
         completedAt,
         dataVersion: CURRENT_REGISTRATION_DATA_VERSION,
         contentVersion: CURRENT_REGISTRATION_CONTENT_VERSION,
-        answers: buildAnxietyAnswers({
-          anxietyTypes,
-          intensity,
-          bodyLocations,
-          bodyPrediction,
-          urgencyHigh,
-          context,
-          triggers,
-          reassuranceSeeking,
-          linkedStates,
-          reaction,
-          note,
-        }),
+        answers: {
+          ...buildAnxietyAnswers({
+            anxietyTypes,
+            intensity,
+            bodyLocations,
+            bodyPrediction,
+            urgencyHigh,
+            context,
+            triggers,
+            reassuranceSeeking,
+            linkedStates,
+            reaction,
+            note,
+          }),
+          quickRegistrationId: reg.session?.quickRegistrationId ?? null,
+        },
         intensity,
         context,
         // The UI asks for multiple triggers/linked states and never asks the
@@ -455,6 +461,7 @@ export function AnxietyTracker() {
       setSavedLog(saved);
       reg.patchSession({ savedLogId: saved.id, step: "done", draft });
       setStep("done");
+      void completeQuickReflection(reg.session?.quickRegistrationId, "anxiety", saved.id).catch(() => undefined);
     } catch {
       setError(
         language === "nl"

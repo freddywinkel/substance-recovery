@@ -19,24 +19,29 @@ import {
 } from "lucide-react";
 
 function PinButton({ toolId, title }: { toolId: string; title: string }) {
-  const { t } = useT();
-  const { isPinned, togglePin } = usePinnedTools();
+  const { t, language } = useT();
+  const { isPinned, togglePin, limitReached } = usePinnedTools();
   const pinned = isPinned(toolId);
+  const disabled = !pinned && limitReached;
+  const pinLabel = disabled
+    ? (language === "nl" ? "Maximaal twee hulpmiddelen" : "Maximum of two tools")
+    : `${pinned ? t("tools.unpin") : t("tools.pin")}: ${title}`;
   return (
     <button
       type="button"
+      disabled={disabled}
       onClick={(e) => {
         e.preventDefault();
         e.stopPropagation();
         togglePin(toolId);
       }}
-      className={`rounded-xl p-2 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 ${
+      className={`rounded-xl p-2 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 disabled:cursor-not-allowed disabled:opacity-35 ${
         pinned
           ? "bg-amber-400/10 text-amber-300"
           : "text-muted-foreground hover:bg-muted/40 hover:text-foreground"
       }`}
-      aria-label={`${pinned ? t("tools.unpin") : t("tools.pin")}: ${title}`}
-      title={pinned ? t("tools.unpin") : t("tools.pin")}
+      aria-label={pinLabel}
+      title={pinLabel}
     >
       {pinned ? <Pin size={16} strokeWidth={2} /> : <PinOff size={16} strokeWidth={2} />}
     </button>

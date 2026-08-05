@@ -6,6 +6,7 @@ import { getBoredomLogs } from "@/db";
 import { useActiveRegistration } from "@/contexts/ActiveRegistrationContext";
 import { useStore } from "@/hooks/useStore";
 import { useT } from "@/hooks/useTranslation";
+import { ToolFollowUpButton } from "@/components/ToolFollowUpButton";
 import {
   DEFAULT_DELAY_DURATION_SECONDS,
   hasCompletedBoredomDelay,
@@ -234,7 +235,14 @@ export function DelayScreen() {
         )}
       </div>
 
-      <div className="px-6" style={{ paddingBottom: "calc(4rem + env(safe-area-inset-bottom) + var(--return-banner-h, 0px))" }}>
+      <div className="flex flex-col gap-3 px-6" style={{ paddingBottom: "calc(4rem + env(safe-area-inset-bottom) + var(--return-banner-h, 0px))" }}>
+        {done && (
+          <ToolFollowUpButton
+            toolId="/delay"
+            toolLabel={t("delay.title")}
+            className="mx-auto"
+          />
+        )}
         <button
           type="button"
           disabled={done && completionState === "saving"}

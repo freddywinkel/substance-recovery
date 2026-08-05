@@ -1,4 +1,11 @@
-import { useMemo, useState } from "react";
+import {
+  Children,
+  isValidElement,
+  type ReactElement,
+  type ReactNode,
+  useMemo,
+  useState,
+} from "react";
 import { Link, useLocation } from "wouter";
 import { useStore } from "@/hooks/useStore";
 import { useT } from "@/hooks/useTranslation";
@@ -15,10 +22,18 @@ import {
 } from "@/lib/analytics";
 import { CigaretteCounter } from "@/components/CigaretteCounter";
 import { CigaretteDayDrawer } from "@/components/CigaretteDayDrawer";
+import { DeferredFollowUpCard } from "@/components/DeferredFollowUpCard";
+import { useRecoveryFeatures } from "@/contexts/RecoveryFeaturesContext";
+import {
+  HOME_WIDGET_IDS,
+  localizedCallMessage,
+  type HomeWidgetId,
+} from "@/lib/recoveryFeatures";
+import { logicalTimestamp } from "@/lib/registrationIds";
 import {
   Wind, Eye, Droplets, Waves, Rewind, Heart, Shuffle,
   CalendarCheck, RotateCcw, Settings,
-  TrendingUp,
+  TrendingUp, SlidersHorizontal, Phone, MessageCircle, Zap, Sparkles,
 } from "lucide-react";
 
 const TOOL_META: Record<string, { icon: typeof Wind; labelKey: string; to: string }> = {
@@ -39,6 +54,51 @@ const RESUME_LABEL_KEYS: Record<string, string> = {
   relapse: "relapse.title",
 };
 
+type HomeWidgetSlotProps = {
+  id: HomeWidgetId;
+  children: ReactNode;
+};
+
+function HomeWidgetSlot({ children }: HomeWidgetSlotProps) {
+  return <>{children}</>;
+}
+
+export function orderHomeWidgetIds(
+  preferredOrder: readonly HomeWidgetId[],
+  urgentFollowUpFirst: boolean,
+): HomeWidgetId[] {
+  const ordered = [
+    ...new Set(preferredOrder.filter((id) => HOME_WIDGET_IDS.includes(id))),
+    ...HOME_WIDGET_IDS.filter((id) => !preferredOrder.includes(id)),
+  ];
+  return urgentFollowUpFirst
+    ? ["follow-ups", ...ordered.filter((id) => id !== "follow-ups")]
+    : ordered;
+}
+
+function OrderedHomeWidgets({
+  preferredOrder,
+  urgentFollowUpFirst,
+  children,
+}: {
+  preferredOrder: readonly HomeWidgetId[];
+  urgentFollowUpFirst: boolean;
+  children: ReactNode;
+}) {
+  const widgets = new Map<HomeWidgetId, ReactElement<HomeWidgetSlotProps>>();
+  Children.forEach(children, (child) => {
+    if (isValidElement<HomeWidgetSlotProps>(child)) widgets.set(child.props.id, child);
+  });
+
+  return (
+    <>
+      {orderHomeWidgetIds(preferredOrder, urgentFollowUpFirst).map(
+        (id) => widgets.get(id) ?? null,
+      )}
+    </>
+  );
+}
+
 function milestoneLabel(days: number, t: (key: string) => string): string {
   if (days >= 365 * 2) return t("home.milestone.years").replace("{n}", String(Math.floor(days / 365)));
   if (days >= 365) return t("home.milestone.1year");
@@ -52,12 +112,18 @@ function milestoneLabel(days: number, t: (key: string) => string): string {
 }
 
 export function Home() {
-  const { cravingLogs, relapseLogs, anxietyLogs, boredomLogs, sobrietyStartDate, loading, cigaretteLogs, logCigarette, updateCigarette, removeCigarette } = useStore();
+  const { cravingLogs, relapseLogs, anxietyLogs, boredomLogs, sobrietyStartDate, loading, cigaretteLogs, logCigarette, updateCigarette, removeCigarette, emergencyContacts } = useStore();
   const { t, language } = useT();
   const { session, discardSession } = useActiveRegistration();
   const [, navigate] = useLocation();
   const { pinned } = usePinnedTools();
   const { openRegistrationLauncher } = useRegistrationLauncher();
+  const {
+    homePreferences,
+    recoveryPlan,
+    quickRegistrations,
+    recoveryActions,
+  } = useRecoveryFeatures();
   const todaysQuote = useMemo(() => getTodaysQuote(language), [language]);
   const [cigaretteDrawerOpen, setCigaretteDrawerOpen] = useState(false);
   const completedCravingLogs = useMemo(() => completedStatusEntries(cravingLogs), [cravingLogs]);
@@ -98,6 +164,29 @@ export function Home() {
     [anxietyLogs, boredomLogs, completedCravingLogs, completedRelapseLogs],
   );
 
+  const pinnedContact = emergencyContacts.find((contact) => contact.id === homePreferences.pinnedContactId) ?? null;
+  const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+  const supportiveActionsThisWeek = useMemo(() => {
+    const detailed = [
+      ...completedCravingLogs,
+      ...completedRelapseLogs,
+      ...anxietyLogs,
+      ...boredomLogs,
+    ].filter((entry) => logicalTimestamp(entry) >= sevenDaysAgo).length;
+    const quick = quickRegistrations.filter(
+      (entry) => entry.timestamp >= sevenDaysAgo && !entry.linkedDetailedRecordId,
+    ).length;
+    const actions = recoveryActions.filter((entry) => entry.timestamp >= sevenDaysAgo).length;
+    return detailed + quick + actions;
+  }, [anxietyLogs, boredomLogs, completedCravingLogs, completedRelapseLogs, quickRegistrations, recoveryActions, sevenDaysAgo]);
+
+  const isWidgetVisible = (id: HomeWidgetId) => !homePreferences.hiddenWidgets.includes(id);
+  const urgentFollowUpFirst = quickRegistrations.some(
+    (record) =>
+      record.immediateSafety === "urgent-danger"
+      && (record.reflectionStatus === "pending" || record.reflectionStatus === "started"),
+  );
+
   if (loading) {
     return (
       <div role="status" className="flex items-center justify-center min-h-dvh">
@@ -117,9 +206,18 @@ export function Home() {
           <h1 className="text-2xl font-semibold text-foreground leading-snug tracking-[-0.03em]">{timeGreeting()}</h1>
           <p className="text-muted-foreground text-sm mt-0.5">{t("home.private")}</p>
         </div>
-        <button onClick={() => navigate("/settings")} className="shrink-0 mt-0.5 p-2 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors touch-target focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50" aria-label={t("nav.settings")}>
-          <Settings size={20} strokeWidth={1.8} />
-        </button>
+        <div className="mt-0.5 flex shrink-0 items-center gap-1">
+          <button
+            onClick={() => navigate("/home-customization")}
+            className="rounded-full p-2 text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground touch-target focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+            aria-label={language === "nl" ? "Thuis aanpassen" : "Edit Home"}
+          >
+            <SlidersHorizontal size={20} strokeWidth={1.8} />
+          </button>
+          <button onClick={() => navigate("/settings")} className="rounded-full p-2 text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground touch-target focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50" aria-label={t("nav.settings")}>
+            <Settings size={20} strokeWidth={1.8} />
+          </button>
+        </div>
       </header>
 
       <div className="flex-1 overflow-y-auto scroll-smooth-ios px-4 flex flex-col gap-4 pb-safe">
@@ -148,8 +246,16 @@ export function Home() {
           </section>
         )}
 
+        <OrderedHomeWidgets
+          preferredOrder={homePreferences.widgetOrder}
+          urgentFollowUpFirst={urgentFollowUpFirst}
+        >
+
         {/* Sobriety streak hero */}
-        {sobriety ? (
+        <HomeWidgetSlot key="sobriety" id="sobriety">
+        {isWidgetVisible("sobriety") && (
+          <div>
+          {sobriety ? (
           <section aria-label={t("home.streak_label")} className="animate-fade-up">
             <div className="relative overflow-hidden rounded-[2rem] border border-border/50 bg-gradient-to-br from-card/90 via-card/80 to-card/60 p-6 shadow-xl shadow-black/20">
               <div className="absolute -top-24 -right-20 h-48 w-48 rounded-full bg-primary/10 blur-3xl" />
@@ -208,22 +314,62 @@ export function Home() {
               </a>
             </Link>
           </section>
+          )}
+          </div>
         )}
+        </HomeWidgetSlot>
+
+        <HomeWidgetSlot key="quick-registration" id="quick-registration">
+        {isWidgetVisible("quick-registration") && (
+          <section aria-label={language === "nl" ? "Snelle registratie" : "Quick registration"} className="animate-fade-up">
+            <button
+              type="button"
+              onClick={() => navigate("/quick")}
+              className="flex w-full items-center gap-3 rounded-[1.5rem] border border-primary/30 bg-primary/10 p-4 text-left transition-all hover:bg-primary/15 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+            >
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary text-primary-foreground">
+                <Zap size={21} strokeWidth={2.1} />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-semibold text-foreground">
+                  {language === "nl" ? "Snelle registratie" : "Quick registration"}
+                </span>
+                <span className="mt-0.5 block text-xs leading-relaxed text-muted-foreground">
+                  {language === "nl" ? "Leg in ongeveer 20 seconden vast wat nu belangrijk is." : "Capture what matters in about 20 seconds."}
+                </span>
+              </span>
+              <span className="text-primary" aria-hidden="true">→</span>
+            </button>
+          </section>
+        )}
+        </HomeWidgetSlot>
+
+        <HomeWidgetSlot key="follow-ups" id="follow-ups">
+          <DeferredFollowUpCard />
+        </HomeWidgetSlot>
 
         {/* Cigarette counter */}
-        <CigaretteCounter logs={cigaretteLogs} onLog={() => logCigarette({ timestamp: Date.now() })} onOpenDrawer={() => setCigaretteDrawerOpen(true)} />
+        <HomeWidgetSlot key="cigarettes" id="cigarettes">
+        {isWidgetVisible("cigarettes") && (
+          <div>
+            <CigaretteCounter logs={cigaretteLogs} onLog={() => logCigarette({ timestamp: Date.now() })} onOpenDrawer={() => setCigaretteDrawerOpen(true)} />
 
-        <CigaretteDayDrawer
-          logs={cigaretteLogs}
-          dayStart={new Date().setHours(0, 0, 0, 0)}
-          open={cigaretteDrawerOpen}
-          onOpenChange={setCigaretteDrawerOpen}
-          onUpdate={updateCigarette}
-          onRemove={removeCigarette}
-          onAdd={logCigarette}
-        />
+            <CigaretteDayDrawer
+              logs={cigaretteLogs}
+              dayStart={new Date().setHours(0, 0, 0, 0)}
+              open={cigaretteDrawerOpen}
+              onOpenChange={setCigaretteDrawerOpen}
+              onUpdate={updateCigarette}
+              onRemove={removeCigarette}
+              onAdd={logCigarette}
+            />
+          </div>
+        )}
+        </HomeWidgetSlot>
 
         {/* Neutral completed-registration activity */}
+        <HomeWidgetSlot key="registration-activity" id="registration-activity">
+        {isWidgetVisible("registration-activity") && (
         <section aria-label={t("home.activity.label")} className="animate-fade-up">
           <div className="rounded-[1.5rem] border border-border/50 bg-card/50 p-4">
             <div className="flex items-center gap-2">
@@ -257,9 +403,44 @@ export function Home() {
             </button>
           </div>
         </section>
+        )}
+        </HomeWidgetSlot>
 
+        <HomeWidgetSlot key="supportive-progress" id="supportive-progress">
+        {isWidgetVisible("supportive-progress") && (
+          <section aria-label={language === "nl" ? "Steunende vooruitgang" : "Supportive progress"} className="animate-fade-up">
+            <Link href="/actions" asChild>
+              <a className="block rounded-[1.5rem] border border-emerald-500/20 bg-emerald-500/5 p-4 transition-all hover:bg-emerald-500/10 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/50">
+                <div className="flex items-start gap-3">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-400">
+                    <Sparkles size={19} strokeWidth={1.9} />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                      {language === "nl" ? "Ondersteunende vooruitgang" : "Supportive progress"}
+                    </span>
+                    <span className="mt-1 block text-2xl font-semibold tabular-nums text-foreground">
+                      {supportiveActionsThisWeek}
+                    </span>
+                    <span className="mt-1 block text-xs leading-relaxed text-muted-foreground">
+                      {language === "nl"
+                        ? "Registraties en ondersteunende acties in de afgelopen 7 dagen."
+                        : "Registrations and supportive actions during the past 7 days."}
+                    </span>
+                    <span className="mt-2 block text-xs font-medium text-primary">
+                      {language === "nl" ? "Actie vastleggen of bekijken →" : "Record or view an action →"}
+                    </span>
+                  </span>
+                </div>
+              </a>
+            </Link>
+          </section>
+        )}
+        </HomeWidgetSlot>
+
+        <HomeWidgetSlot key="top-insight" id="top-insight">
         {topImpactInsight && (
-          <section aria-label={t("home.top_insight.label")} className="animate-fade-up">
+          isWidgetVisible("top-insight") && <section aria-label={t("home.top_insight.label")} className="animate-fade-up">
             <Link href="/insights" asChild>
               <a className="block rounded-[1.5rem] border border-border/50 bg-card/50 p-4 transition-all duration-300 hover:bg-card/70 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50">
                 <div className="flex items-start justify-between gap-3">
@@ -290,17 +471,57 @@ export function Home() {
             </Link>
           </section>
         )}
+        </HomeWidgetSlot>
 
         {/* Daily recovery insight */}
+        <HomeWidgetSlot key="daily-anchor" id="daily-anchor">
+        {isWidgetVisible("daily-anchor") && (
         <section aria-label={t("home.insight.label")} className="animate-fade-up">
           <div className="rounded-[1.5rem] border border-border/50 bg-card/50 p-4">
             <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">{t("home.insight.label")}</p>
             <p className="mt-2 text-sm leading-6 text-foreground/70">{todaysQuote}</p>
           </div>
         </section>
+        )}
+        </HomeWidgetSlot>
+
+        <HomeWidgetSlot key="pinned-contact" id="pinned-contact">
+        {isWidgetVisible("pinned-contact") && pinnedContact && (
+          <section aria-label={language === "nl" ? "Vertrouwd contact" : "Trusted contact"} className="animate-fade-up">
+            <div className="rounded-[1.5rem] border border-border/60 bg-card/60 p-4">
+              <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                {language === "nl" ? "Vertrouwd contact" : "Trusted contact"}
+              </p>
+              <div className="mt-3 flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold text-foreground">{pinnedContact.name}</p>
+                  <p className="truncate text-xs text-muted-foreground">{pinnedContact.relationship}</p>
+                </div>
+                <div className="flex shrink-0 gap-2">
+                  <a
+                    href={`tel:${pinnedContact.phone.replace(/\s/g, "")}`}
+                    className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                    aria-label={`${language === "nl" ? "Bel" : "Call"} ${pinnedContact.name}`}
+                  >
+                    <Phone size={18} />
+                  </a>
+                  <a
+                    href={`sms:${pinnedContact.phone.replace(/\s/g, "")}?&body=${encodeURIComponent(localizedCallMessage(recoveryPlan.callMessage, language))}`}
+                    className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                    aria-label={`${language === "nl" ? "Stuur bericht aan" : "Message"} ${pinnedContact.name}`}
+                  >
+                    <MessageCircle size={18} />
+                  </a>
+                </div>
+              </div>
+            </div>
+          </section>
+        )}
+        </HomeWidgetSlot>
 
         {/* Pinned tools */}
-        {pinned.length > 0 && (
+        <HomeWidgetSlot key="pinned-tools" id="pinned-tools">
+        {isWidgetVisible("pinned-tools") && pinned.length > 0 && (
           <section aria-label={t("tools.pinned.title")} className="animate-fade-up">
             <p className="text-xs text-muted-foreground uppercase tracking-widest px-1 mb-3">{t("tools.pinned.title")}</p>
             <div className="grid grid-cols-2 gap-3">
@@ -322,6 +543,9 @@ export function Home() {
             </div>
           </section>
         )}
+        </HomeWidgetSlot>
+
+        </OrderedHomeWidgets>
 
       </div>
     </div>

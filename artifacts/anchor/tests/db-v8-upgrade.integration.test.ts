@@ -5,6 +5,7 @@ import {
   headRelapseV2WithFollowUp,
   headTrekV2,
 } from "./fixtures/deployed-v2-records";
+import type { FeatureRecord } from "../src/lib/recoveryFeatures";
 
 const DATABASE_NAME = "anchor-recovery";
 let closeUpgradedDatabase: (() => void) | null = null;
@@ -32,7 +33,7 @@ function deleteDatabase(): Promise<void> {
 }
 
 function openAndSeedLegacyDatabase(
-  version: 6 | 7,
+  version: 6 | 7 | 8,
   cravingRecord: object,
   relapseRecord?: object,
 ): Promise<void> {
@@ -99,7 +100,8 @@ describe("real IndexedDB registration upgrades to v8", () => {
     const db = await getDB();
     closeUpgradedDatabase = () => db.close();
 
-    expect(db.version).toBe(8);
+    expect(db.version).toBe(9);
+    expect(db.objectStoreNames.contains("featureRecords")).toBe(true);
 
     const trek = await db.get("cravingLogs", headTrekV2.id);
     expect(trek).toBeDefined();
@@ -180,7 +182,8 @@ describe("real IndexedDB registration upgrades to v8", () => {
     const db = await getDB();
     closeUpgradedDatabase = () => db.close();
 
-    expect(db.version).toBe(8);
+    expect(db.version).toBe(9);
+    expect(db.objectStoreNames.contains("featureRecords")).toBe(true);
 
     const trek = await db.get("cravingLogs", v6TrekRecord.id);
     expect(trek).toMatchObject({
@@ -210,6 +213,84 @@ describe("real IndexedDB registration upgrades to v8", () => {
         useOutcome: "not_used",
       },
     });
+
+    db.close();
+    closeUpgradedDatabase = null;
+  });
+
+  it("upgrades an exact v8 database and supports every v9 feature-record variant and index", async () => {
+    await openAndSeedLegacyDatabase(8, headTrekV2);
+    const { getDB } = await import("../src/db/schema");
+    const { getFeatureRecords, saveFeatureRecord } = await import("../src/db/crud");
+    const db = await getDB();
+    closeUpgradedDatabase = () => db.close();
+
+    expect(db.version).toBe(9);
+    const transaction = db.transaction("featureRecords", "readonly");
+    expect([...transaction.store.indexNames].sort()).toEqual(["byRecordType", "byTimestamp"]);
+    await transaction.done;
+
+    const timestamp = 1_700_000_100_000;
+    const records = [
+      {
+        id: "quick-v8-upgrade",
+        recordType: "quick-registration",
+        timestamp,
+        updatedAt: timestamp,
+        registrationType: "anxiety",
+        intensity: 7,
+        immediateSafety: "safe-for-now",
+        chosenAction: "contact-support",
+        chosenActionOther: "",
+        note: "",
+        reflectionStatus: "pending",
+        reflectionDueAt: timestamp + 600_000,
+        reflectionStartedAt: null,
+        reflectionCompletedAt: null,
+        linkedDetailedRecordId: null,
+      },
+      {
+        id: "action-v8-upgrade",
+        recordType: "recovery-action",
+        timestamp: timestamp + 1,
+        updatedAt: timestamp + 1,
+        actionType: "contact",
+        label: "Called support",
+        note: "",
+        sourceId: null,
+      },
+      {
+        id: "tool-v8-upgrade",
+        recordType: "tool-follow-up",
+        timestamp: timestamp + 2,
+        updatedAt: timestamp + 2,
+        dueAt: timestamp + 600_002,
+        toolId: "/tools/breathing",
+        toolLabel: "Box breathing",
+        feelingBefore: 7,
+        feelingAfter: null,
+        attempted: null,
+        status: "pending",
+        completedAt: null,
+      },
+      {
+        id: "weekly-v8-upgrade",
+        recordType: "weekly-review",
+        timestamp: timestamp + 3,
+        updatedAt: timestamp + 3,
+        periodStart: timestamp,
+        periodEnd: timestamp + 7 * 86_400_000 - 1,
+        chosenPattern: "Anxiety was frequently recorded (1/1)",
+        nextWeekPlan: "Call support early.",
+      },
+    ] satisfies FeatureRecord[];
+
+    for (const record of records) await saveFeatureRecord(record);
+    expect((await getFeatureRecords()).map((record) => record.id).sort()).toEqual(
+      records.map((record) => record.id).sort(),
+    );
+    expect((await db.getAllFromIndex("featureRecords", "byRecordType", "quick-registration")))
+      .toHaveLength(1);
 
     db.close();
     closeUpgradedDatabase = null;

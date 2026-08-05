@@ -3,6 +3,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { useLocation } from "wouter";
 import { useT } from "@/hooks/useTranslation";
 import { Eye, Hand, Ear, Wind, Coffee, CheckCircle2 } from "lucide-react";
+import { ToolFollowUpButton } from "@/components/ToolFollowUpButton";
 
 export function Grounding54321() {
   const { t } = useT();
@@ -65,6 +66,10 @@ export function Grounding54321() {
           <p className="text-muted-foreground leading-relaxed max-w-xs">
             {t("ground.done_body")}
           </p>
+          <ToolFollowUpButton
+            toolId="/tools/grounding"
+            toolLabel={t("ground.title")}
+          />
           <button
             onClick={() => navigate("/")}
             className="mt-4 bg-primary text-primary-foreground rounded-2xl px-8 py-3 font-semibold touch-target hover:opacity-90 active:scale-95 transition-all"

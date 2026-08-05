@@ -22,7 +22,7 @@ import type {
   RelapseLog,
 } from "./schema";
 
-export const BACKUP_FORMAT_VERSION = 1 as const;
+export const BACKUP_FORMAT_VERSION = 2 as const;
 
 export type ImportStoreKey =
   | "journal"
@@ -56,6 +56,12 @@ function failure(error: string): ValidationResult<never> {
 
 function isFiniteNumber(value: unknown, min = -Infinity, max = Infinity): value is number {
   return typeof value === "number" && Number.isFinite(value) && value >= min && value <= max;
+}
+
+const MAX_SUPPORTED_TIMESTAMP = 8_640_000_000_000_000;
+
+function isFiniteTimestamp(value: unknown): value is number {
+  return isFiniteNumber(value, 0, MAX_SUPPORTED_TIMESTAMP);
 }
 
 function isNullableFiniteNumber(value: unknown, min: number, max: number): boolean {
@@ -111,7 +117,7 @@ function validAnswerValue(value: unknown): value is RegistrationAnswerValue {
 }
 
 function validateSyncFields(record: UnknownRecord): string | null {
-  if (record.updatedAt !== undefined && !isFiniteNumber(record.updatedAt, 0)) {
+  if (record.updatedAt !== undefined && !isFiniteTimestamp(record.updatedAt)) {
     return "updatedAt must be a non-negative finite number";
   }
   if (record.deleted !== undefined && typeof record.deleted !== "boolean") {
@@ -124,11 +130,11 @@ function validateRegistrationMetadata(record: UnknownRecord): string | null {
   if (typeof record.id !== "string" || record.id.trim() === "") {
     return "id must be a non-empty string";
   }
-  if (!isFiniteNumber(record.timestamp, 0)) {
+  if (!isFiniteTimestamp(record.timestamp)) {
     return "timestamp must be a non-negative finite number";
   }
   for (const field of ["occurredAt", "startedAt", "completedAt"] as const) {
-    if (record[field] !== undefined && !isFiniteNumber(record[field], 0)) {
+    if (record[field] !== undefined && !isFiniteTimestamp(record[field])) {
       return `${field} must be a non-negative finite number`;
     }
   }
@@ -318,6 +324,12 @@ const CRAVING_TREK_OPTIONAL_V3_ANSWERS: CanonicalAnswerSchema = {
   // Notes are added only after the person edits the saved History entry, so
   // they are allowed but not required on the initial tracker write.
   note: isNullableStringAnswer,
+  quickRegistrationId: (value) => value === null
+    || (typeof value === "string" && value.trim().length > 0 && value.length <= 200),
+};
+
+const QUICK_LINK_OPTIONAL_V3_ANSWER: CanonicalAnswerSchema = {
+  quickRegistrationId: CRAVING_TREK_OPTIONAL_V3_ANSWERS.quickRegistrationId,
 };
 
 function validateV3CanonicalAnswers(
@@ -356,7 +368,7 @@ function validateV3CanonicalAnswers(
 
 function validateJournal(record: UnknownRecord): ValidationResult<JournalEntry> {
   if (typeof record.id !== "string" || record.id.trim() === "") return failure("id must be a non-empty string");
-  if (!isFiniteNumber(record.timestamp, 0)) return failure("timestamp must be a non-negative finite number");
+  if (!isFiniteTimestamp(record.timestamp)) return failure("timestamp must be a supported non-negative date timestamp");
   if (!Number.isInteger(record.mood) || !isFiniteNumber(record.mood, 1, 5)) return failure("mood must be an integer from 1 through 5");
   if (record.cravingIntensity !== null && !isFiniteNumber(record.cravingIntensity, 0, 10)) return failure("cravingIntensity must be null or a number from 0 through 10");
   if (typeof record.note !== "string") return failure("note must be a string");
@@ -577,7 +589,12 @@ function validateRelapse(record: UnknownRecord): ValidationResult<RelapseLog> {
       }
     }
   }
-  const relapseAnswerError = validateV3CanonicalAnswers(record, "Relapse", RELAPSE_V3_ANSWERS);
+  const relapseAnswerError = validateV3CanonicalAnswers(
+    record,
+    "Relapse",
+    RELAPSE_V3_ANSWERS,
+    QUICK_LINK_OPTIONAL_V3_ANSWER,
+  );
   if (relapseAnswerError) return failure(relapseAnswerError);
   if (record.dataVersion === 3 && isRecord(record.answers)) {
     if (!isFiniteNumber(record.occurredAt, 0) || !isFiniteNumber(record.completedAt, 0)) {
@@ -711,7 +728,12 @@ function validateAnxiety(record: UnknownRecord): ValidationResult<AnxietyLog> {
   ) {
     return failure("dataVersion 3 Anxiety requires empty trigger and linkedState compatibility fields");
   }
-  const anxietyAnswerError = validateV3CanonicalAnswers(record, "Anxiety", ANXIETY_V3_ANSWERS);
+  const anxietyAnswerError = validateV3CanonicalAnswers(
+    record,
+    "Anxiety",
+    ANXIETY_V3_ANSWERS,
+    QUICK_LINK_OPTIONAL_V3_ANSWER,
+  );
   if (anxietyAnswerError) return failure(anxietyAnswerError);
   if (record.dataVersion === 3 && isRecord(record.answers)) {
     const canonicalNote = typeof record.answers.note === "string" ? record.answers.note : "";
@@ -772,7 +794,12 @@ function validateBoredom(record: UnknownRecord): ValidationResult<BoredomLog> {
   ) {
     return failure("dataVersion 3 Boredom requires an empty stimulationNeed compatibility field");
   }
-  const boredomAnswerError = validateV3CanonicalAnswers(record, "Boredom", BOREDOM_V3_ANSWERS);
+  const boredomAnswerError = validateV3CanonicalAnswers(
+    record,
+    "Boredom",
+    BOREDOM_V3_ANSWERS,
+    QUICK_LINK_OPTIONAL_V3_ANSWER,
+  );
   if (boredomAnswerError) return failure(boredomAnswerError);
   if (record.dataVersion === 3 && isRecord(record.answers)) {
     const canonicalNote = typeof record.answers.note === "string" ? record.answers.note : "";
@@ -854,7 +881,7 @@ export function validateBackupEnvelope(
   value: unknown,
 ): ValidationResult<Record<string, unknown>> {
   if (!isRecord(value)) return failure("Backup must be an object.");
-  if (value.version !== BACKUP_FORMAT_VERSION) {
+  if (value.version !== 1 && value.version !== BACKUP_FORMAT_VERSION) {
     return failure("Unsupported backup version.");
   }
   for (const key of [
@@ -864,6 +891,12 @@ export function validateBackupEnvelope(
   }
   if (value.cigaretteLogs !== undefined && !Array.isArray(value.cigaretteLogs)) {
     return failure("cigaretteLogs must be an array when present.");
+  }
+  if (value.version === 2 && !Array.isArray(value.featureRecords)) {
+    return failure("featureRecords must be an array in a version 2 backup.");
+  }
+  if (value.featureRecords !== undefined && !Array.isArray(value.featureRecords)) {
+    return failure("featureRecords must be an array when present.");
   }
   return { ok: true, value };
 }

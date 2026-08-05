@@ -21,6 +21,7 @@ import {
 } from "@/db/relapseSafety";
 import { relapseWhenForOccurrence } from "@/db/relapseTiming";
 import { useActiveRegistration } from "@/contexts/ActiveRegistrationContext";
+import { useRecoveryFeatures } from "@/contexts/RecoveryFeaturesContext";
 import { PageHeader } from "@/components/PageHeader";
 import { toStableOptionId, toStableOptionIds } from "@/lib/registrationIds";
 import { RELAPSE_NO_CLEAR_TRIGGER_ID } from "@/lib/relapseTrigger";
@@ -537,6 +538,7 @@ const WHEN_OPTIONS = [
 
 // ── Main component ────────────────────────────────────────────
 export function RelapseLog() {
+  const { completeQuickReflection } = useRecoveryFeatures();
   const [, navigate] = useLocation();
   const {
     logRelapse,
@@ -729,13 +731,17 @@ export function RelapseLog() {
         completedAt,
         dataVersion: CURRENT_REGISTRATION_DATA_VERSION,
         contentVersion: CURRENT_REGISTRATION_CONTENT_VERSION,
-        answers: buildRelapseAnswers(normalizedDraft, completedAt),
+        answers: {
+          ...buildRelapseAnswers(normalizedDraft, completedAt),
+          quickRegistrationId: reg.session?.quickRegistrationId ?? null,
+        },
         status: "completed",
       });
       setSavedLog(saved);
       setDraft(normalizedDraft);
       reg.patchSession({ savedLogId: saved.id, step: "done", draft: normalizedDraft });
       setStep("done");
+      void completeQuickReflection(reg.session?.quickRegistrationId, "relapse", saved.id).catch(() => undefined);
     } catch {
       setError(
         language === "nl"

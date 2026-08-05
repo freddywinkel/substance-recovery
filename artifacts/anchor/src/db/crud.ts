@@ -27,6 +27,17 @@ import { migrateRelapseSafetyRecord } from "./relapseSafety";
 import { normalizeRelapseTimingRecord } from "./relapseTiming";
 import { parseActiveRegistration } from "@/contexts/activeRegistrationValidation";
 import { migrateCompletedTrekRecord } from "@/lib/trekMigration";
+import {
+  parseFeatureRecord,
+  isValidHomePreferences,
+  isValidRecoveryPlan,
+  parseHomePreferences,
+  parseJson,
+  parseRecoveryPlan,
+  type FeatureRecord,
+  type QuickRegistrationRecord,
+  type RegistrationType,
+} from "@/lib/recoveryFeatures";
 
 type NewRegistrationRecord<T extends { id: string }> = Omit<T, "id"> & {
   id?: string;
@@ -143,6 +154,104 @@ export async function getSetting(key: string, defaultValue?: string | number | b
 export async function setSetting(key: string, value: string | number | boolean) {
   const db = await getDB();
   await db.put("settings", { key, value });
+}
+
+// ── Recovery feature records ─────────────────────────────────
+export async function getFeatureRecords(): Promise<FeatureRecord[]> {
+  const db = await getDB();
+  const records = await db.getAllFromIndex("featureRecords", "byTimestamp");
+  return records
+    .map((record) => parseFeatureRecord(record))
+    .filter((record): record is FeatureRecord => record !== null)
+    .reverse();
+}
+
+/**
+ * Repairs the secondary quick-to-detailed pointer from the detailed record's
+ * own durable answer envelope. This makes a transient feature-store write
+ * failure recoverable on refresh without duplicating or losing the episode.
+ */
+export async function reconcileQuickReflectionLinks(): Promise<number> {
+  const db = await getDB();
+  const [featureRecords, cravingLogs, relapseLogs, anxietyLogs, boredomLogs] = await Promise.all([
+    db.getAll("featureRecords"),
+    db.getAll("cravingLogs"),
+    db.getAll("relapseLogs"),
+    db.getAll("anxietyLogs"),
+    db.getAll("boredomLogs"),
+  ]);
+
+  const candidates = new Map<string, {
+    detailedRecordId: string;
+    type: RegistrationType;
+    completedAt: number;
+  }>();
+  const remember = (
+    record: RegistrationRecordMetadata & { id: string; completedAt?: number; timestamp: number },
+    type: RegistrationType,
+  ) => {
+    const quickRegistrationId = record.answers?.quickRegistrationId;
+    if (typeof quickRegistrationId !== "string" || !quickRegistrationId.trim()) return;
+    const completedAt = typeof record.completedAt === "number" ? record.completedAt : record.timestamp;
+    const existing = candidates.get(quickRegistrationId);
+    if (!existing || completedAt < existing.completedAt) {
+      candidates.set(quickRegistrationId, {
+        detailedRecordId: record.id,
+        type,
+        completedAt,
+      });
+    }
+  };
+
+  for (const record of cravingLogs) {
+    if (!record.deleted && record.status === "completed") {
+      remember(record, record.cravingType === "active" ? "trek" : "craving");
+    }
+  }
+  for (const record of relapseLogs) {
+    if (!record.deleted && record.status === "completed") remember(record, "relapse");
+  }
+  for (const record of anxietyLogs) {
+    if (!record.deleted) remember(record, "anxiety");
+  }
+  for (const record of boredomLogs) {
+    if (!record.deleted) remember(record, "boredom");
+  }
+
+  let repaired = 0;
+  for (const raw of featureRecords) {
+    const parsed = parseFeatureRecord(raw);
+    if (!parsed || parsed.recordType !== "quick-registration") continue;
+    const candidate = candidates.get(parsed.id);
+    if (!candidate || candidate.type !== parsed.registrationType) continue;
+    if (
+      parsed.reflectionStatus === "completed"
+      && parsed.linkedDetailedRecordId === candidate.detailedRecordId
+    ) continue;
+    const updated: QuickRegistrationRecord = {
+      ...parsed,
+      updatedAt: Date.now(),
+      reflectionStatus: "completed",
+      reflectionStartedAt: parsed.reflectionStartedAt ?? candidate.completedAt,
+      reflectionCompletedAt: parsed.reflectionCompletedAt ?? candidate.completedAt,
+      linkedDetailedRecordId: candidate.detailedRecordId,
+    };
+    await db.put("featureRecords", updated);
+    repaired += 1;
+  }
+  return repaired;
+}
+
+export async function saveFeatureRecord(record: FeatureRecord): Promise<void> {
+  const parsed = parseFeatureRecord(record);
+  if (!parsed) throw new Error("Invalid recovery feature record.");
+  const db = await getDB();
+  await db.put("featureRecords", parsed);
+}
+
+export async function deleteFeatureRecord(id: string): Promise<void> {
+  const db = await getDB();
+  await db.delete("featureRecords", id);
 }
 
 // ── Craving Logs ─────────────────────────────────────────────
@@ -275,6 +384,7 @@ export async function clearAllData(): Promise<void> {
     db.clear("anxietyLogs"),
     db.clear("boredomLogs"),
     db.clear("cigaretteLogs"),
+    db.clear("featureRecords"),
     db.clear("dirtyRecords"),
     db.clear("syncMeta"),
   ]);
@@ -293,6 +403,7 @@ export async function exportAllData(): Promise<Record<string, unknown>> {
   const boredomLogs = await db.getAll("boredomLogs");
   const cigaretteLogs = await db.getAll("cigaretteLogs");
   const settings = await db.getAll("settings");
+  const featureRecords = await db.getAll("featureRecords");
   const contacts = await getEmergencyContacts();
   const crisis = await getCrisisService();
 
@@ -308,6 +419,7 @@ export async function exportAllData(): Promise<Record<string, unknown>> {
     anxietyLogs: anxietyLogs.filter((e) => !e.deleted),
     boredomLogs: boredomLogs.filter((e) => !e.deleted),
     cigaretteLogs: cigaretteLogs.filter((e) => !e.deleted),
+    featureRecords,
     settings,
     emergencyContacts: contacts,
     crisisService: crisis,
@@ -384,6 +496,18 @@ function normalizeImportedSetting(
       ? { key, value: parsed.value ? JSON.stringify(parsed.value) : "" }
       : null;
   }
+  if (key === "suspendedRegistrations") {
+    if (typeof settingValue !== "string") return null;
+    const parsedStack = settingValue === "" ? [] : parseJsonSetting(settingValue);
+    if (!Array.isArray(parsedStack)) return null;
+    const normalized: unknown[] = [];
+    for (const item of parsedStack) {
+      const parsed = parseActiveRegistration(item);
+      if (!parsed.ok || !parsed.value) return null;
+      normalized.push(parsed.value);
+    }
+    return { key, value: JSON.stringify(normalized) };
+  }
   if (key === "emergencyContacts") {
     if (typeof settingValue !== "string") return null;
     const contacts = parseJsonSetting(settingValue);
@@ -396,6 +520,18 @@ function normalizeImportedSetting(
     if (typeof settingValue !== "string") return null;
     const service = parseJsonSetting(settingValue);
     return validCrisisService(service) ? { key, value: settingValue } : null;
+  }
+  if (key === "homePreferences") {
+    if (typeof settingValue !== "string") return null;
+    const parsed = parseJson(settingValue);
+    if (!isValidHomePreferences(parsed)) return null;
+    return { key, value: JSON.stringify(parseHomePreferences(parsed)) };
+  }
+  if (key === "recoveryPlan") {
+    if (typeof settingValue !== "string") return null;
+    const parsed = parseJson(settingValue);
+    if (!isValidRecoveryPlan(parsed)) return null;
+    return { key, value: JSON.stringify(parseRecoveryPlan(parsed)) };
   }
 
   // Version 1 has a closed setting catalog. A future backup version can add
@@ -450,6 +586,25 @@ export async function importAllData(
         skipped++;
         const id = isRecord(item) && typeof item.id === "string" ? item.id : `item ${index + 1}`;
         errors.push(`Failed to import ${key} ${id}: ${String(e)}`);
+      }
+    }
+  }
+
+  const featureRecords = payload.featureRecords;
+  if (Array.isArray(featureRecords)) {
+    for (const [index, item] of featureRecords.entries()) {
+      const parsed = parseFeatureRecord(item);
+      if (!parsed) {
+        skipped++;
+        errors.push(`Invalid featureRecords item ${index + 1}.`);
+        continue;
+      }
+      try {
+        await db.put("featureRecords", parsed);
+        imported++;
+      } catch (e) {
+        skipped++;
+        errors.push(`Failed to import featureRecords ${parsed.id}: ${String(e)}`);
       }
     }
   }

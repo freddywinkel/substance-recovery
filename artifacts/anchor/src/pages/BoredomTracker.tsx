@@ -16,6 +16,7 @@ import {
   CURRENT_REGISTRATION_DATA_VERSION,
 } from "@/db/migrations";
 import { useActiveRegistration } from "@/contexts/ActiveRegistrationContext";
+import { useRecoveryFeatures } from "@/contexts/RecoveryFeaturesContext";
 import { useT } from "@/hooks/useTranslation";
 import { IntensitySlider } from "@/components/tracker/IntensitySlider";
 import { ChipCol } from "@/components/tracker/ChipCol";
@@ -298,6 +299,7 @@ interface BoredomDraft {
 }
 
 export function BoredomTracker() {
+  const { completeQuickReflection } = useRecoveryFeatures();
   const [, navigate] = useLocation();
   const { logBoredom, updateBoredom } = useStore();
   const { t, tOpt } = useT();
@@ -470,27 +472,31 @@ export function BoredomTracker() {
     setSaving(true);
     const completedAt = Date.now();
     const startedAt = reg.session?.startedAt ?? completedAt;
+    const occurredAt = reg.session?.quickRegistrationTimestamp ?? startedAt;
     try {
       const saved = await logBoredom({
-        timestamp: startedAt,
-        occurredAt: startedAt,
+        timestamp: occurredAt,
+        occurredAt,
         startedAt,
         completedAt,
         dataVersion: CURRENT_REGISTRATION_DATA_VERSION,
         contentVersion: CURRENT_REGISTRATION_CONTENT_VERSION,
-        answers: buildBoredomAnswers({
-          restlessnessTypes,
-          intensity,
-          stimulationNeeds,
-          convertCheck,
-          situation,
-          situationOther,
-          urge,
-          urgeOther,
-          rescueMenu,
-          action,
-          note,
-        }),
+        answers: {
+          ...buildBoredomAnswers({
+            restlessnessTypes,
+            intensity,
+            stimulationNeeds,
+            convertCheck,
+            situation,
+            situationOther,
+            urge,
+            urgeOther,
+            rescueMenu,
+            action,
+            note,
+          }),
+          quickRegistrationId: reg.session?.quickRegistrationId ?? null,
+        },
         intensity,
         feelingTypes: restlessnessTypes,
         situation,
@@ -512,6 +518,7 @@ export function BoredomTracker() {
       setSavedLog(saved);
       void reg.patchSession({ savedLogId: saved.id, step: "done" });
       setStep("done");
+      void completeQuickReflection(reg.session?.quickRegistrationId, "boredom", saved.id).catch(() => undefined);
     } catch {
       toast({ title: t("common.save_error"), variant: "destructive" });
     } finally {

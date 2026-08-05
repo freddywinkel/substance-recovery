@@ -1,40 +1,25 @@
-import { useState, useEffect, useCallback } from "react";
-
-const STORAGE_KEY = "anchor-pinned-tools";
+import { useCallback } from "react";
+import { useRecoveryFeatures } from "@/contexts/RecoveryFeaturesContext";
+import { TOOL_IDS, type RecoveryToolId } from "@/lib/recoveryFeatures";
 
 export function usePinnedTools(): {
   pinned: string[];
   isPinned: (id: string) => boolean;
   togglePin: (id: string) => void;
+  limitReached: boolean;
 } {
-  const [pinned, setPinned] = useState<string[]>([]);
-
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed)) setPinned(parsed);
-      }
-    } catch {
-      // ignore
-    }
-  }, []);
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(pinned));
-  }, [pinned]);
+  const { homePreferences, togglePinnedTool } = useRecoveryFeatures();
+  const pinned = homePreferences.pinnedToolIds;
 
   const isPinned = useCallback(
-    (id: string) => pinned.includes(id),
+    (id: string) => pinned.includes(id as RecoveryToolId),
     [pinned]
   );
 
   const togglePin = useCallback((id: string) => {
-    setPinned((prev) =>
-      prev.includes(id) ? prev.filter((p) => p !== id) : [...prev, id]
-    );
-  }, []);
+    if (!TOOL_IDS.includes(id as RecoveryToolId)) return;
+    void togglePinnedTool(id as RecoveryToolId);
+  }, [togglePinnedTool]);
 
-  return { pinned, isPinned, togglePin };
+  return { pinned, isPinned, togglePin, limitReached: pinned.length >= 2 };
 }

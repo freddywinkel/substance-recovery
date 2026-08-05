@@ -17,6 +17,7 @@ import { boredomClassificationIdForRead } from "@/lib/boredomClassification";
 
 type RegistrationWithAnswers = {
   dataVersion?: number;
+  contentVersion?: string;
   answers?: Record<string, RegistrationAnswerValue>;
 };
 

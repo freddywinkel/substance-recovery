@@ -46,6 +46,10 @@ export interface ActiveRegistration {
   startedAt: number;
   updatedAt: number;
   savedLogId?: string;
+  /** Exact quick registration that opened this detailed reflection. */
+  quickRegistrationId?: string;
+  /** Original quick-event time, kept separate from the later reflection start. */
+  quickRegistrationTimestamp?: number;
   pendingReturn?: PendingReturn;
   stepIndex?: number;
   stepCount?: number;
@@ -493,7 +497,10 @@ function isRecord(value: unknown): value is UnknownRecord {
 }
 
 function isFiniteTimestamp(value: unknown): value is number {
-  return typeof value === "number" && Number.isFinite(value) && value >= 0;
+  return typeof value === "number"
+    && Number.isFinite(value)
+    && value >= 0
+    && value <= 8_640_000_000_000_000;
 }
 
 function isRegistrationType(value: unknown): value is RegistrationType {
@@ -1047,6 +1054,35 @@ export function parseActiveRegistration(
       error: "Active-registration saved-log ID is invalid.",
     };
   }
+  if (
+    data.quickRegistrationId !== undefined
+    && (
+      typeof data.quickRegistrationId !== "string"
+      || data.quickRegistrationId.trim() === ""
+      || data.quickRegistrationId.length > 200
+    )
+  ) {
+    return {
+      ok: false,
+      value: null,
+      migrated: false,
+      error: "Active-registration quick-registration ID is invalid.",
+    };
+  }
+  if (
+    data.quickRegistrationTimestamp !== undefined
+    && (
+      data.quickRegistrationId === undefined
+      || !isFiniteTimestamp(data.quickRegistrationTimestamp)
+    )
+  ) {
+    return {
+      ok: false,
+      value: null,
+      migrated: false,
+      error: "Active-registration quick-registration time is invalid.",
+    };
+  }
 
   const now = Date.now();
   const startedAt = isFiniteTimestamp(data.startedAt)
@@ -1060,6 +1096,14 @@ export function parseActiveRegistration(
   const savedLogId =
     typeof data.savedLogId === "string" && data.savedLogId.trim() !== ""
       ? data.savedLogId
+      : undefined;
+  const quickRegistrationId =
+    typeof data.quickRegistrationId === "string" && data.quickRegistrationId.trim() !== ""
+      ? data.quickRegistrationId
+      : undefined;
+  const quickRegistrationTimestamp =
+    quickRegistrationId && isFiniteTimestamp(data.quickRegistrationTimestamp)
+      ? data.quickRegistrationTimestamp
       : undefined;
   const recordId =
     typeof data.recordId === "string" && data.recordId.trim() !== ""
@@ -1135,6 +1179,8 @@ export function parseActiveRegistration(
       startedAt,
       updatedAt: Math.max(startedAt, updatedAt),
       savedLogId,
+      quickRegistrationId,
+      quickRegistrationTimestamp,
       pendingReturn,
       stepIndex,
       stepCount,
