@@ -21,7 +21,7 @@ import {
   QUICK_REFLECTION_HANDOFF_KEY,
   parseHomePreferences,
   parseJson,
-  parseRecoveryPlan,
+  parseStoredRecoveryPlan,
   serializeFeatureSetting,
   type FeatureRecord,
   type HomePreferences,
@@ -34,6 +34,7 @@ import {
   type ToolFollowUpRecord,
   type WeeklyReviewRecord,
 } from "@/lib/recoveryFeatures";
+import { commitRecoveryPlan } from "@/db/planPersistence";
 
 const LEGACY_PINNED_TOOLS_KEY = "anchor-pinned-tools";
 
@@ -55,7 +56,7 @@ type RecoveryFeaturesContextValue = {
   saveHomePreferences: (preferences: HomePreferences) => Promise<void>;
   patchHomePreferences: (patch: Partial<HomePreferences>) => Promise<void>;
   togglePinnedTool: (toolId: RecoveryToolId) => Promise<void>;
-  saveRecoveryPlan: (plan: RecoveryPlan) => Promise<void>;
+  saveRecoveryPlan: (plan: RecoveryPlan, preferences?: Partial<HomePreferences>) => Promise<RecoveryPlan>;
   addRecord: <T extends FeatureRecord>(record: NewFeatureRecord<T>) => Promise<T>;
   updateRecord: <T extends FeatureRecord>(record: T) => Promise<T>;
   removeRecord: (id: string) => Promise<void>;
@@ -110,6 +111,7 @@ export function RecoveryFeaturesProvider({ children }: { children: React.ReactNo
         getSetting("recoveryPlan", ""),
         getFeatureRecords(),
       ]);
+      const storedRecoveryPlan = parseStoredRecoveryPlan(storedPlan);
       const preferences = parseHomePreferences(parseJson(storedPreferences));
 
       // Migrate once only when the typed setting does not exist. An explicit
@@ -134,7 +136,7 @@ export function RecoveryFeaturesProvider({ children }: { children: React.ReactNo
 
       homePreferencesRef.current = preferences;
       setHomePreferencesState(preferences);
-      setRecoveryPlanState(parseRecoveryPlan(parseJson(storedPlan)));
+      setRecoveryPlanState(storedRecoveryPlan);
       setRecords(sortRecords(storedRecords));
     } catch (error) {
       setLoadError(error instanceof Error ? error : new Error(String(error)));
@@ -187,10 +189,18 @@ export function RecoveryFeaturesProvider({ children }: { children: React.ReactNo
     }),
   [enqueuePreferenceWrite]);
 
-  const saveRecoveryPlan = useCallback(async (plan: RecoveryPlan) => {
-    const normalized = parseRecoveryPlan({ ...plan, updatedAt: Date.now() });
-    await setSetting("recoveryPlan", serializeFeatureSetting(normalized));
-    setRecoveryPlanState(normalized);
+  const saveRecoveryPlan = useCallback((plan: RecoveryPlan, preferences?: Partial<HomePreferences>) => {
+    const write = preferenceWriteQueue.current.then(async () => {
+      const saved = await commitRecoveryPlan(plan, preferences);
+      setRecoveryPlanState(saved.plan);
+      if (saved.preferences) {
+        homePreferencesRef.current = saved.preferences;
+        setHomePreferencesState(saved.preferences);
+      }
+      return saved.plan;
+    });
+    preferenceWriteQueue.current = write.then(() => undefined, () => undefined);
+    return write;
   }, []);
 
   const addRecord = useCallback(async <T extends FeatureRecord>(record: NewFeatureRecord<T>): Promise<T> => {

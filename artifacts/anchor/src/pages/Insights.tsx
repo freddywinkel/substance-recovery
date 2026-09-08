@@ -17,7 +17,7 @@ import {
   computeAttentionStats,
   computeBoredomStats,
   computeCravingStats,
-  computeCurrentStreakDays,
+  computeGoalProgress,
   computeRelapseStats,
   computeWeeklyTrend,
   completedStatusEntries,
@@ -31,39 +31,85 @@ import { logicalTimestamp } from "@/lib/registrationIds";
 import { BarChart3, TrendingUp } from "lucide-react";
 import { Link } from "wouter";
 import { recoveryToolLabel, type RecoveryToolId } from "@/lib/recoveryFeatures";
+import { normalizePreventionPlan } from "@/lib/preventionPlan";
+import { recoveryTargetLabel } from "@/lib/recoveryTargets";
 
-function StatCard({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
+function StatCard({
+  label,
+  value,
+  sub,
+}: {
+  label: string;
+  value: string | number;
+  sub?: string;
+}) {
   return (
     <div className="rounded-2xl border border-border/50 bg-card/50 p-4">
-      <p className="text-[11px] text-muted-foreground uppercase tracking-widest mb-2">{label}</p>
-      <p className="text-3xl font-bold text-foreground tabular-nums leading-none">{value}</p>
-      {sub && <p className="text-xs text-muted-foreground mt-1 leading-snug">{sub}</p>}
+      <p className="break-words text-[11px] text-muted-foreground uppercase tracking-widest mb-2">
+        {label}
+      </p>
+      <p className="text-3xl font-bold text-foreground tabular-nums leading-none">
+        {value}
+      </p>
+      {sub && (
+        <p className="text-xs text-muted-foreground mt-1 leading-snug">{sub}</p>
+      )}
     </div>
   );
 }
 
-function FreqBars({ items, labelMap, translate }: { items: FreqItem[]; labelMap?: Record<string, string>; translate?: (s: string) => string }) {
+function FreqBars({
+  items,
+  labelMap,
+  translate,
+}: {
+  items: FreqItem[];
+  labelMap?: Record<string, string>;
+  translate?: (s: string) => string;
+}) {
   const { t } = useT();
-  if (items.length === 0) return <p className="text-sm text-muted-foreground italic">{t("common.no_data")}</p>;
+  if (items.length === 0)
+    return (
+      <p className="text-sm text-muted-foreground italic">
+        {t("common.no_data")}
+      </p>
+    );
   const cap = items[0]?.count ?? 1;
   return (
     <div className="flex flex-col gap-2.5">
       {items.map(({ label, count }) => (
         <div key={label} className="flex items-center gap-3">
           <span className="text-sm text-muted-foreground flex-1 min-w-0 truncate">
-            {translate ? translate(label) : labelMap ? (labelMap[label] ?? label) : label}
+            {translate
+              ? translate(label)
+              : labelMap
+                ? (labelMap[label] ?? label)
+                : label}
           </span>
           <div className="h-1.5 rounded-full bg-muted w-24 overflow-hidden shrink-0">
-            <div className="h-full bg-primary/70 rounded-full transition-all" style={{ width: `${(count / cap) * 100}%` }} />
+            <div
+              className="h-full bg-primary/70 rounded-full transition-all"
+              style={{ width: `${(count / cap) * 100}%` }}
+            />
           </div>
-          <span className="text-xs text-muted-foreground tabular-nums w-5 text-right shrink-0">{count}</span>
+          <span className="text-xs text-muted-foreground tabular-nums w-5 text-right shrink-0">
+            {count}
+          </span>
         </div>
       ))}
     </div>
   );
 }
 
-function RangeFilter({ value, onChange, opts }: { value: TimeRange; onChange: (r: TimeRange) => void; opts: { v: TimeRange; label: string }[] }) {
+function RangeFilter({
+  value,
+  onChange,
+  opts,
+}: {
+  value: TimeRange;
+  onChange: (r: TimeRange) => void;
+  opts: { v: TimeRange; label: string }[];
+}) {
   return (
     <div className="flex gap-1.5">
       {opts.map(({ v, label }) => (
@@ -72,7 +118,9 @@ function RangeFilter({ value, onChange, opts }: { value: TimeRange; onChange: (r
           onClick={() => onChange(v)}
           aria-pressed={value === v}
           className={`flex-1 py-1.5 rounded-full text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 ${
-            value === v ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:text-foreground"
+            value === v
+              ? "bg-primary text-primary-foreground"
+              : "bg-muted text-muted-foreground hover:text-foreground"
           }`}
         >
           {label}
@@ -88,16 +136,34 @@ export function Insights() {
     relapseLogs,
     anxietyLogs,
     boredomLogs,
-    sobrietyStartDate,
+    cigaretteLogs,
+    loadError,
     loading,
   } = useStore();
   const { t, tOpt, language } = useT();
-  const { recoveryActions, toolFollowUps } = useRecoveryFeatures();
+  const {
+    recoveryActions,
+    toolFollowUps,
+    quickRegistrations,
+    recoveryPlan,
+    loadError: featureError,
+  } = useRecoveryFeatures();
   const [range, setRange] = useState<TimeRange>("30d");
 
-  const currentStreak = useMemo(() => {
-    return computeCurrentStreakDays(sobrietyStartDate, relapseLogs);
-  }, [relapseLogs, sobrietyStartDate]);
+  const goalProgress = useMemo(
+    () =>
+      computeGoalProgress(
+        normalizePreventionPlan(recoveryPlan.prevention).goals,
+        { cravingLogs, relapseLogs, cigaretteLogs, quickRegistrations },
+      ),
+    [
+      recoveryPlan.prevention,
+      cravingLogs,
+      relapseLogs,
+      cigaretteLogs,
+      quickRegistrations,
+    ],
+  );
 
   const rangeOpts: { v: TimeRange; label: string }[] = [
     { v: "7d", label: t("progress.range.7d") },
@@ -114,21 +180,48 @@ export function Insights() {
     () => filterByRange(completedStatusEntries(relapseLogs), range),
     [relapseLogs, range],
   );
-  const filteredAnxiety = useMemo(() => filterByRange(anxietyLogs, range), [anxietyLogs, range]);
-  const filteredBoredom = useMemo(() => filterByRange(boredomLogs, range), [boredomLogs, range]);
+  const filteredAnxiety = useMemo(
+    () => filterByRange(anxietyLogs, range),
+    [anxietyLogs, range],
+  );
+  const filteredBoredom = useMemo(
+    () => filterByRange(boredomLogs, range),
+    [boredomLogs, range],
+  );
 
-  const cStats = useMemo(() => computeCravingStats(filteredCravings), [filteredCravings]);
-  const rStats = useMemo(() => computeRelapseStats(filteredRelapses), [filteredRelapses]);
-  const aStats = useMemo(() => computeAnxietyStats(filteredAnxiety), [filteredAnxiety]);
-  const bStats = useMemo(() => computeBoredomStats(filteredBoredom), [filteredBoredom]);
-  const attentionStats = useMemo(() => computeAttentionStats({
-    cravingLogs: filteredCravings,
-    relapseLogs: filteredRelapses,
-    anxietyLogs: filteredAnxiety,
-    boredomLogs: filteredBoredom,
-  }), [filteredAnxiety, filteredBoredom, filteredCravings, filteredRelapses]);
+  const cStats = useMemo(
+    () => computeCravingStats(filteredCravings),
+    [filteredCravings],
+  );
+  const rStats = useMemo(
+    () => computeRelapseStats(filteredRelapses),
+    [filteredRelapses],
+  );
+  const aStats = useMemo(
+    () => computeAnxietyStats(filteredAnxiety),
+    [filteredAnxiety],
+  );
+  const bStats = useMemo(
+    () => computeBoredomStats(filteredBoredom),
+    [filteredBoredom],
+  );
+  const attentionStats = useMemo(
+    () =>
+      computeAttentionStats({
+        cravingLogs: filteredCravings,
+        relapseLogs: filteredRelapses,
+        anxietyLogs: filteredAnxiety,
+        boredomLogs: filteredBoredom,
+      }),
+    [filteredAnxiety, filteredBoredom, filteredCravings, filteredRelapses],
+  );
   const weekly = useMemo(
-    () => computeWeeklyTrend(filteredCravings, 10, language === "nl" ? "nl-NL" : "en-GB"),
+    () =>
+      computeWeeklyTrend(
+        filteredCravings,
+        10,
+        language === "nl" ? "nl-NL" : "en-GB",
+      ),
     [filteredCravings, language],
   );
 
@@ -156,32 +249,45 @@ export function Insights() {
       else if (h >= 18 && h < 22) buckets.evening++;
       else buckets.night++;
     }
-    return Object.entries(buckets).map(([key, count]) => ({ name: labels[key], count }));
+    return Object.entries(buckets).map(([key, count]) => ({
+      name: labels[key],
+      count,
+    }));
   }, [allPatternEntries, t]);
 
   const triggerData = useMemo(() => {
-    return cStats.topSituations.slice(0, 6).map((item) => ({ name: tOpt(item.label), count: item.count }));
+    return cStats.topSituations
+      .slice(0, 6)
+      .map((item) => ({ name: tOpt(item.label), count: item.count }));
   }, [cStats.topSituations, tOpt]);
 
   const impactItems = useMemo(
-    () => buildImpactInsights({
-      cravingLogs: completedStatusEntries(cravingLogs),
-      relapseLogs: completedStatusEntries(relapseLogs),
-      anxietyLogs,
-      boredomLogs,
-    }, range),
+    () =>
+      buildImpactInsights(
+        {
+          cravingLogs: completedStatusEntries(cravingLogs),
+          relapseLogs: completedStatusEntries(relapseLogs),
+          anxietyLogs,
+          boredomLogs,
+        },
+        range,
+      ),
     [anxietyLogs, boredomLogs, cravingLogs, relapseLogs, range],
   );
 
   const toolOutcomeSummaries = useMemo(() => {
-    const groups = new Map<RecoveryToolId, { total: number; improved: number }>();
+    const groups = new Map<
+      RecoveryToolId,
+      { total: number; improved: number }
+    >();
     for (const followUp of filterByRange(toolFollowUps, range)) {
       if (
-        followUp.status !== "completed"
-        || followUp.attempted !== true
-        || followUp.feelingBefore === null
-        || followUp.feelingAfter === null
-      ) continue;
+        followUp.status !== "completed" ||
+        followUp.attempted !== true ||
+        followUp.feelingBefore === null ||
+        followUp.feelingAfter === null
+      )
+        continue;
       const current = groups.get(followUp.toolId) ?? { total: 0, improved: 0 };
       current.total += 1;
       if (followUp.feelingAfter < followUp.feelingBefore) current.improved += 1;
@@ -189,7 +295,10 @@ export function Insights() {
     }
     return [...groups.entries()]
       .map(([toolId, summary]) => ({ toolId, ...summary }))
-      .sort((left, right) => right.total - left.total || left.toolId.localeCompare(right.toolId));
+      .sort(
+        (left, right) =>
+          right.total - left.total || left.toolId.localeCompare(right.toolId),
+      );
   }, [range, toolFollowUps]);
 
   if (loading) {
@@ -234,22 +343,32 @@ export function Insights() {
 
             {impactItems.length === 0 ? (
               <div className="rounded-[1.5rem] border border-border/50 bg-card/50 p-5 text-center">
-                <p className="text-sm text-muted-foreground">{t("insights.impact.empty")}</p>
+                <p className="text-sm text-muted-foreground">
+                  {t("insights.impact.empty")}
+                </p>
               </div>
             ) : (
-                impactItems.map((item, index) => (
-                <div key={item.kind} className="rounded-[1.5rem] border border-border/50 bg-card/50 p-4">
+              impactItems.map((item, index) => (
+                <div
+                  key={item.kind}
+                  className="rounded-[1.5rem] border border-border/50 bg-card/50 p-4"
+                >
                   <div className="flex items-center justify-between gap-3">
                     <div className="min-w-0">
                       <p className="text-sm font-semibold text-foreground">
                         {index + 1}. {t(item.labelKey)}
                       </p>
                       <p className="mt-1 text-xs text-muted-foreground">
-                        {t("insights.impact.count").replace("{n}", String(item.count))}
+                        {t("insights.impact.count").replace(
+                          "{n}",
+                          String(item.count),
+                        )}
                       </p>
                     </div>
                     <div className="text-right">
-                      <p className={`text-2xl font-semibold tabular-nums ${item.tone}`}>
+                      <p
+                        className={`text-2xl font-semibold tabular-nums ${item.tone}`}
+                      >
                         {item.score.toFixed(1)}
                       </p>
                       <p className="text-[10px] text-muted-foreground">
@@ -264,12 +383,19 @@ export function Insights() {
             {toolOutcomeSummaries.length > 0 && (
               <section className="rounded-[1.5rem] border border-border/50 bg-card/50 p-4">
                 <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
-                  {language === "nl" ? "Gerapporteerde check-ins na hulpmiddelen" : "Reported check-ins after tools"}
+                  {language === "nl"
+                    ? "Gerapporteerde check-ins na hulpmiddelen"
+                    : "Reported check-ins after tools"}
                 </p>
                 <div className="mt-3 flex flex-col gap-3">
                   {toolOutcomeSummaries.map((summary) => (
-                    <div key={summary.toolId} className="rounded-2xl border border-border/50 bg-background/40 p-3">
-                      <p className="text-sm font-semibold text-foreground">{recoveryToolLabel(summary.toolId, language)}</p>
+                    <div
+                      key={summary.toolId}
+                      className="rounded-2xl border border-border/50 bg-background/40 p-3"
+                    >
+                      <p className="text-sm font-semibold text-foreground">
+                        {recoveryToolLabel(summary.toolId, language)}
+                      </p>
                       <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
                         {language === "nl"
                           ? `In ${summary.improved} van ${summary.total} check-ins rapporteerde je later een lagere score.`
@@ -288,24 +414,121 @@ export function Insights() {
           </TabsContent>
 
           <TabsContent value="patterns" className="mt-3 flex flex-col gap-4">
-            <div className="grid grid-cols-2 gap-3">
+            {(loadError || featureError) && (
+              <p role="alert" className="text-sm text-destructive">
+                {language === "nl"
+                  ? "Niet alle gegevens zijn geladen. Deze cijfers kunnen onvolledig zijn; herlaad en probeer opnieuw."
+                  : "Some data could not be loaded. These figures may be incomplete; reload and retry."}
+              </p>
+            )}
+            <section className="rounded-2xl border border-border/60 bg-card/50 p-4">
+              <h2 className="font-semibold">
+                {language === "nl"
+                  ? "Voortgang bij mijn doelen"
+                  : "Progress for my goals"}
+              </h2>
+              <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                {language === "nl"
+                  ? "Sinds de startdatum van elk doel, op basis van passende expliciete antwoorden uit alle registratieroutes. Geen invoer is geen bewijs van abstinentie. Gebruik volgens voorschrift telt niet automatisch als terugval."
+                  : "Since each goal’s start date, using matching explicit answers across registration routes. Missing entries are not evidence of abstinence. Use as prescribed does not automatically count as a return to use."}
+              </p>
+              {goalProgress.length === 0 ? (
+                <Link
+                  href="/recovery-plan"
+                  className="mt-2 inline-flex min-h-11 items-center text-sm text-primary underline"
+                >
+                  {language === "nl"
+                    ? "Kies in je preventieplan welk persoonlijk doel je wilt volgen"
+                    : "Choose a personal goal to track in your prevention plan"}
+                </Link>
+              ) : (
+                <ul className="mt-3 grid gap-3">
+                  {goalProgress.map((progress) => (
+                    <li
+                      key={progress.goal.id}
+                      className="rounded-xl border border-border p-3"
+                    >
+                      <p className="text-sm font-semibold">
+                        {recoveryTargetLabel(progress.goal.target, language)} ·{" "}
+                        {progress.goal.description}
+                      </p>
+                      <p className="mt-1 text-sm">
+                        {language === "nl"
+                          ? `${progress.elapsedDays} dagen sinds de doelstart · ${progress.confirmedUseEpisodes} gebeurtenissen met gemeld gebruik`
+                          : `${progress.elapsedDays} days since goal start · ${progress.confirmedUseEpisodes} episodes with reported use`}
+                      </p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {language === "nl"
+                          ? `${progress.explicitNotUsedObservations} keer expliciet niet gebruikt · ${progress.unknownOutcomeObservations} uitkomsten onbekend`
+                          : `${progress.explicitNotUsedObservations} explicit not-used answers · ${progress.unknownOutcomeObservations} unknown outcomes`}
+                      </p>
+                      {progress.excludedAsPrescribed > 0 && (
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {language === "nl"
+                            ? `${progress.excludedAsPrescribed} registraties volgens voorschrift apart gehouden`
+                            : `${progress.excludedAsPrescribed} as-prescribed records kept separate`}
+                        </p>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+            <p className="text-xs text-muted-foreground">
+              {language === "nl"
+                ? "De onderstaande inhoudelijke patronen gebruiken voltooide uitgebreide registraties in de gekozen periode. Snelle registraties en gekoppelde reflecties staan samen in het weekoverzicht en verslag."
+                : "The detailed patterns below use completed detailed records in the selected period. Quick entries and linked reflections appear together in the weekly review and report."}
+            </p>
+            <div className="grid grid-cols-1 min-[375px]:grid-cols-2 gap-3">
               <StatCard
                 label={t("insights.attention.title")}
-                value={attentionStats.answeredCount === 0 ? "-" : attentionStats.needsAttentionCount}
-                sub={attentionStats.answeredCount === 0
-                  ? t("insights.attention.empty")
-                  : t("insights.attention.sub")
-                    .replace("{attention}", String(attentionStats.needsAttentionCount))
-                    .replace("{answered}", String(attentionStats.answeredCount))}
+                value={
+                  attentionStats.answeredCount === 0
+                    ? "-"
+                    : attentionStats.needsAttentionCount
+                }
+                sub={
+                  attentionStats.answeredCount === 0
+                    ? t("insights.attention.empty")
+                    : t("insights.attention.sub")
+                        .replace(
+                          "{attention}",
+                          String(attentionStats.needsAttentionCount),
+                        )
+                        .replace(
+                          "{answered}",
+                          String(attentionStats.answeredCount),
+                        )
+                }
               />
-              <StatCard label={t("progress.stat.streak")} value={currentStreak ?? "-"} sub={t("progress.stat.streak_sub")} />
-              <StatCard label={t("progress.stat.cravings")} value={cStats.total} />
-              <StatCard label={t("progress.stat.lapses")} value={rStats.total} sub={t("progress.stat.in_period")} />
-              <StatCard label={t("progress.stat.avg_intensity")} value={cStats.avgIntensity?.toFixed(1) ?? "-"} sub={t("progress.stat.avg_intensity_sub")} />
-              <StatCard label={t("progress.stat.anxiety")} value={aStats.total} sub={t("progress.stat.in_period")} />
-              <StatCard label={t("progress.stat.boredom")} value={bStats.total} sub={t("progress.stat.in_period")} />
               <StatCard
-                label={language === "nl" ? "Steunende acties" : "Supportive actions"}
+                label={t("progress.stat.cravings")}
+                value={cStats.total}
+              />
+              <StatCard
+                label={t("progress.stat.lapses")}
+                value={rStats.total}
+                sub={t("progress.stat.in_period")}
+              />
+              <StatCard
+                label={t("progress.stat.avg_intensity")}
+                value={cStats.avgIntensity?.toFixed(1) ?? "-"}
+                sub={t("progress.stat.avg_intensity_sub")}
+              />
+              <StatCard
+                label={t("progress.stat.anxiety")}
+                value={aStats.total}
+                sub={t("progress.stat.in_period")}
+              />
+              <StatCard
+                label={t("progress.stat.boredom")}
+                value={bStats.total}
+                sub={t("progress.stat.in_period")}
+              />
+              <StatCard
+                label={
+                  language === "nl" ? "Steunende acties" : "Supportive actions"
+                }
                 value={filterByRange(recoveryActions, range).length}
                 sub={t("progress.stat.in_period")}
               />
@@ -313,23 +536,42 @@ export function Insights() {
 
             <Link href="/weekly-review" asChild>
               <a className="flex min-h-12 items-center justify-between rounded-2xl border border-primary/25 bg-primary/10 px-4 py-3 text-sm font-semibold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50">
-                <span>{language === "nl" ? "Start de begeleide wekelijkse terugblik" : "Start the guided weekly review"}</span>
-                <span className="text-primary" aria-hidden="true">→</span>
+                <span>
+                  {language === "nl"
+                    ? "Start de begeleide wekelijkse terugblik"
+                    : "Start the guided weekly review"}
+                </span>
+                <span className="text-primary" aria-hidden="true">
+                  →
+                </span>
               </a>
             </Link>
 
             <div className="rounded-[1.5rem] border border-border/50 bg-card/50 p-4">
-              <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground mb-3">{t("progress.section.checkins")}</p>
+              <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground mb-3">
+                {t("progress.section.checkins")}
+              </p>
               <div className="flex items-end gap-1.5 h-[60px]">
                 {weekly.map((p, i) => {
                   const hPct = p.count === 0 ? 4 : (p.count / maxCount) * 100;
-                  const opacity = p.avgIntensity != null ? 0.25 + (p.avgIntensity / 10) * 0.75 : 0.15;
+                  const opacity =
+                    p.avgIntensity != null
+                      ? 0.25 + (p.avgIntensity / 10) * 0.75
+                      : 0.15;
                   return (
-                    <div key={i} className="flex flex-col items-center gap-1 flex-1">
+                    <div
+                      key={i}
+                      className="flex flex-col items-center gap-1 flex-1"
+                    >
                       <div className="w-full relative" style={{ height: 48 }}>
-                        <div className="absolute bottom-0 left-0 right-0 rounded-t-sm bg-primary transition-all" style={{ height: `${hPct}%`, opacity }} />
+                        <div
+                          className="absolute bottom-0 left-0 right-0 rounded-t-sm bg-primary transition-all"
+                          style={{ height: `${hPct}%`, opacity }}
+                        />
                       </div>
-                      <span className="text-[8px] text-muted-foreground leading-none">{p.weekLabel}</span>
+                      <span className="text-[8px] text-muted-foreground leading-none">
+                        {p.weekLabel}
+                      </span>
                     </div>
                   );
                 })}
@@ -337,104 +579,185 @@ export function Insights() {
             </div>
 
             <div className="rounded-[1.5rem] border border-border/50 bg-card/50 p-4">
-              <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground mb-3">{t("insights.timeOfDay.title")}</p>
+              <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground mb-3">
+                {t("insights.timeOfDay.title")}
+              </p>
               {timeOfDayData.some((d) => d.count > 0) ? (
                 <div className="h-[180px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={timeOfDayData}>
-                      <XAxis dataKey="name" tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} />
-                      <YAxis tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} width={20} />
+                      <XAxis
+                        dataKey="name"
+                        tick={{
+                          fontSize: 10,
+                          fill: "hsl(var(--muted-foreground))",
+                        }}
+                        axisLine={false}
+                        tickLine={false}
+                      />
+                      <YAxis
+                        tick={{
+                          fontSize: 10,
+                          fill: "hsl(var(--muted-foreground))",
+                        }}
+                        axisLine={false}
+                        tickLine={false}
+                        width={20}
+                      />
                       <Tooltip
-                        contentStyle={{ borderRadius: 12, border: "1px solid hsl(var(--border))", background: "hsl(var(--card))", fontSize: 12 }}
+                        contentStyle={{
+                          borderRadius: 12,
+                          border: "1px solid hsl(var(--border))",
+                          background: "hsl(var(--card))",
+                          fontSize: 12,
+                        }}
                         itemStyle={{ color: "hsl(var(--foreground))" }}
                         cursor={{ fill: "hsl(var(--primary) / 0.08)" }}
                       />
                       <Bar dataKey="count" radius={[4, 4, 0, 0]}>
                         {timeOfDayData.map((_, i) => (
-                          <Cell key={i} fill={`hsl(var(--primary) / ${0.5 + i * 0.12})`} />
+                          <Cell
+                            key={i}
+                            fill={`hsl(var(--primary) / ${0.5 + i * 0.12})`}
+                          />
                         ))}
                       </Bar>
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
               ) : (
-                <p className="text-sm text-muted-foreground italic">{t("common.no_data")}</p>
+                <p className="text-sm text-muted-foreground italic">
+                  {t("common.no_data")}
+                </p>
               )}
             </div>
 
             <div className="rounded-[1.5rem] border border-border/50 bg-card/50 p-4">
-              <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground mb-3">{t("insights.byTrigger.title")}</p>
+              <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground mb-3">
+                {t("insights.byTrigger.title")}
+              </p>
               {triggerData.length > 0 ? (
                 <div className="h-[200px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={triggerData} layout="vertical">
-                      <XAxis type="number" tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} width={20} />
-                      <YAxis type="category" dataKey="name" tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} width={100} />
+                      <XAxis
+                        type="number"
+                        tick={{
+                          fontSize: 10,
+                          fill: "hsl(var(--muted-foreground))",
+                        }}
+                        axisLine={false}
+                        tickLine={false}
+                        width={20}
+                      />
+                      <YAxis
+                        type="category"
+                        dataKey="name"
+                        tick={{
+                          fontSize: 10,
+                          fill: "hsl(var(--muted-foreground))",
+                        }}
+                        axisLine={false}
+                        tickLine={false}
+                        width={100}
+                      />
                       <Tooltip
-                        contentStyle={{ borderRadius: 12, border: "1px solid hsl(var(--border))", background: "hsl(var(--card))", fontSize: 12 }}
+                        contentStyle={{
+                          borderRadius: 12,
+                          border: "1px solid hsl(var(--border))",
+                          background: "hsl(var(--card))",
+                          fontSize: 12,
+                        }}
                         itemStyle={{ color: "hsl(var(--foreground))" }}
                         cursor={{ fill: "hsl(var(--primary) / 0.08)" }}
                       />
-                      <Bar dataKey="count" radius={[0, 4, 4, 0]} fill="hsl(var(--primary) / 0.7)" />
+                      <Bar
+                        dataKey="count"
+                        radius={[0, 4, 4, 0]}
+                        fill="hsl(var(--primary) / 0.7)"
+                      />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
               ) : (
-                <p className="text-sm text-muted-foreground italic">{t("common.no_data")}</p>
+                <p className="text-sm text-muted-foreground italic">
+                  {t("common.no_data")}
+                </p>
               )}
             </div>
 
             {cStats.topEmotions.length > 0 && (
               <div className="rounded-[1.5rem] border border-border/50 bg-card/50 p-4">
-                <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground mb-3">{t("progress.patterns.emotions")}</p>
+                <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground mb-3">
+                  {t("progress.patterns.emotions")}
+                </p>
                 <FreqBars items={cStats.topEmotions} translate={tOpt} />
               </div>
             )}
             {cStats.topSituations.length > 0 && (
               <div className="rounded-[1.5rem] border border-border/50 bg-card/50 p-4">
-                <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground mb-3">{t("progress.patterns.situations")}</p>
+                <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground mb-3">
+                  {t("progress.patterns.situations")}
+                </p>
                 <FreqBars items={cStats.topSituations} translate={tOpt} />
               </div>
             )}
             {cStats.topActions.length > 0 && (
               <div className="rounded-[1.5rem] border border-border/50 bg-card/50 p-4">
-                <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground mb-3">{t("progress.section.deescalation")}</p>
+                <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground mb-3">
+                  {t("progress.section.deescalation")}
+                </p>
                 <FreqBars items={cStats.topActions} translate={tOpt} />
               </div>
             )}
             {aStats.topTriggers.length > 0 && (
               <div className="rounded-[1.5rem] border border-border/50 bg-card/50 p-4">
-                <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground mb-3">{t("progress.patterns.anxiety_triggers")}</p>
+                <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground mb-3">
+                  {t("progress.patterns.anxiety_triggers")}
+                </p>
                 <FreqBars items={aStats.topTriggers} translate={tOpt} />
               </div>
             )}
             {aStats.topBodySensations.length > 0 && (
               <div className="rounded-[1.5rem] border border-border/50 bg-card/50 p-4">
-                <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground mb-3">{t("progress.patterns.body_locations")}</p>
+                <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground mb-3">
+                  {t("progress.patterns.body_locations")}
+                </p>
                 <FreqBars items={aStats.topBodySensations} translate={tOpt} />
               </div>
             )}
             {bStats.topFeelingTypes.length > 0 && (
               <div className="rounded-[1.5rem] border border-border/50 bg-card/50 p-4">
-                <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground mb-3">{t("progress.patterns.restlessness")}</p>
+                <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground mb-3">
+                  {t("progress.patterns.restlessness")}
+                </p>
                 <FreqBars items={bStats.topFeelingTypes} translate={tOpt} />
               </div>
             )}
             {bStats.topStimulationNeeds.length > 0 && (
               <div className="rounded-[1.5rem] border border-border/50 bg-card/50 p-4">
-                <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground mb-3">{t("progress.patterns.needs")}</p>
+                <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground mb-3">
+                  {t("progress.patterns.needs")}
+                </p>
                 <FreqBars items={bStats.topStimulationNeeds} translate={tOpt} />
               </div>
             )}
             {rStats.topFirstTriggerTypes.length > 0 && (
               <div className="rounded-[1.5rem] border border-border/50 bg-card/50 p-4">
-                <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground mb-3">{t("progress.patterns.relapse_triggers")}</p>
-                <FreqBars items={rStats.topFirstTriggerTypes} translate={tOpt} />
+                <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground mb-3">
+                  {t("progress.patterns.relapse_triggers")}
+                </p>
+                <FreqBars
+                  items={rStats.topFirstTriggerTypes}
+                  translate={tOpt}
+                />
               </div>
             )}
             {rStats.topMissedWarnings.length > 0 && (
               <div className="rounded-[1.5rem] border border-border/50 bg-card/50 p-4">
-                <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground mb-3">{t("progress.patterns.warning_signs")}</p>
+                <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground mb-3">
+                  {t("progress.patterns.warning_signs")}
+                </p>
                 <FreqBars items={rStats.topMissedWarnings} translate={tOpt} />
               </div>
             )}

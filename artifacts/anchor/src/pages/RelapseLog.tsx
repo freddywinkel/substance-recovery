@@ -1,3 +1,8 @@
+import { RECOVERY_TARGET_VALUES, recoveryTargetLabel } from "@/lib/recoveryTargets";
+import { encodeUseDetails, selectedUseDetails } from "@/lib/useDetails";
+import { UseDetailsEditor } from "@/components/UseDetailsEditor";
+import { TargetSafetyAdvice } from "@/components/TargetSafetyAdvice";
+import { CareContactCard } from "@/components/CareContactCard";
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
 import { useStore } from "@/hooks/useStore";
@@ -26,9 +31,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { toStableOptionId, toStableOptionIds } from "@/lib/registrationIds";
 import { RELAPSE_NO_CLEAR_TRIGGER_ID } from "@/lib/relapseTrigger";
 import {
-  getSubstanceSafetyWarnings,
   getUrgentSafetyCopy,
-  phoneHref,
 } from "@/lib/registrationSafety";
 import { Heart, ArrowRight, AlertTriangle, Phone } from "lucide-react";
 
@@ -69,11 +72,7 @@ const DURATION_OPTIONS: { value: EpisodeDuration; label: string }[] = [
   { value: "multiple-days", label: "Multiple days" },
 ];
 
-const SUBSTANCES = [
-  "Alcohol", "Cannabis", "Cocaine / stimulant", "Benzodiazepines",
-  "Nicotine", "Opioids", "Gambling", "Sex / pornography",
-  "Gaming", "Food / binge eating",
-];
+const SUBSTANCES = [...RECOVERY_TARGET_VALUES];
 
 const AMOUNT_OPTIONS: { value: AmountCategory; label: string; sub: string }[] = [
   { value: "small", label: "small", sub: "" },
@@ -281,6 +280,7 @@ export function createBlankRelapseDraft(): RelapseDraft {
     label: "",
     when: "",
     episodeDuration: "unanswered",
+    useDetails: [],
     substances: [], primarySubstance: "", amountCategory: "unanswered",
     firstTriggerType: "", firstTriggerText: "",
     preUseFactors: [], missedWarnings: [],
@@ -478,6 +478,7 @@ export function buildRelapseAnswers(
     when: optionAnswer(relapseWhenForOccurrence(draft.occurrenceDateTime, reference)),
     episodeDuration: optionAnswer(draft.episodeDuration),
     substances: optionListAnswer(draft.substances),
+    useDetailsJson: encodeUseDetails(selectedUseDetails(draft.useDetails, draft.substances)),
     primarySubstance: null,
     amountCategory: hasTarget ? optionAnswer(draft.amountCategory) : null,
     firstTriggerType: hasNoClearTrigger(draft)
@@ -577,7 +578,6 @@ export function RelapseLog() {
   const postSaveLock = useRef(false);
   const isWriting = saving || postSaveWriting || leavingHome;
   const safetyCopy = getUrgentSafetyCopy(language);
-  const substanceWarnings = getSubstanceSafetyWarnings(draft.substances, language);
 
   const STEP_LABELS: Record<Step, string> = {
     label: t("relapse.step.label"),
@@ -662,6 +662,7 @@ export function RelapseLog() {
       return {
         ...previous,
         substances,
+        useDetails: selectedUseDetails(previous.useDetails, substances),
         amountCategory: substances.length > 0 ? previous.amountCategory : "unanswered",
       };
     });
@@ -700,6 +701,7 @@ export function RelapseLog() {
       const startedAt = reg.session?.startedAt ?? completedAt;
       const normalizedDraft: RelapseDraft = {
         ...draft,
+        useDetails: selectedUseDetails(draft.useDetails, draft.substances),
         when: whenForOccurrence(draft.occurrenceDateTime, new Date(completedAt)),
         primarySubstance: "",
         amountCategory: draft.substances.length > 0
@@ -860,11 +862,7 @@ export function RelapseLog() {
             </a>
           </>
         )}
-        {crisisService?.number && (
-          <a href={phoneHref(crisisService.number)} className="text-sm text-primary font-semibold touch-target inline-flex items-center">
-            {safetyCopy.configuredService}: {crisisService.name} ({crisisService.number})
-          </a>
-        )}
+        {crisisService?.number && <CareContactCard service={crisisService} language={language} />}
       </div>
     </div>
   ) : null;
@@ -1176,25 +1174,11 @@ export function RelapseLog() {
               options={SUBSTANCES}
               selected={draft.substances}
               onToggle={toggleSubstance}
-              translate={tOpt}
+              translate={(target) => recoveryTargetLabel(target, language)}
             />
-            {substanceWarnings.map((warning) => (
-              <div key={warning.key} className="rounded-2xl border border-amber-500/50 bg-amber-500/10 p-4 text-left">
-                <div className="mb-1 flex items-start gap-2">
-                  <AlertTriangle size={16} className="mt-0.5 shrink-0 text-amber-500" />
-                  <p className="text-sm font-semibold text-foreground">{warning.title}</p>
-                </div>
-                <p className="text-sm leading-relaxed text-muted-foreground">{warning.body}</p>
-                <div className="mt-2 flex flex-wrap gap-x-4 gap-y-2">
-                  <a href="tel:112" className="text-sm font-semibold text-primary">{safetyCopy.call112}</a>
-                  {crisisService?.number && (
-                    <a href={phoneHref(crisisService.number)} className="text-sm font-semibold text-primary">
-                      {crisisService.name}
-                    </a>
-                  )}
-                </div>
-              </div>
-            ))}
+            <TargetSafetyAdvice targets={draft.substances} language={language} />
+            <UseDetailsEditor targets={draft.substances} value={draft.useDetails} language={language} onChange={(value) => update("useDetails", value)} />
+
             {draft.substances.length > 0 && (
               <>
                 <div className="h-px bg-border" />

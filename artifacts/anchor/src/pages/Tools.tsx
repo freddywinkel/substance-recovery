@@ -1,3 +1,5 @@
+import { PersonalContactCard } from "@/components/PersonalContactCard";
+import { CareContactCard } from "@/components/CareContactCard";
 import { PageHeader } from "@/components/PageHeader";
 import { ToolCard } from "@/components/ToolCard";
 import { useT } from "@/hooks/useTranslation";
@@ -49,7 +51,7 @@ function PinButton({ toolId, title }: { toolId: string; title: string }) {
 }
 
 export function Tools() {
-  const { t } = useT();
+  const { t, language } = useT();
   const { crisisService, emergencyContacts } = useStore();
 
   const tools = [
@@ -183,28 +185,7 @@ export function Tools() {
             </div>
           )}
 
-          {crisisService && crisisService.name && crisisService.number && (
-            <div className="bg-red-950/20 border border-red-800/30 rounded-2xl p-4 flex flex-col gap-3">
-              <div className="flex items-center gap-2">
-                <Phone size={16} strokeWidth={2} className="text-red-400 shrink-0" />
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold text-foreground">
-                    {t("help.crisisService.title")}
-                  </p>
-                  <p className="text-xs text-muted-foreground truncate">
-                    {crisisService.name}
-                  </p>
-                </div>
-              </div>
-              <a
-                href={`tel:${crisisService.number.replace(/\s/g, "")}`}
-                className="flex items-center justify-center gap-2 w-full bg-red-600 hover:bg-red-700 text-white rounded-xl py-3.5 font-semibold text-sm active:scale-[0.98] transition-all touch-target focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/50"
-              >
-                <Phone size={18} strokeWidth={2} />
-                {t("help.crisisService.call")} - {crisisService.number}
-              </a>
-            </div>
-          )}
+          {crisisService?.number && <CareContactCard service={crisisService} language={language} />}
 
           {emergencyContacts.length > 0 && (
             <div className="bg-card border border-border rounded-2xl p-4 flex flex-col gap-3">
@@ -215,28 +196,7 @@ export function Tools() {
                 </p>
               </div>
               <div className="flex flex-col gap-2">
-                {emergencyContacts.map((contact) => (
-                  <div
-                    key={contact.id}
-                    className="flex items-center justify-between gap-3 bg-background border border-border rounded-xl px-4 py-3"
-                  >
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-foreground truncate">
-                        {contact.name}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {contact.relationship} - {contact.phone}
-                      </p>
-                    </div>
-                    <a
-                      href={`tel:${contact.phone.replace(/\s/g, "")}`}
-                      className="flex items-center gap-1.5 bg-primary/10 border border-primary/20 text-primary rounded-lg px-3 py-2 text-xs font-semibold hover:bg-primary/15 active:scale-[0.97] transition-all touch-target shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
-                    >
-                      <Phone size={13} strokeWidth={2} />
-                      {t("help.emergencyContacts.call")}
-                    </a>
-                  </div>
-                ))}
+                {emergencyContacts.map((contact) => <PersonalContactCard key={contact.id} contact={contact} language={language} />)}
               </div>
             </div>
           )}

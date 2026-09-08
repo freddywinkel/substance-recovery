@@ -1,5 +1,7 @@
 # Replit Deployment Checklist
 
+> Historical reference only. These Replit deployment instructions do not describe the current GitHub Pages offline PWA. Use [README.md](README.md) for the supported architecture, development and release workflow. The original checklist below is retained for provenance.
+
 Use this checklist to deploy the GitHub repository as a new Replit project.
 
 ## 1. Import From GitHub

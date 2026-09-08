@@ -188,7 +188,7 @@ describe("IndexedDB backup and retry integration", () => {
     expect(await getCravingLogs()).toHaveLength(1);
     const backup = await exportAllData();
     expect(backup).toMatchObject({
-      version: 2,
+      version: 3,
       cravingLogs: [
         {
           id: "craving-roundtrip",
@@ -272,7 +272,7 @@ describe("IndexedDB backup and retry integration", () => {
     await setSetting("recoveryPlan", JSON.stringify(DEFAULT_RECOVERY_PLAN));
 
     const backup = await exportAllData();
-    expect(backup).toMatchObject({ version: 2 });
+    expect(backup).toMatchObject({ version: 3 });
     if (!Array.isArray(backup.featureRecords)) throw new Error("Expected feature records in backup");
     expect(backup.featureRecords).toEqual(expect.arrayContaining([
       expect.objectContaining({ id: "quick-backup", recordType: "quick-registration" }),
@@ -658,7 +658,7 @@ describe("IndexedDB backup and retry integration", () => {
     ]);
   });
 
-  it("reports invalid contact items, imports valid ones, and restores a null crisis service", async () => {
+  it("blocks the whole import when a contact is invalid and preserves the existing crisis service", async () => {
     await saveCrisisService({
       id: "existing-service",
       name: "Existing service",
@@ -681,14 +681,9 @@ describe("IndexedDB backup and retry integration", () => {
 
     expect(result.skipped).toBe(1);
     expect(result.errors).toEqual(["Invalid emergencyContacts item 2."]);
-    expect(await getEmergencyContacts()).toEqual([
-      {
-        id: "contact-1",
-        name: "Trusted person",
-        relationship: "Friend",
-        phone: "555-0100",
-      },
-    ]);
-    expect(await getCrisisService()).toBeNull();
+    expect(result.committed).toBe(false);
+    expect(result.imported).toBe(0);
+    expect(await getEmergencyContacts()).toEqual([]);
+    expect(await getCrisisService()).toMatchObject({ id: "existing-service" });
   });
 });

@@ -18,10 +18,10 @@ import { buildImpactInsights } from "@/lib/impactInsights";
 import {
   completedStatusEntries,
   computeCompletedRegistrationActivity,
-  computeSobrietyStats,
 } from "@/lib/analytics";
 import { CigaretteCounter } from "@/components/CigaretteCounter";
 import { CigaretteDayDrawer } from "@/components/CigaretteDayDrawer";
+import { GoalProgressHome } from "@/components/GoalProgressHome";
 import { DeferredFollowUpCard } from "@/components/DeferredFollowUpCard";
 import { useRecoveryFeatures } from "@/contexts/RecoveryFeaturesContext";
 import {
@@ -33,7 +33,7 @@ import { logicalTimestamp } from "@/lib/registrationIds";
 import {
   Wind, Eye, Droplets, Waves, Rewind, Heart, Shuffle,
   CalendarCheck, RotateCcw, Settings,
-  TrendingUp, SlidersHorizontal, Phone, MessageCircle, Zap, Sparkles,
+  SlidersHorizontal, Phone, MessageCircle, Zap, Sparkles,
 } from "lucide-react";
 
 const TOOL_META: Record<string, { icon: typeof Wind; labelKey: string; to: string }> = {
@@ -99,18 +99,6 @@ function OrderedHomeWidgets({
   );
 }
 
-function milestoneLabel(days: number, t: (key: string) => string): string {
-  if (days >= 365 * 2) return t("home.milestone.years").replace("{n}", String(Math.floor(days / 365)));
-  if (days >= 365) return t("home.milestone.1year");
-  if (days >= 180) return t("home.milestone.6mo");
-  if (days >= 90) return t("home.milestone.90d");
-  if (days >= 30) return t("home.milestone.30d");
-  if (days >= 14) return t("home.milestone.14d");
-  if (days >= 7) return t("home.milestone.7d");
-  if (days >= 1) return t("home.milestone.1d");
-  return t("home.milestone.0d");
-}
-
 export function Home() {
   const { cravingLogs, relapseLogs, anxietyLogs, boredomLogs, sobrietyStartDate, loading, cigaretteLogs, logCigarette, updateCigarette, removeCigarette, emergencyContacts } = useStore();
   const { t, language } = useT();
@@ -128,11 +116,6 @@ export function Home() {
   const [cigaretteDrawerOpen, setCigaretteDrawerOpen] = useState(false);
   const completedCravingLogs = useMemo(() => completedStatusEntries(cravingLogs), [cravingLogs]);
   const completedRelapseLogs = useMemo(() => completedStatusEntries(relapseLogs), [relapseLogs]);
-
-  const sobriety = useMemo(
-    () => computeSobrietyStats(sobrietyStartDate, completedRelapseLogs),
-    [completedRelapseLogs, sobrietyStartDate],
-  );
 
   const timeGreeting = () => {
     const h = new Date().getHours();
@@ -251,72 +234,8 @@ export function Home() {
           urgentFollowUpFirst={urgentFollowUpFirst}
         >
 
-        {/* Sobriety streak hero */}
         <HomeWidgetSlot key="sobriety" id="sobriety">
-        {isWidgetVisible("sobriety") && (
-          <div>
-          {sobriety ? (
-          <section aria-label={t("home.streak_label")} className="animate-fade-up">
-            <div className="relative overflow-hidden rounded-[2rem] border border-border/50 bg-gradient-to-br from-card/90 via-card/80 to-card/60 p-6 shadow-xl shadow-black/20">
-              <div className="absolute -top-24 -right-20 h-48 w-48 rounded-full bg-primary/10 blur-3xl" />
-              <div className="absolute -bottom-24 -left-20 h-48 w-48 rounded-full bg-emerald-400/10 blur-3xl" />
-
-              <p className="relative text-sm font-medium text-muted-foreground">{t("home.streak_label")}</p>
-              <div className="relative mt-4 flex items-end gap-2">
-                <span className="text-6xl font-semibold tracking-[-0.06em] text-foreground tabular-nums">{sobriety.currentStreakDays}</span>
-                <span className="mb-2 text-lg font-medium text-muted-foreground">{sobriety.currentStreakDays === 1 ? t("home.day") : t("home.days")}</span>
-              </div>
-              <p className="relative mt-4 max-w-[260px] text-sm leading-6 text-muted-foreground">{milestoneLabel(sobriety.currentStreakDays, t)}</p>
-
-              <button onClick={() => { hapticLight(); openRegistrationLauncher(); }} className="relative mt-6 rounded-full bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary/20 active:scale-[0.98] transition-transform touch-target">
-                {t("home.log_today")}
-              </button>
-
-              {sobriety.hasRelapse ? (
-                <div className="relative mt-4 border-t border-border/50 pt-3 flex items-center gap-3">
-                  <TrendingUp size={15} className="text-muted-foreground shrink-0" />
-                  <div>
-                    <p className="text-xs text-muted-foreground"><span className="font-semibold text-foreground">{sobriety.totalDays}</span> {" "}{t("home.total_days")}</p>
-                    <p className="text-[10px] text-muted-foreground/60 mt-0.5">{t("home.since")} {new Date(sobriety.startDate + "T00:00:00").toLocaleDateString(language === "nl" ? "nl-NL" : "en-GB", { month: "long", day: "numeric", year: "numeric" })}</p>
-                  </div>
-                </div>
-              ) : (
-                <p className="relative mt-4 text-[10px] text-muted-foreground/60">{t("home.since")} {new Date(sobriety.startDate + "T00:00:00").toLocaleDateString(language === "nl" ? "nl-NL" : "en-GB", { month: "long", day: "numeric", year: "numeric" })}</p>
-              )}
-            </div>
-
-            {/* Status row */}
-            <div className="mt-3 grid grid-cols-3 gap-2">
-              <div className="rounded-2xl border border-border/50 bg-card/50 p-3">
-                <p className="text-[11px] font-medium text-muted-foreground">{t("home.status.cravings")}</p>
-                <p className="mt-1 text-sm font-semibold text-foreground">{completedCravingLogs.length} {t("home.status.logged")}</p>
-              </div>
-              <div className="rounded-2xl border border-border/50 bg-card/50 p-3">
-                <p className="text-[11px] font-medium text-muted-foreground">{t("home.status.checkins")}</p>
-                <p className="mt-1 text-sm font-semibold text-foreground">{anxietyLogs.length + boredomLogs.length}</p>
-              </div>
-              <div className="rounded-2xl border border-border/50 bg-card/50 p-3">
-                <p className="text-[11px] font-medium text-muted-foreground">{t("home.status.journal")}</p>
-                <p className="mt-1 text-sm font-semibold text-foreground">{t("home.status.write")}</p>
-              </div>
-            </div>
-          </section>
-        ) : (
-          <section aria-label={t("home.streak_label")} className="animate-fade-up">
-            <Link href="/settings" asChild>
-              <a className="block rounded-[1.5rem] border border-dashed border-border bg-card/30 p-5 flex flex-col gap-2 hover:border-primary/40 transition-colors active:scale-[0.98]">
-                <div className="flex items-center gap-2">
-                  <CalendarCheck size={18} className="text-muted-foreground" />
-                  <p className="text-sm font-semibold text-foreground">{t("home.set_date")}</p>
-                </div>
-                <p className="text-xs text-muted-foreground leading-relaxed">{t("home.set_date_sub")}</p>
-                <p className="text-xs text-primary mt-1">{t("home.open_settings")}</p>
-              </a>
-            </Link>
-          </section>
-          )}
-          </div>
-        )}
+          {isWidgetVisible("sobriety") && <GoalProgressHome />}
         </HomeWidgetSlot>
 
         <HomeWidgetSlot key="quick-registration" id="quick-registration">
@@ -335,7 +254,7 @@ export function Home() {
                   {language === "nl" ? "Snelle registratie" : "Quick registration"}
                 </span>
                 <span className="mt-0.5 block text-xs leading-relaxed text-muted-foreground">
-                  {language === "nl" ? "Leg in ongeveer 20 seconden vast wat nu belangrijk is." : "Capture what matters in about 20 seconds."}
+                  {language === "nl" ? "Leg kort vast wat nu belangrijk is." : "Briefly capture what matters now."}
                 </span>
               </span>
               <span className="text-primary" aria-hidden="true">→</span>

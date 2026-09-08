@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent } from "react";
+import { useMemo, useRef, useState, type FormEvent } from "react";
 import {
   CalendarCheck2,
   CheckCircle2,
@@ -16,7 +16,11 @@ import {
   buildSupportiveProgressSummary,
   getLocalWeekRange,
 } from "@/lib/recoveryProgress";
-import { recoveryToolLabel, type RecoveryActionType } from "@/lib/recoveryFeatures";
+import { recoveryToolLabel, type RecoveryActionRecord, type RecoveryActionType } from "@/lib/recoveryFeatures";
+import { useLocalDraft } from "@/hooks/useLocalDraft";
+import { DraftStatus } from "@/components/DraftStatus";
+import { createSupportiveActionDraft, isSupportiveActionDraft } from "@/lib/supportiveActionDraft";
+import { flushLocalDrafts } from "@/lib/localDrafts";
 
 const COPY = {
   en: {
@@ -117,17 +121,25 @@ export function RecoveryActions() {
   const copy = COPY[language];
   const store = useStore();
   const {
-    addRecoveryAction,
+    addRecord,
     loading: featureLoading,
+    loadError: featureLoadError,
     quickRegistrations,
     recoveryActions,
     removeRecord,
     toolFollowUps,
   } = useRecoveryFeatures();
-  const [actionType, setActionType] = useState<Exclude<RecoveryActionType, "tool">>("contact");
-  const [label, setLabel] = useState("");
-  const [note, setNote] = useState("");
+  const draft = useLocalDraft("supportive-action", createSupportiveActionDraft(), {
+    ready: !featureLoading && !featureLoadError,
+    validate: isSupportiveActionDraft,
+  });
+  const { actionType, label, note } = draft.value;
+  const setActionType = (next: Exclude<RecoveryActionType, "tool">) => draft.setValue(current => ({ ...current, actionType: next }));
+  const setLabel = (next: string) => draft.setValue(current => ({ ...current, label: next }));
+  const setNote = (next: string) => draft.setValue(current => ({ ...current, note: next }));
   const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
+  const actionButtons = useRef<Array<HTMLButtonElement | null>>([]);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [listError, setListError] = useState("");
@@ -174,21 +186,33 @@ export function RecoveryActions() {
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
+    if (savingRef.current || !draft.hydrated || draft.error || featureLoadError) return;
     setMessage("");
     if (!label.trim()) {
       setError(copy.required);
       return;
     }
+    savingRef.current = true;
     setSaving(true);
     setError("");
+    let committed = false;
     try {
-      await addRecoveryAction({ actionType, label, note });
-      setLabel("");
-      setNote("");
+      const submitted = { ...draft.value, timestamp: draft.value.timestamp ?? Date.now() };
+      draft.setValue(submitted);
+      await flushLocalDrafts();
+      await addRecord<RecoveryActionRecord>({
+        id: submitted.id, recordType: "recovery-action", timestamp: submitted.timestamp,
+        actionType: submitted.actionType, label: submitted.label.trim(), note: submitted.note.trim(), sourceId: null,
+      });
+      committed = true;
+      await draft.clearDraft(createSupportiveActionDraft(), { keepInputOnFailure: true });
       setMessage(copy.saved);
     } catch {
-      setError(copy.saveError);
+      setError(committed
+        ? (language === "nl" ? "De actie is opgeslagen; het concept kon niet worden gewist. Probeer opnieuw: dezelfde actie wordt bijgewerkt." : "The action is saved; its draft could not be cleared. Retrying updates the same action.")
+        : copy.saveError);
     } finally {
+      savingRef.current = false;
       setSaving(false);
     }
   };
@@ -205,7 +229,7 @@ export function RecoveryActions() {
   return (
     <div className="flex h-full min-h-0 flex-col">
       <PageHeader title={copy.title} subtitle={copy.subtitle} back />
-      <main className="flex-1 overflow-y-auto scroll-smooth-ios px-4 pb-safe pt-3">
+      <div className="flex-1 overflow-y-auto scroll-smooth-ios px-4 pb-safe pt-3">
         <div className="mx-auto flex w-full max-w-2xl flex-col gap-4 pb-8">
           <section className="rounded-[1.5rem] border border-primary/20 bg-primary/5 p-4" aria-labelledby="weekly-progress-title">
             <div className="flex items-start gap-3">
@@ -239,9 +263,11 @@ export function RecoveryActions() {
           <form onSubmit={submit} className="rounded-[1.5rem] border border-border/70 bg-card p-4" noValidate>
             <h2 className="text-base font-semibold text-foreground">{copy.addTitle}</h2>
             <p className="mt-1 text-sm leading-6 text-muted-foreground">{copy.addIntro}</p>
+            <DraftStatus {...draft} />
+            <fieldset disabled={!draft.hydrated || saving || !!featureLoadError}>
 
             <div className="mt-4 grid gap-2" role="radiogroup" aria-label={copy.addTitle}>
-              {ACTION_OPTIONS.map(({ type, icon: Icon, titleKey, hintKey }) => {
+              {ACTION_OPTIONS.map(({ type, icon: Icon, titleKey, hintKey }, index) => {
                 const selected = actionType === type;
                 return (
                   <button
@@ -249,7 +275,20 @@ export function RecoveryActions() {
                     type="button"
                     role="radio"
                     aria-checked={selected}
+                    aria-labelledby={`supportive-action-${type}-label`}
+                    aria-describedby={`supportive-action-${type}-hint`}
+                    tabIndex={selected ? 0 : -1}
+                    ref={element => { actionButtons.current[index] = element; }}
                     onClick={() => setActionType(type)}
+                    onKeyDown={event => {
+                      if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) return;
+                      event.preventDefault();
+                      const count = ACTION_OPTIONS.length;
+                      const next = event.key === "Home" ? 0 : event.key === "End" ? count - 1
+                        : (index + (["ArrowRight", "ArrowDown"].includes(event.key) ? 1 : count - 1)) % count;
+                      setActionType(ACTION_OPTIONS[next].type);
+                      actionButtons.current[next]?.focus();
+                    }}
                     className={`flex min-h-16 items-center gap-3 rounded-2xl border px-3 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 ${
                       selected
                         ? "border-primary bg-primary/10"
@@ -260,8 +299,8 @@ export function RecoveryActions() {
                       <Icon size={20} strokeWidth={1.8} />
                     </span>
                     <span>
-                      <span className="block text-sm font-semibold text-foreground">{copy[titleKey]}</span>
-                      <span className="mt-0.5 block text-xs leading-relaxed text-muted-foreground">{copy[hintKey]}</span>
+                      <span id={`supportive-action-${type}-label`} className="block text-sm font-semibold text-foreground">{copy[titleKey]}</span>
+                      <span id={`supportive-action-${type}-hint`} className="mt-0.5 block text-xs leading-relaxed text-muted-foreground">{copy[hintKey]}</span>
                     </span>
                   </button>
                 );
@@ -301,13 +340,14 @@ export function RecoveryActions() {
 
             <button
               type="submit"
-              disabled={saving}
+              disabled={saving || !draft.hydrated || !!draft.error || !!featureLoadError}
               className="mt-4 flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground transition-opacity disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
             >
               <CheckCircle2 size={19} strokeWidth={1.8} />
               {saving ? copy.saving : copy.save}
             </button>
             <div aria-live="polite" className="mt-2 min-h-5 text-sm text-primary">{message}</div>
+            </fieldset>
           </form>
 
           <section className="rounded-[1.5rem] border border-border/70 bg-card p-4" aria-labelledby="recent-actions-title">
@@ -358,7 +398,7 @@ export function RecoveryActions() {
             )}
           </section>
         </div>
-      </main>
+      </div>
     </div>
   );
 }

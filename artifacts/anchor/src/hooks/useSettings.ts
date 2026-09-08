@@ -1,3 +1,4 @@
+import { clearStorageIssue, registerStorageRetry, setStorageIssue } from "@/lib/storageIntegrity";
 import { useState, useEffect, useCallback } from "react";
 import {
   CrisisService,
@@ -21,23 +22,22 @@ export function useSettings() {
     EmergencyContact[]
   >([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<Error | null>(null);
 
   const load = useCallback(async () => {
-    const [savedSobrietyDate, svc, contacts] = await Promise.all([
-      getSetting("sobrietyStartDate", ""),
-      getCrisisService(),
-      getEmergencyContacts(),
-    ]);
-    const raw = savedSobrietyDate as string;
-    setSobrietyStartDateState(raw && raw.length > 0 ? raw : null);
-    setCrisisServiceState(svc);
-    setEmergencyContactsState(contacts);
-    setLoading(false);
+    setLoading(true);
+    try {
+      const [savedSobrietyDate, svc, contacts] = await Promise.all([getSetting("sobrietyStartDate", ""), getCrisisService(), getEmergencyContacts()]);
+      const raw = savedSobrietyDate as string;
+      setSobrietyStartDateState(raw && raw.length > 0 ? raw : null);
+      setCrisisServiceState(svc); setEmergencyContactsState(contacts);
+      setLoadError(null); clearStorageIssue("settings");
+    } catch (cause) {
+      const error = cause instanceof Error ? cause : new Error(String(cause));
+      setLoadError(error); setStorageIssue("settings", "read", error);
+    } finally { setLoading(false); }
   }, []);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+  useEffect(() => { const unregister = registerStorageRetry("settings", load); void load(); return unregister; }, [load]);
 
   const setSobrietyStartDate = useCallback(
     async (date: string | null) => {
@@ -72,6 +72,7 @@ export function useSettings() {
     crisisService,
     emergencyContacts,
     loading,
+    loadError,
     setSobrietyStartDate,
     setCrisisService,
     setEmergencyContacts,

@@ -1,3 +1,5 @@
+import { RECOVERY_TARGET_VALUES } from "@/lib/recoveryTargets";
+import { isValidUseDetails } from "@/lib/useDetails";
 import {
   ACUTE_RISK_SELECTION_VALUES,
   acuteRiskCompatibilityAlias,
@@ -104,6 +106,7 @@ const DRAFT_DEFAULTS: Record<RegistrationType, UnknownRecord> = {
     chosenAction: "",
     actionAttempted: null,
     substances: [],
+    useDetails: [],
     cravingOutcome: "",
     intensityAfter: null,
     useOutcome: "",
@@ -125,6 +128,7 @@ const DRAFT_DEFAULTS: Record<RegistrationType, UnknownRecord> = {
     needTypes: [],
     needOther: "",
     substances: [],
+    useDetails: [],
     chosenAction: "",
     actionAttempted: null,
     confidenceAfter: null,
@@ -167,6 +171,7 @@ const DRAFT_DEFAULTS: Record<RegistrationType, UnknownRecord> = {
     occurrenceDateTime: "",
     episodeDuration: "unanswered",
     substances: [],
+    useDetails: [],
     primarySubstance: "",
     amountCategory: "unanswered",
     firstTriggerType: "",
@@ -203,10 +208,7 @@ function optionalValues(values: readonly string[]): readonly string[] {
   return ["", ...values];
 }
 
-const SUBSTANCE_VALUES = [
-  "Alcohol", "Cannabis", "Cocaine / stimulant", "Benzodiazepines", "Nicotine",
-  "Opioids", "Gambling", "Sex / pornography", "Gaming", "Food / binge eating",
-] as const;
+const SUBSTANCE_VALUES = RECOVERY_TARGET_VALUES;
 const EMOTION_VALUES = [
   "Anxious", "Tense", "Low / sad", "Empty", "Angry", "Frustrated", "Guilty",
   "Ashamed", "Lonely", "Bored", "Restless", "Overwhelmed", "Rejected",
@@ -247,7 +249,7 @@ const RELAPSE_THOUGHT_VALUES = [
 ] as const;
 
 /** Canonical values stored by tracker controls; free-text fields are omitted. */
-const DRAFT_CATALOGS: Record<RegistrationType, DraftCatalog> = {
+export const DRAFT_CATALOGS: Record<RegistrationType, DraftCatalog> = {
   craving: {
     scalars: {
       onsetType: optionalValues([
@@ -688,6 +690,8 @@ function migrateRetiredTrekDraftValues(type: RegistrationType, draft: UnknownRec
  * would make the resumed draft disagree with the tracker payload.
  */
 function normalizeDependentDraftValues(type: RegistrationType, draft: UnknownRecord): void {
+  if (Array.isArray(draft.useDetails) && Array.isArray(draft.substances)) draft.useDetails = draft.useDetails.filter((item: {target:string}) => (draft.substances as string[]).includes(item.target));
+  if ((type === "craving" || type === "trek") && draft.useOutcome === "not_used") draft.useDetails = [];
   if (type === "craving") {
     if (draft.onsetType !== "Other") draft.onsetOther = "";
     if (!(draft.situationPresets as string[]).includes("Other")) draft.triggerOther = "";
@@ -719,6 +723,7 @@ function normalizeDependentDraftValues(type: RegistrationType, draft: UnknownRec
 
 function matchesDraftCatalog(type: RegistrationType, draft: UnknownRecord): boolean {
   const catalog = DRAFT_CATALOGS[type];
+  if ("useDetails" in draft && (!isValidUseDetails(draft.useDetails) || !(draft.useDetails as {target:string}[]).every(item => (draft.substances as string[]).includes(item.target)))) return false;
 
   for (const [field, allowed] of Object.entries(catalog.scalars)) {
     const value = draft[field];
@@ -812,6 +817,11 @@ function normalizeDraft(
 
   for (const [key, defaultValue] of Object.entries(defaults)) {
     const candidate = value[key];
+    if (key === "useDetails") {
+      if (candidate !== undefined && !isValidUseDetails(candidate)) return null;
+      result[key] = candidate === undefined ? [] : JSON.parse(JSON.stringify(candidate));
+      continue;
+    }
     const canonicalRelapseSafetyAlias = type === "relapse"
       && key === "acuteRisk"
       && Array.isArray(value.acuteRisks);

@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { Switch, Route, Router as WouterRouter } from "wouter";
 import { Toaster } from "@/components/ui/toaster";
 import { LanguageProvider } from "@/contexts/LanguageContext";
@@ -14,44 +15,153 @@ import { PWAProvider } from "@/hooks/usePWA";
 import { AtmosphericBackground } from "@/components/AtmosphericBackground";
 import { ScrollToTop } from "@/components/ScrollToTop";
 import { basePath } from "@/lib/basePath";
+import { HelpAccess } from "@/components/HelpAccess";
+import { RouteErrorBoundary } from "@/components/RouteErrorBoundary";
+import { DatabaseGate } from "@/components/DatabaseGate";
+import { ActionCard } from "@/pages/ActionCard";
 import { Home } from "@/pages/Home";
 import { CrisisNow } from "@/pages/CrisisNow";
-import { Tools } from "@/pages/Tools";
-import { Journal } from "@/pages/Journal";
-import { JournalNewEntry } from "@/pages/JournalNewEntry";
-import { Registraties } from "@/pages/Registraties";
-import { Insights } from "@/pages/Insights";
-import { Settings } from "@/pages/Settings";
-import { More } from "@/pages/More";
-import { QuickRegistration } from "@/pages/QuickRegistration";
-import { RecoveryPlan } from "@/pages/RecoveryPlan";
-import { HomeCustomization } from "@/pages/HomeCustomization";
-import { RecoveryActions } from "@/pages/RecoveryActions";
-import { WeeklyReview } from "@/pages/WeeklyReview";
-import { ReportBuilder } from "@/pages/ReportBuilder";
-import { CravingTracker } from "@/pages/CravingTracker";
-import { RelapseLog } from "@/pages/RelapseLog";
-import { AnxietyTracker } from "@/pages/AnxietyTracker";
-import { BoredomTracker } from "@/pages/BoredomTracker";
-import { TrekTracker } from "@/pages/TrekTracker";
-import { DelayScreen } from "@/pages/DelayScreen";
-import { PrivacyPolicy } from "@/pages/PrivacyPolicy";
-import { BoxBreathing } from "@/tools/BoxBreathing";
-import { Grounding54321 } from "@/tools/Grounding54321";
-import { UrgeSurfing } from "@/tools/UrgeSurfing";
-import { PlayTheTape } from "@/tools/PlayTheTape";
-import { ColdWaterReset } from "@/tools/ColdWaterReset";
-import { SelfCompassion } from "@/tools/SelfCompassion";
-import { Distraction } from "@/tools/Distraction";
+const Tools = lazy(() =>
+  import("@/pages/Tools").then((module) => ({ default: module.Tools })),
+);
+const Journal = lazy(() =>
+  import("@/pages/Journal").then((module) => ({ default: module.Journal })),
+);
+const JournalNewEntry = lazy(() =>
+  import("@/pages/JournalNewEntry").then((module) => ({
+    default: module.JournalNewEntry,
+  })),
+);
+const Registraties = lazy(() =>
+  import("@/pages/Registraties").then((module) => ({
+    default: module.Registraties,
+  })),
+);
+const Insights = lazy(() =>
+  import("@/pages/Insights").then((module) => ({ default: module.Insights })),
+);
+const Settings = lazy(() =>
+  import("@/pages/Settings").then((module) => ({ default: module.Settings })),
+);
+const More = lazy(() =>
+  import("@/pages/More").then((module) => ({ default: module.More })),
+);
+const QuickRegistration = lazy(() =>
+  import("@/pages/QuickRegistration").then((module) => ({
+    default: module.QuickRegistration,
+  })),
+);
+const RecoveryPlan = lazy(() =>
+  import("@/pages/RecoveryPlan").then((module) => ({
+    default: module.RecoveryPlan,
+  })),
+);
+const HomeCustomization = lazy(() =>
+  import("@/pages/HomeCustomization").then((module) => ({
+    default: module.HomeCustomization,
+  })),
+);
+const RecoveryActions = lazy(() =>
+  import("@/pages/RecoveryActions").then((module) => ({
+    default: module.RecoveryActions,
+  })),
+);
+const WeeklyReview = lazy(() =>
+  import("@/pages/WeeklyReview").then((module) => ({
+    default: module.WeeklyReview,
+  })),
+);
+const ReportBuilder = lazy(() =>
+  import("@/pages/ReportBuilder").then((module) => ({
+    default: module.ReportBuilder,
+  })),
+);
+const CravingTracker = lazy(() =>
+  import("@/pages/CravingTracker").then((module) => ({
+    default: module.CravingTracker,
+  })),
+);
+const RelapseLog = lazy(() =>
+  import("@/pages/RelapseLog").then((module) => ({
+    default: module.RelapseLog,
+  })),
+);
+const AnxietyTracker = lazy(() =>
+  import("@/pages/AnxietyTracker").then((module) => ({
+    default: module.AnxietyTracker,
+  })),
+);
+const BoredomTracker = lazy(() =>
+  import("@/pages/BoredomTracker").then((module) => ({
+    default: module.BoredomTracker,
+  })),
+);
+const TrekTracker = lazy(() =>
+  import("@/pages/TrekTracker").then((module) => ({
+    default: module.TrekTracker,
+  })),
+);
+const DelayScreen = lazy(() =>
+  import("@/pages/DelayScreen").then((module) => ({
+    default: module.DelayScreen,
+  })),
+);
+const PrivacyPolicy = lazy(() =>
+  import("@/pages/PrivacyPolicy").then((module) => ({
+    default: module.PrivacyPolicy,
+  })),
+);
+const BoxBreathing = lazy(() =>
+  import("@/tools/BoxBreathing").then((module) => ({
+    default: module.BoxBreathing,
+  })),
+);
+const Grounding54321 = lazy(() =>
+  import("@/tools/Grounding54321").then((module) => ({
+    default: module.Grounding54321,
+  })),
+);
+const UrgeSurfing = lazy(() =>
+  import("@/tools/UrgeSurfing").then((module) => ({
+    default: module.UrgeSurfing,
+  })),
+);
+const PlayTheTape = lazy(() =>
+  import("@/tools/PlayTheTape").then((module) => ({
+    default: module.PlayTheTape,
+  })),
+);
+const ColdWaterReset = lazy(() =>
+  import("@/tools/ColdWaterReset").then((module) => ({
+    default: module.ColdWaterReset,
+  })),
+);
+const SelfCompassion = lazy(() =>
+  import("@/tools/SelfCompassion").then((module) => ({
+    default: module.SelfCompassion,
+  })),
+);
+const Distraction = lazy(() =>
+  import("@/tools/Distraction").then((module) => ({
+    default: module.Distraction,
+  })),
+);
 
 function NotFound() {
   const { t } = useT();
   return (
     <div className="flex flex-col items-center justify-center min-h-dvh px-6 text-center bg-background">
       <p className="text-4xl mb-4">🌊</p>
-      <h1 className="text-xl font-semibold text-foreground mb-2">{t("notfound.title")}</h1>
+      <h1 className="text-xl font-semibold text-foreground mb-2">
+        {t("notfound.title")}
+      </h1>
       <p className="text-muted-foreground text-sm">{t("notfound.body")}</p>
-      <a href={`${basePath}/`} className="mt-6 text-primary text-sm font-medium">{t("notfound.home")}</a>
+      <a
+        href={`${basePath}/`}
+        className="mt-6 text-primary text-sm font-medium"
+      >
+        {t("notfound.home")}
+      </a>
     </div>
   );
 }
@@ -61,6 +171,7 @@ function AppRoutes() {
     <Switch>
       <Route path="/" component={Home} />
       <Route path="/help" component={CrisisNow} />
+      <Route path="/action-card" component={ActionCard} />
       <Route path="/quick" component={QuickRegistration} />
       <Route path="/recovery-plan" component={RecoveryPlan} />
       <Route path="/home-customization" component={HomeCustomization} />
@@ -99,11 +210,20 @@ function AppShell() {
       <AtmosphericBackground />
       <ScrollToTop />
       <RegistrationLauncherProvider>
-        <div
-          className="relative flex h-dvh min-h-dvh w-full max-w-full flex-col overflow-hidden bg-background"
-        >
+        <div className="relative flex h-dvh min-h-dvh w-full max-w-full flex-col overflow-hidden bg-background">
+          <HelpAccess />
           <main className="app-main min-h-0 flex-1 overflow-hidden">
-            <AppRoutes />
+            <DatabaseGate><RouteErrorBoundary>
+              <Suspense
+                fallback={
+                  <div role="status" className="p-5 text-sm">
+                    Anchor…
+                  </div>
+                }
+              >
+                <AppRoutes />
+              </Suspense>
+            </RouteErrorBoundary></DatabaseGate>
           </main>
           <DataIntegrityBanner />
           <RegistrationStorageBanner />

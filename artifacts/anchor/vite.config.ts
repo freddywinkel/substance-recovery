@@ -8,7 +8,9 @@ import { VitePWA } from "vite-plugin-pwa";
 const rawPort = process.env.PORT || "8080";
 
 if (!rawPort) {
-  throw new Error("PORT environment variable is required but was not provided.");
+  throw new Error(
+    "PORT environment variable is required but was not provided.",
+  );
 }
 
 const port = Number(rawPort);
@@ -21,12 +23,27 @@ const rawBasePath = process.env.BASE_PATH || "/";
 const basePath = rawBasePath.endsWith("/") ? rawBasePath : `${rawBasePath}/`;
 
 if (!basePath) {
-  throw new Error("BASE_PATH environment variable is required but was not provided.");
+  throw new Error(
+    "BASE_PATH environment variable is required but was not provided.",
+  );
 }
 
 export default defineConfig({
   base: basePath,
   plugins: [
+    {
+      name: "anchor-build-identity",
+      transformIndexHtml: () => [
+        {
+          tag: "meta",
+          attrs: {
+            name: "anchor-build",
+            content: process.env.ANCHOR_BUILD_ID || "local",
+          },
+          injectTo: "head",
+        },
+      ],
+    },
     react(),
     tailwindcss(),
 
@@ -44,7 +61,8 @@ export default defineConfig({
       manifest: {
         name: "Substance Recovery",
         short_name: "Substance Recovery",
-        description: "A private, offline-capable companion for addiction recovery support.",
+        description:
+          "A private, offline-capable companion for addiction recovery support.",
         lang: "nl",
         theme_color: "#0D0C0B",
         background_color: "#0D0C0B",
@@ -107,8 +125,8 @@ export default defineConfig({
   },
   server: {
     port,
-    host: "0.0.0.0",
-    allowedHosts: true,
+    host: "127.0.0.1",
+    allowedHosts: ["localhost", "127.0.0.1"],
     fs: {
       strict: true,
       deny: ["**/.*"],
@@ -116,7 +134,7 @@ export default defineConfig({
   },
   preview: {
     port,
-    host: "0.0.0.0",
-    allowedHosts: true,
+    host: "127.0.0.1",
+    allowedHosts: ["localhost", "127.0.0.1"],
   },
 });

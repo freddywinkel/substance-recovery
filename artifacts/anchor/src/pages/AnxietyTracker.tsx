@@ -1,3 +1,4 @@
+import { CareContactCard } from "@/components/CareContactCard";
 /**
  * AnxietyTracker v2 — 4-step awareness + action log.
  *
@@ -19,7 +20,7 @@ import { useActiveRegistration } from "@/contexts/ActiveRegistrationContext";
 import { useRecoveryFeatures } from "@/contexts/RecoveryFeaturesContext";
 import { useT } from "@/hooks/useTranslation";
 import { toStableOptionId, toStableOptionIds } from "@/lib/registrationIds";
-import { getUrgentSafetyCopy, phoneHref } from "@/lib/registrationSafety";
+import { getUrgentSafetyCopy } from "@/lib/registrationSafety";
 import { IntensitySlider } from "@/components/tracker/IntensitySlider";
 import { ChipCol } from "@/components/tracker/ChipCol";
 import { MultiSelectGrid } from "@/components/tracker/MultiSelectGrid";
@@ -593,11 +594,7 @@ export function AnxietyTracker() {
         <a href="tel:113" className="text-sm font-semibold text-primary">{safetyCopy.call113}</a>
         <a href="tel:08000113" className="text-sm font-semibold text-primary">{safetyCopy.call0800}</a>
         <a href="https://www.113.nl" target="_blank" rel="noreferrer" className="text-sm font-semibold text-primary">{safetyCopy.visit113}</a>
-        {crisisService?.number && (
-          <a href={phoneHref(crisisService.number)} className="text-sm font-semibold text-primary">
-            {safetyCopy.configuredService}: {crisisService.name} ({crisisService.number})
-          </a>
-        )}
+        {crisisService?.number && <CareContactCard service={crisisService} language={language} />}
       </div>
     </div>
   );

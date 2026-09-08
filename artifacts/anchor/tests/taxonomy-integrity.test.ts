@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { DEFAULT_CRISIS_SERVICES } from "../src/lib/crisisServices";
 import {
   arrayObjectStringPropertyValuesContaining,
   objectPropertyNames,
@@ -26,7 +27,7 @@ const trackers = [
   {
     name: "Trek",
     file: "src/pages/TrekTracker.tsx",
-    expectedOptions: 92,
+    expectedOptions: 96,
     lists: [
       "TREK_TYPES",
       "PLANNING_STAGES",
@@ -44,7 +45,7 @@ const trackers = [
   {
     name: "Craving",
     file: "src/pages/CravingTracker.tsx",
-    expectedOptions: 91,
+    expectedOptions: 95,
     lists: [
       "ONSET_TYPES",
       "TRIGGER_PRESETS",
@@ -97,7 +98,7 @@ const trackers = [
   {
     name: "Relapse",
     file: "src/pages/RelapseLog.tsx",
-    expectedOptions: 120,
+    expectedOptions: 124,
     lists: [
       "LABEL_OPTIONS",
       "DURATION_OPTIONS",
@@ -167,7 +168,7 @@ describe.each(trackers)("$name taxonomy", ({ file, expectedOptions, lists }) => 
     options: readLiteralVariable(file, list) as Option[],
   }));
 
-  it(`keeps the reviewed ${expectedOptions}-option source inventory explicit`, () => {
+  it(`keeps the ${expectedOptions}-option source inventory explicit`, () => {
     expect(parsedLists.reduce((total, current) => total + current.options.length, 0)).toBe(expectedOptions);
   });
 
@@ -218,10 +219,7 @@ describe("safety option contracts", () => {
   });
 
   it("keeps the national emergency and suicide-prevention numbers available", () => {
-    const services = readLiteralVariable("src/lib/crisisServices.ts", "DEFAULT_CRISIS_SERVICES") as Array<{
-      id: string;
-      number: string;
-    }>;
+    const services = DEFAULT_CRISIS_SERVICES;
     expect(duplicateValues(services.map(({ id }) => id))).toEqual([]);
     expect(services).toEqual(
       expect.arrayContaining([

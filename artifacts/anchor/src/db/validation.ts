@@ -1,3 +1,5 @@
+import { toStableOptionId } from "@/lib/registrationIds";
+import { isValidUseDetails, decodeUseDetails } from "@/lib/useDetails";
 import {
   migrateRelapseFollowUpAnswers,
   migrateRelapseV2DefaultAnswers,
@@ -22,7 +24,7 @@ import type {
   RelapseLog,
 } from "./schema";
 
-export const BACKUP_FORMAT_VERSION = 2 as const;
+export const BACKUP_FORMAT_VERSION = 3 as const;
 
 export type ImportStoreKey =
   | "journal"
@@ -133,7 +135,7 @@ function validateRegistrationMetadata(record: UnknownRecord): string | null {
   if (!isFiniteTimestamp(record.timestamp)) {
     return "timestamp must be a non-negative finite number";
   }
-  for (const field of ["occurredAt", "startedAt", "completedAt"] as const) {
+  for (const field of ["occurredAt", "startedAt", "completedAt", "editedAt"] as const) {
     if (record[field] !== undefined && !isFiniteTimestamp(record[field])) {
       return `${field} must be a non-negative finite number`;
     }
@@ -200,6 +202,7 @@ const RELAPSE_FIRST_TRIGGER_IDS = new Set([
   "social-pressure",
   "craving-out-of-nowhere",
   "memory-or-flashback",
+  "memory-flashback",
   "seeing-or-smelling-a-cue",
   RELAPSE_NO_CLEAR_TRIGGER_ID,
 ]);
@@ -339,6 +342,7 @@ function validateV3CanonicalAnswers(
   optionalSchema: CanonicalAnswerSchema = {},
 ): string | null {
   if (record.dataVersion !== 3) return null;
+  if (flow === "Craving" || flow === "Trek" || flow === "Relapse") optionalSchema = { ...optionalSchema, useDetailsJson: value => decodeUseDetails(value) !== null };
   if (!isRecord(record.answers)) {
     return `dataVersion 3 ${flow} requires a canonical answers object`;
   }
@@ -369,7 +373,7 @@ function validateV3CanonicalAnswers(
 function validateJournal(record: UnknownRecord): ValidationResult<JournalEntry> {
   if (typeof record.id !== "string" || record.id.trim() === "") return failure("id must be a non-empty string");
   if (!isFiniteTimestamp(record.timestamp)) return failure("timestamp must be a supported non-negative date timestamp");
-  if (!Number.isInteger(record.mood) || !isFiniteNumber(record.mood, 1, 5)) return failure("mood must be an integer from 1 through 5");
+  if (record.mood !== null && (!Number.isInteger(record.mood) || !isFiniteNumber(record.mood, 1, 5))) return failure("mood must be null or an integer from 1 through 5");
   if (record.cravingIntensity !== null && !isFiniteNumber(record.cravingIntensity, 0, 10)) return failure("cravingIntensity must be null or a number from 0 through 10");
   if (typeof record.note !== "string") return failure("note must be a string");
   if (record.toolUsed !== null && typeof record.toolUsed !== "string") return failure("toolUsed must be null or a string");
@@ -859,6 +863,20 @@ export function validateImportedStoreRecord(
   value: unknown,
 ): ValidationResult<ImportedStoreRecord> {
   if (!isRecord(value)) return failure("record must be an object");
+  if (key === "cravingLogs" || key === "relapseLogs") {
+    if (value.useDetails !== undefined && !isValidUseDetails(value.useDetails)) return failure("useDetails must be valid optional use details");
+    const answers = isRecord(value.answers) ? value.answers : undefined;
+    const hasCanonical = !!answers && Object.prototype.hasOwnProperty.call(answers, "useDetailsJson");
+    const canonical = hasCanonical ? decodeUseDetails(answers?.useDetailsJson) : undefined;
+    if (canonical === null) return failure("answers.useDetailsJson is invalid");
+    if (value.dataVersion === 3 && (value.useDetails !== undefined || hasCanonical)) {
+      if (!hasCanonical || JSON.stringify(canonical) !== JSON.stringify(value.useDetails ?? [])) return failure("useDetails must match canonical useDetailsJson");
+    }
+    const details = canonical ?? value.useDetails;
+    const targetKey = key === "relapseLogs" ? "substances" : "targets";
+    const targets = answers && Object.prototype.hasOwnProperty.call(answers, targetKey) ? answers[targetKey] : (Array.isArray(value.substances) ? value.substances.map(item => toStableOptionId(String(item))) : null);
+    if (Array.isArray(details) && details.some(item => !Array.isArray(targets) || !targets.includes(toStableOptionId(item.target)) || !Array.isArray(value.substances) || !value.substances.includes(item.target))) return failure("useDetails target must be selected in this registration");
+  }
   switch (key) {
     case "journal": return validateJournal(value);
     case "cravingLogs": {
@@ -881,7 +899,7 @@ export function validateBackupEnvelope(
   value: unknown,
 ): ValidationResult<Record<string, unknown>> {
   if (!isRecord(value)) return failure("Backup must be an object.");
-  if (value.version !== 1 && value.version !== BACKUP_FORMAT_VERSION) {
+  if (value.version !== 1 && value.version !== 2 && value.version !== BACKUP_FORMAT_VERSION) {
     return failure("Unsupported backup version.");
   }
   for (const key of [
@@ -892,11 +910,13 @@ export function validateBackupEnvelope(
   if (value.cigaretteLogs !== undefined && !Array.isArray(value.cigaretteLogs)) {
     return failure("cigaretteLogs must be an array when present.");
   }
-  if (value.version === 2 && !Array.isArray(value.featureRecords)) {
+  if ((value.version === 2 || value.version === 3) && !Array.isArray(value.featureRecords)) {
     return failure("featureRecords must be an array in a version 2 backup.");
   }
   if (value.featureRecords !== undefined && !Array.isArray(value.featureRecords)) {
     return failure("featureRecords must be an array when present.");
   }
+  if (value.checkIns !== undefined && !Array.isArray(value.checkIns)) return failure("checkIns must be an array when present.");
+  if (value.dataVersion !== undefined && (!Number.isInteger(value.dataVersion) || Number(value.dataVersion) > 3 || Number(value.dataVersion) < 1)) return failure("Unsupported backup dataVersion.");
   return { ok: true, value };
 }

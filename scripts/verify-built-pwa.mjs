@@ -1,8 +1,9 @@
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-const dist = resolve("artifacts/anchor/dist/public");
-const base = "/substance-recovery/";
+const dist = resolve(process.env.PWA_DIST || "artifacts/anchor/dist/public");
+const rawBase = process.env.BASE_PATH || "/substance-recovery/";
+const base = rawBase.endsWith("/") ? rawBase : `${rawBase}/`;
 
 function fail(message) {
   throw new Error(`Built PWA verification failed: ${message}`);
@@ -15,6 +16,7 @@ function read(name) {
 }
 
 const html = read("index.html");
+if (read("404.html") !== html) fail("SPA fallback must match index.html");
 const serviceWorker = read("sw.js");
 const manifest = JSON.parse(read("manifest.webmanifest"));
 
@@ -49,11 +51,14 @@ for (const required of ["index.html", "manifest.webmanifest", "assets/"]) {
   }
 }
 
-const localAssetRefs = [...html.matchAll(/(?:src|href)="\/substance-recovery\/([^"?#]+)"/g)]
+const localAssetRefs = [...html.matchAll(/(?:src|href)="([^"?#]+)"/g)]
   .map((match) => match[1])
+  .filter((path) => path.startsWith(base))
+  .map((path) => path.slice(base.length))
   .filter((path) => !path.endsWith("/"));
 for (const asset of localAssetRefs) {
-  if (!existsSync(resolve(dist, asset))) fail(`referenced asset is missing: ${asset}`);
+  if (!existsSync(resolve(dist, asset)))
+    fail(`referenced asset is missing: ${asset}`);
 }
 
 console.log(`Verified GitHub Pages PWA artifact at ${base}`);

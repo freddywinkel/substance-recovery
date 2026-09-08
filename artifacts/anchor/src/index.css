@@ -193,7 +193,8 @@
     );
   }
 
-  .app-main > * {
+  .app-main > *,
+  .app-route-host > * {
     height: 100%;
     min-height: 0 !important;
     max-height: 100%;
