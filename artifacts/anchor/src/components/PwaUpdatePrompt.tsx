@@ -1,9 +1,16 @@
 import { RefreshCw } from "lucide-react";
 import { useRegisterSW } from "virtual:pwa-register/react";
 import { useT } from "@/hooks/useTranslation";
+import { useRef, useState } from "react";
+import { flushLocalDrafts } from "@/lib/localDrafts";
+import { useActiveRegistration } from "@/contexts/ActiveRegistrationContext";
 
 export function PwaUpdatePrompt() {
-  const { t } = useT();
+  const { t, language } = useT();
+  const { storageError, retryPersistence } = useActiveRegistration();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(false);
+  const busyRef = useRef(false);
   const {
     needRefresh: [needRefresh, setNeedRefresh],
     updateServiceWorker,
@@ -15,8 +22,16 @@ export function PwaUpdatePrompt() {
     setNeedRefresh(false);
   };
 
-  const update = () => {
-    void updateServiceWorker(true);
+  const update = async () => {
+    if (busyRef.current) return;
+    busyRef.current = true; setBusy(true); setError(false);
+    try {
+      if (storageError) throw storageError;
+      await flushLocalDrafts();
+      if (!await retryPersistence()) throw new Error("Registration draft could not be saved.");
+      await updateServiceWorker(true);
+    } catch { setError(true); }
+    finally { busyRef.current = false; setBusy(false); }
   };
 
   return (
@@ -49,7 +64,8 @@ export function PwaUpdatePrompt() {
         </div>
       </div>
 
-      <div className="mt-3 flex justify-end gap-2">
+      {error && <p role="alert" className="mt-3 text-sm text-destructive">{language === "nl" ? "Bijwerken is uitgesteld omdat invoer nog niet veilig is bewaard. Ga terug naar het formulier en probeer opslaan opnieuw." : "Update postponed because input has not been safely saved. Return to the form and retry saving."}</p>}
+      <div className="mt-3 flex flex-wrap justify-end gap-2">
         <button
           type="button"
           onClick={dismiss}
@@ -59,7 +75,8 @@ export function PwaUpdatePrompt() {
         </button>
         <button
           type="button"
-          onClick={update}
+          onClick={() => void update()}
+          disabled={busy}
           className="min-h-11 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-all hover:opacity-90 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
         >
           {t("pwa.update.action")}

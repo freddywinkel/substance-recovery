@@ -50,7 +50,31 @@ export function literalValue(node: ts.Expression): unknown {
     return node.operator === ts.SyntaxKind.MinusToken ? -value : value;
   }
   if (ts.isArrayLiteralExpression(node)) {
-    return node.elements.map((element) => literalValue(element as ts.Expression));
+    return node.elements.flatMap((element) => {
+      if (!ts.isSpreadElement(element)) return [literalValue(element as ts.Expression)];
+      const values = literalValue(element.expression);
+      if (!Array.isArray(values)) throw new Error("Only literal array spreads can be inspected");
+      return values;
+    });
+  }
+  if (ts.isIdentifier(node)) {
+    const source = node.getSourceFile();
+    for (const statement of source.statements) {
+      if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier)) continue;
+      const bindings = statement.importClause?.namedBindings;
+      if (!bindings || !ts.isNamedImports(bindings)) continue;
+      const binding = bindings.elements.find(item => item.name.text === node.text);
+      if (!binding) continue;
+      const specifier = statement.moduleSpecifier.text;
+      if (!specifier.startsWith("@/") && !specifier.startsWith(".")) throw new Error("Only local literal imports can be inspected");
+      const base = specifier.startsWith("@/") ? path.join(appRoot, "src", specifier.slice(2)) : path.resolve(path.dirname(source.fileName), specifier);
+      const filename = [base, `${base}.ts`, `${base}.tsx`].find(candidate => fs.existsSync(candidate) && fs.statSync(candidate).isFile());
+      if (!filename || path.relative(appRoot, filename).startsWith("..")) throw new Error("Imported literal must be inside the app");
+      return readLiteralVariable(path.relative(appRoot, filename), binding.propertyName?.text ?? binding.name.text);
+    }
+    const variable = findVariable(source, node.text);
+    if (!variable.initializer) throw new Error(`${node.text} has no literal initializer`);
+    return literalValue(variable.initializer);
   }
   if (ts.isObjectLiteralExpression(node)) {
     return Object.fromEntries(

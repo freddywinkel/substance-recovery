@@ -146,6 +146,7 @@ describe("Craving and Trek question-flow semantics", () => {
       useOutcome: "unsure",
       cravingOutcome: null,
       intensityAfter: null,
+      useDetailsJson: null,
     });
   });
 
@@ -184,6 +185,7 @@ describe("Craving and Trek question-flow semantics", () => {
       actionAttempted: false,
       confidenceAfter: null,
       useOutcome: "unsure",
+      useDetailsJson: null,
     });
   });
 

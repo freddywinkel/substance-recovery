@@ -22,8 +22,10 @@ function formatShortDate(ts: number, locale: string) {
 }
 
 export function Journal() {
-  const { journal, removeEntry } = useStore();
+  const { journal, removeEntry, loading, loadError, refresh } = useStore();
   const { t, language } = useT();
+  const [deleteError, setDeleteError] = useState("");
+  const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [dateFilter, setDateFilter] = useState<"all" | "today" | "week" | "month">("all");
@@ -127,7 +129,7 @@ export function Journal() {
           {t("journal.local_storage")}
         </p>
 
-        {filteredEntries.length === 0 ? (
+        {loadError ? <p role="alert">{t("data.warning.read_failed")} <button onClick={() => void refresh()} className="underline">{t("data.warning.retry")}</button></p> : loading ? <p role="status">{language === "nl" ? "Laden..." : "Loading..."}</p> : filteredEntries.length === 0 ? (
           <div className="flex flex-col items-center justify-center flex-1 gap-4 text-center py-16">
             <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center">
               <span className="text-3xl">📓</span>
@@ -146,10 +148,10 @@ export function Journal() {
             >
               <div className="flex items-start justify-between gap-2">
                 <div className="flex items-center gap-2.5">
-                  <span className="text-2xl">{["😔", "😟", "😐", "🙂", "😊"][entry.mood - 1]}</span>
+                  <span className="text-2xl">{["😔", "😟", "😐", "🙂", "😊"][entry.mood === null ? -1 : entry.mood - 1]}</span>
                   <div>
                     <p className="text-sm font-medium text-foreground">
-                      {t("journal.mood")} {entry.mood}/5
+                      {t("journal.mood")} {entry.mood === null ? (language === "nl" ? "Niet ingevuld" : "Unanswered") : `${entry.mood}/5`}
                       {entry.cravingIntensity !== null && ` · ${t("journal.craving_label")} ${entry.cravingIntensity}/10`}
                     </p>
                     <p className="text-xs text-muted-foreground">{formatDate(entry.timestamp, language)}</p>
@@ -165,7 +167,7 @@ export function Journal() {
                     />
                   )}
                   <button
-                    onClick={() => setConfirmDelete(entry.id)}
+                    onClick={() => { setDeleteError(""); setConfirmDelete(entry.id); }}
                     className="touch-target text-muted-foreground hover:text-destructive transition-colors ml-2 p-1.5 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
                     aria-label={t("journal.delete_aria")}
                   >
@@ -207,6 +209,7 @@ export function Journal() {
           <div role="alertdialog" aria-modal="true" aria-labelledby="delete-entry-title" className="bg-card border border-border rounded-3xl p-6 w-full max-w-sm">
             <h3 id="delete-entry-title" className="font-semibold text-foreground mb-2">{t("journal.delete_title")}</h3>
             <p className="text-sm text-muted-foreground mb-5">{t("journal.delete_body")}</p>
+            {deleteError && <p role="alert" className="text-destructive mb-3">{deleteError}</p>}
             <div className="flex gap-3">
               <button
                 onClick={() => setConfirmDelete(null)}
@@ -215,9 +218,13 @@ export function Journal() {
                 {t("common.cancel")}
               </button>
               <button
+                disabled={deleting}
                 onClick={async () => {
-                  await removeEntry(confirmDelete);
-                  setConfirmDelete(null);
+                  if (deleting) return;
+                  setDeleting(true); setDeleteError("");
+                  try { await removeEntry(confirmDelete); setConfirmDelete(null); }
+                  catch { setDeleteError(language === "nl" ? "Verwijderen is mislukt. Probeer opnieuw." : "Could not delete. Please retry."); }
+                  finally { setDeleting(false); }
                 }}
                 className="flex-1 bg-destructive text-destructive-foreground rounded-xl py-3 font-semibold touch-target focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
               >

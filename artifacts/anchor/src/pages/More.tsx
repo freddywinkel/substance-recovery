@@ -79,7 +79,7 @@ export function More() {
   return (
     <div className="h-full overflow-y-auto scroll-smooth-ios">
       <PageHeader title={t("nav.more")} subtitle={t("more.subtitle")} />
-      <main className="mx-auto w-full max-w-2xl px-4 py-4">
+      <div className="mx-auto w-full max-w-2xl px-4 py-4">
         <nav className="grid gap-3" aria-label={t("nav.more")}>
           {items.map(({ to, icon: Icon, title, description }) => (
             <Link key={to} href={to} asChild>
@@ -104,7 +104,7 @@ export function More() {
             </Link>
           ))}
         </nav>
-      </main>
+      </div>
     </div>
   );
 }

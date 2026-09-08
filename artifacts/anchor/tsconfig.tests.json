@@ -1,6 +1,6 @@
 {
   "extends": "./tsconfig.json",
-  "include": ["src/**/*", "tests/**/*"],
+  "include": ["src/**/*", "tests/**/*", "browser-tests/**/*"],
   "exclude": ["node_modules", "build", "dist"],
   "compilerOptions": {
     "noEmit": true,

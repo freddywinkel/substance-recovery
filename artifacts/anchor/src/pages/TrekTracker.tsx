@@ -1,3 +1,7 @@
+import { RECOVERY_TARGET_VALUES, recoveryTargetLabel, isBehavioralTarget } from "@/lib/recoveryTargets";
+import { encodeUseDetails, selectedUseDetails, type UseDetail } from "@/lib/useDetails";
+import { UseDetailsEditor } from "@/components/UseDetailsEditor";
+import { TargetSafetyAdvice } from "@/components/TargetSafetyAdvice";
 import { useState, useCallback, useEffect, useMemo } from "react";
 import { useLocation } from "wouter";
 import { useStore } from "@/hooks/useStore";
@@ -129,7 +133,7 @@ const TREK_ACTIONS = [
   { value: "just-observe", label: "Just observe — don't act", msgKey: "trek.msg.observe" },
 ];
 
-const SUBSTANCES = ["Alcohol", "Cannabis", "Cocaine / stimulant", "Benzodiazepines", "Nicotine", "Opioids", "Gambling", "Sex / pornography", "Gaming", "Food / binge eating"];
+const SUBSTANCES = [...RECOVERY_TARGET_VALUES];
 
 const BEHAVIOURAL_TARGETS = new Set([
   "Gambling",
@@ -143,7 +147,7 @@ const BEHAVIOURAL_TARGETS = new Set([
  * substance, but do not apply substance-oriented copy to behaviour-only entries.
  */
 export function shouldShowMedicalSafetyForTargets(targets: string[]): boolean {
-  return targets.length === 0 || targets.some((target) => !BEHAVIOURAL_TARGETS.has(target));
+  return targets.length === 0 || targets.some((target) => !isBehavioralTarget(target));
 }
 
 /** An after-action score has no saved meaning unless the action was attempted. */
@@ -184,6 +188,7 @@ export interface TrekDraft {
   needTypes: string[];
   needOther: string;
   substances: string[];
+  useDetails?: UseDetail[];
   chosenAction: string;
   actionAttempted: boolean | null;
   confidenceAfter: number | null;
@@ -208,6 +213,7 @@ export function createBlankTrekDraft(): TrekDraft {
     needTypes: [],
     needOther: "",
     substances: [],
+    useDetails: [],
     chosenAction: "",
     actionAttempted: null,
     confidenceAfter: null,
@@ -250,6 +256,7 @@ export function buildTrekAnswers(
     needs: toStableOptionIds(draft.needTypes),
     needOther: textOrNull(removeHiddenOtherText(draft.needTypes, draft.needOther)),
     targets: stableIdsOrNull(draft.substances),
+    useDetailsJson: encodeUseDetails(selectedUseDetails(draft.useOutcome === "not_used" ? [] : draft.useDetails, draft.substances)),
     chosenAction: draft.chosenAction,
     actionAttempted: draft.actionAttempted,
     confidenceAfter: confidenceAfterForAttempt(draft.actionAttempted, draft.confidenceAfter),
@@ -307,7 +314,7 @@ export function TrekTracker() {
   };
 
   const update = useCallback(<K extends keyof TrekDraft>(key: K, value: TrekDraft[K]) => {
-    setDraft((prev) => ({ ...prev, [key]: value }));
+    setDraft((prev) => ({ ...prev, [key]: value, ...(key === "useOutcome" && value === "not_used" ? { useDetails: [] } : {}) }));
   }, []);
 
   const toggleType = useCallback((v: string) => {
@@ -319,6 +326,7 @@ export function TrekTracker() {
   const toggleSubstance = useCallback((v: string) => {
     setDraft((prev) => ({
       ...prev,
+      useDetails: prev.substances.includes(v) ? prev.useDetails?.filter(item => item.target !== v) ?? [] : prev.useDetails ?? [],
       substances: prev.substances.includes(v)
         ? prev.substances.filter((x) => x !== v)
         : [...prev.substances, v],
@@ -443,6 +451,7 @@ export function TrekTracker() {
         locationOther: removeHiddenOtherText(draft.location, draft.locationOther),
         socialContext: [],
         substances: draft.substances,
+        useDetails: selectedUseDetails(draft.useOutcome === "not_used" ? [] : draft.useDetails, draft.substances),
         // Trek targets are an unordered plural answer; no primary target is asked.
         primarySubstance: "",
         buildupDuration: "",
@@ -835,8 +844,9 @@ export function TrekTracker() {
               options={SUBSTANCES}
               value={draft.substances}
               onToggle={toggleSubstance}
-              translate={tOpt}
+              translate={(target) => recoveryTargetLabel(target, language)}
             />
+            <TargetSafetyAdvice targets={draft.substances} language={language} />
           </>
         )}
 
@@ -965,6 +975,7 @@ export function TrekTracker() {
                 </button>
               ))}
             </div>
+            {(draft.useOutcome === "used" || draft.useOutcome === "unsure") && <UseDetailsEditor targets={draft.substances} value={draft.useDetails} language={language} onChange={(value) => update("useDetails", value)} />}
             {draft.useOutcome === "used" && shouldShowMedicalSafetyForTargets(draft.substances) && (
               <div role="alert" className="space-y-3 rounded-2xl border border-amber-500/50 bg-card p-4">
                 <div className="flex items-start gap-2">

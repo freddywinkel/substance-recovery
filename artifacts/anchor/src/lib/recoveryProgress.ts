@@ -5,6 +5,8 @@ import type {
   RegistrationType,
 } from "@/lib/recoveryFeatures";
 import { toStableOptionId } from "@/lib/registrationIds";
+import { explicitSafetyAnswer } from "@/lib/canonicalRegistration";
+import type { AnxietyLog, BoredomLog, CravingLog, RelapseLog } from "@/db";
 
 export type ReviewSource = "detailed" | "quick" | "linked";
 export type TimeOfDay = "morning" | "afternoon" | "evening" | "night";
@@ -21,6 +23,12 @@ interface RegistrationBase {
   timestamp: number;
   occurredAt?: number | null;
   completedAt?: number | null;
+  startedAt?: number | null;
+  editedAt?: number | null;
+  dataVersion?: number;
+  urgencyHigh?: boolean | null;
+  acuteRisks?: string[];
+  acuteRisk?: string;
   intensity?: number | null;
   note?: string;
   answers?: Record<string, ReviewAnswerValue>;
@@ -79,11 +87,108 @@ export interface ReviewRegistration {
   intensity: number | null;
   laterIntensity: number | null;
   immediateSafety: QuickSafety | null;
+  /** Source-specific observations; no historical answer is a current assessment. */
+  safetyObservations: SafetyObservation[];
+  intensityObservations: IntensityObservation[];
+  quickId: string | null;
+  detailedId: string | null;
+  eventTimeExplicit: boolean;
+  quickRecordedAt: number | null;
+  reflectionStartedAt: number | null;
+  reflectionCompletedAt: number | null;
+  editedAt: number | null;
   context: string;
   contextParts: ReviewTextPart[];
   action: string;
   actionParts: ReviewTextPart[];
   note: string;
+}
+
+export interface SafetyObservation {
+  source: "quick" | "detailed";
+  sourceId: string;
+  recordedAt: number;
+  answered: boolean;
+  values: string[];
+  editedAt?: number | null;
+}
+
+export interface IntensityObservation {
+  source: "quick" | "detailed";
+  sourceId: string;
+  recordedAt: number;
+  value: number | null;
+  editedAt?: number | null;
+}
+
+export function formatSafetyObservations(
+  observations: readonly SafetyObservation[],
+  language: "en" | "nl",
+): string {
+  const labels =
+    language === "nl"
+      ? {
+          "safe-for-now": "Voor nu veilig aangegeven",
+          "need-support": "Steun nodig aangegeven",
+          "urgent-danger": "Direct gevaar aangegeven",
+          "anxiety-urgent": "Dringende hulp nodig aangegeven",
+          "relapse-unsafe": "Onveilig aangegeven",
+          "relapse-continued-use": "Zorg over doorgaan met gebruik",
+          "relapse-withdrawal": "Zorg over ontwenning",
+          "relapse-self-harm": "Zorg over schade aan zichzelf of een ander",
+          "explicit-none": "Expliciet geen van de gevraagde zorgen",
+        }
+      : {
+          "safe-for-now": "Reported safe for now",
+          "need-support": "Reported needing support",
+          "urgent-danger": "Reported immediate danger",
+          "anxiety-urgent": "Reported urgent help needed",
+          "relapse-unsafe": "Reported unsafe",
+          "relapse-continued-use": "Concern about continued use",
+          "relapse-withdrawal": "Concern about withdrawal",
+          "relapse-self-harm": "Concern about harm to self or another",
+          "explicit-none": "Explicitly none of the concerns asked about",
+        };
+  const format = new Intl.DateTimeFormat(
+    language === "nl" ? "nl-NL" : "en-GB",
+    { dateStyle: "medium", timeStyle: "short" },
+  );
+  return observations
+    .map((observation) => {
+      const source =
+        language === "nl"
+          ? observation.source === "quick"
+            ? "Snel"
+            : "Uitgebreid"
+          : observation.source === "quick"
+            ? "Quick"
+            : "Detailed";
+      const answer = observation.answered
+        ? observation.values
+            .map((value) => labels[value as keyof typeof labels] ?? value)
+            .join("; ")
+        : language === "nl"
+          ? "Niet beantwoord / niet gevraagd"
+          : "Unanswered / not asked";
+      return `${source} · ${format.format(observation.recordedAt)}${observation.editedAt ? ` (${language === "nl" ? "gecorrigeerd" : "corrected"} ${format.format(observation.editedAt)})` : ""}: ${answer}`;
+    })
+    .join("\n");
+}
+
+export function formatIntensityObservations(
+  observations: readonly IntensityObservation[],
+  language: "en" | "nl",
+): string {
+  const format = new Intl.DateTimeFormat(
+    language === "nl" ? "nl-NL" : "en-GB",
+    { dateStyle: "medium", timeStyle: "short" },
+  );
+  return observations
+    .map(
+      (entry) =>
+        `${language === "nl" ? (entry.source === "quick" ? "Snel" : "Uitgebreid") : entry.source === "quick" ? "Quick" : "Detailed"} · ${format.format(entry.recordedAt)}${entry.editedAt ? ` (${language === "nl" ? "gecorrigeerd" : "corrected"} ${format.format(entry.editedAt)})` : ""}: ${entry.value ?? (language === "nl" ? "Niet vastgelegd" : "Not recorded")}`,
+    )
+    .join("\n");
 }
 
 export interface LocalWeekRange {
@@ -102,16 +207,17 @@ export function buildLocalDateRange(
     const month = Number(match[2]);
     const day = Number(match[3]);
     const date = new Date(year, month - 1, day);
-    return date.getFullYear() === year
-      && date.getMonth() === month - 1
-      && date.getDate() === day
+    return date.getFullYear() === year &&
+      date.getMonth() === month - 1 &&
+      date.getDate() === day
       ? date
       : null;
   };
 
   const startDate = parseDateOnly(from);
   const throughDate = parseDateOnly(through);
-  if (!startDate || !throughDate || throughDate.getTime() < startDate.getTime()) return null;
+  if (!startDate || !throughDate || throughDate.getTime() < startDate.getTime())
+    return null;
   throughDate.setDate(throughDate.getDate() + 1);
   return { start: startDate.getTime(), endExclusive: throughDate.getTime() };
 }
@@ -160,6 +266,7 @@ export interface SupportiveProgressSummary {
 export const REPORT_FIELD_IDS = [
   "summary",
   "date",
+  "timing",
   "source",
   "type",
   "intensity",
@@ -174,19 +281,41 @@ export const REPORT_FIELD_IDS = [
 ] as const;
 
 export type ReportFieldId = (typeof REPORT_FIELD_IDS)[number];
-export type ReportSupportiveField = Extract<ReportFieldId, `supportive-${string}`>;
+export type ReportSupportiveField = Extract<
+  ReportFieldId,
+  `supportive-${string}`
+>;
 export type ReportRegistrationField = Exclude<
   ReportFieldId,
   "summary" | ReportSupportiveField
 >;
 
-export function isReportSupportiveField(field: ReportFieldId): field is ReportSupportiveField {
+export function isReportSupportiveField(
+  field: ReportFieldId,
+): field is ReportSupportiveField {
   return field.startsWith("supportive-");
 }
 
 export interface SelectiveReportRow {
   id: string;
-  values: Partial<Record<ReportRegistrationField, string | number | null | ReviewTextPart[]>>;
+  values: Partial<
+    Record<
+      ReportRegistrationField,
+      | string
+      | number
+      | null
+      | ReviewTextPart[]
+      | SafetyObservation[]
+      | IntensityObservation[]
+    >
+  >;
+  timing?: Pick<
+    ReviewRegistration,
+    | "quickRecordedAt"
+    | "reflectionStartedAt"
+    | "reflectionCompletedAt"
+    | "editedAt"
+  >;
 }
 
 export interface SelectiveSupportiveActionRow {
@@ -221,15 +350,18 @@ function answerOptionParts(
   legacy: string | readonly string[] | undefined | null,
 ): ReviewTextPart[] {
   const answer = answers?.[key];
-  const values = typeof answer === "string"
-    ? [answer]
-    : Array.isArray(answer) && answer.every((value) => typeof value === "string")
-      ? answer
-      : Array.isArray(legacy)
-        ? legacy.map(toStableOptionId)
-        : typeof legacy === "string"
-          ? [toStableOptionId(legacy)]
-          : [];
+  if (answers && Object.hasOwn(answers, key) && answer === null) return [];
+  const values =
+    typeof answer === "string"
+      ? [answer]
+      : Array.isArray(answer) &&
+          answer.every((value) => typeof value === "string")
+        ? answer
+        : Array.isArray(legacy)
+          ? legacy.map(toStableOptionId)
+          : typeof legacy === "string"
+            ? [toStableOptionId(legacy)]
+            : [];
   return values.flatMap(optionPart);
 }
 
@@ -246,17 +378,90 @@ function uniqueParts(...groups: readonly ReviewTextPart[][]): ReviewTextPart[] {
 const partsToLegacyText = (parts: readonly ReviewTextPart[]): string =>
   parts.map((part) => part.value).join(" · ");
 
-const joinedDistinctNonBlank = (...values: Array<string | undefined | null>): string =>
-  [...new Set(values.map((value) => value?.trim()).filter((value): value is string => Boolean(value)))].join("\n");
+const joinedDistinctNonBlank = (
+  ...values: Array<string | undefined | null>
+): string =>
+  [
+    ...new Set(
+      values
+        .map((value) => value?.trim())
+        .filter((value): value is string => Boolean(value)),
+    ),
+  ].join("\n");
 
 function registrationTimestamp(record: RegistrationBase): number {
-  return typeof record.occurredAt === "number" && Number.isFinite(record.occurredAt)
+  return typeof record.occurredAt === "number" &&
+    Number.isFinite(record.occurredAt)
     ? record.occurredAt
     : record.timestamp;
 }
 
 function safeIntensity(value: number | null | undefined): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function recordedIntensity(record: RegistrationBase): number | null {
+  if (record.answers && Object.hasOwn(record.answers, "intensity"))
+    return typeof record.answers.intensity === "number"
+      ? safeIntensity(record.answers.intensity)
+      : null;
+  return safeIntensity(record.intensity);
+}
+
+function answerTextPart(
+  record: RegistrationBase,
+  key: string,
+  legacy: string | undefined,
+): ReviewTextPart[] {
+  if (record.answers && Object.hasOwn(record.answers, key))
+    return textPart(
+      typeof record.answers[key] === "string"
+        ? (record.answers[key] as string)
+        : null,
+    );
+  return textPart(legacy);
+}
+
+function detailedProvenance(record: RegistrationBase, type: RegistrationType) {
+  const safety = explicitSafetyAnswer(
+    type,
+    record as CravingLog | RelapseLog | AnxietyLog | BoredomLog,
+  );
+  const recordedAt = record.completedAt ?? record.startedAt ?? record.timestamp;
+  return {
+    quickId: null,
+    detailedId: record.id,
+    eventTimeExplicit:
+      typeof record.occurredAt === "number" &&
+      Number.isFinite(record.occurredAt),
+    quickRecordedAt: null,
+    reflectionStartedAt: record.startedAt ?? null,
+    reflectionCompletedAt: record.completedAt ?? null,
+    editedAt: record.editedAt ?? null,
+    safetyObservations: [
+      {
+        source: "detailed" as const,
+        sourceId: record.id,
+        recordedAt,
+        editedAt: record.editedAt ?? null,
+        answered: safety.answered,
+        values: safety.reasons.length
+          ? safety.reasons
+          : safety.answered
+            ? ["explicit-none"]
+            : [],
+      },
+    ],
+    intensityObservations: [
+      {
+        source: "detailed" as const,
+        sourceId: record.id,
+        recordedAt,
+        editedAt: record.editedAt ?? null,
+        value: recordedIntensity(record),
+      },
+    ],
+  };
 }
 
 export function buildReviewRegistrations(
@@ -267,11 +472,14 @@ export function buildReviewRegistrations(
     sources.quickRegistrations.map((record) => [record.id, record] as const),
   );
   const consumedLinkedQuickIds = new Set<string>();
-  const hintedDetailedWinnerByQuickId = new Map<string, {
-    detailedRecordId: string;
-    type: RegistrationType;
-    completedAt: number;
-  }>();
+  const hintedDetailedWinnerByQuickId = new Map<
+    string,
+    {
+      detailedRecordId: string;
+      type: RegistrationType;
+      completedAt: number;
+    }
+  >();
   const rememberHintedWinner = (
     record: RegistrationBase,
     type: RegistrationType,
@@ -280,9 +488,11 @@ export function buildReviewRegistrations(
     if (typeof quickRegistrationId !== "string") return;
     const quick = quickById.get(quickRegistrationId);
     if (!quick || quick.registrationType !== type) return;
-    const completedAt = typeof record.completedAt === "number" && Number.isFinite(record.completedAt)
-      ? record.completedAt
-      : registrationTimestamp(record);
+    const completedAt =
+      typeof record.completedAt === "number" &&
+      Number.isFinite(record.completedAt)
+        ? record.completedAt
+        : registrationTimestamp(record);
     const existing = hintedDetailedWinnerByQuickId.get(quickRegistrationId);
     if (!existing || completedAt < existing.completedAt) {
       hintedDetailedWinnerByQuickId.set(quickRegistrationId, {
@@ -294,14 +504,19 @@ export function buildReviewRegistrations(
   };
   for (const record of sources.cravingLogs) {
     if (record.status === "completed") {
-      rememberHintedWinner(record, record.cravingType === "active" ? "trek" : "craving");
+      rememberHintedWinner(
+        record,
+        record.cravingType === "active" ? "trek" : "craving",
+      );
     }
   }
   for (const record of sources.relapseLogs) {
     if (record.status === "completed") rememberHintedWinner(record, "relapse");
   }
-  for (const record of sources.anxietyLogs) rememberHintedWinner(record, "anxiety");
-  for (const record of sources.boredomLogs) rememberHintedWinner(record, "boredom");
+  for (const record of sources.anxietyLogs)
+    rememberHintedWinner(record, "anxiety");
+  for (const record of sources.boredomLogs)
+    rememberHintedWinner(record, "boredom");
 
   const linkedQuickByDetailedId = new Map<string, QuickRegistrationRecord>();
   for (const quick of sources.quickRegistrations) {
@@ -314,35 +529,82 @@ export function buildReviewRegistrations(
   }
 
   const addDetailed = (
-    entry: Omit<ReviewRegistration, "source" | "laterIntensity" | "immediateSafety">,
+    entry: Omit<
+      ReviewRegistration,
+      "source" | "laterIntensity" | "immediateSafety"
+    >,
     hintedQuickRegistrationId?: ReviewAnswerValue,
   ) => {
-    const hintedWinner = typeof hintedQuickRegistrationId === "string"
-      ? hintedDetailedWinnerByQuickId.get(hintedQuickRegistrationId)
-      : undefined;
-    const hintedQuick =
+    const hintedWinner =
       typeof hintedQuickRegistrationId === "string"
-      && hintedWinner?.detailedRecordId === entry.sourceId
-      && hintedWinner.type === entry.type
+        ? hintedDetailedWinnerByQuickId.get(hintedQuickRegistrationId)
+        : undefined;
+    const hintedQuick =
+      typeof hintedQuickRegistrationId === "string" &&
+      hintedWinner?.detailedRecordId === entry.sourceId &&
+      hintedWinner.type === entry.type
         ? quickById.get(hintedQuickRegistrationId)
         : undefined;
-    const candidate = hintedQuick?.registrationType === entry.type
-      ? hintedQuick
-      : linkedQuickByDetailedId.get(`${entry.type}:${entry.sourceId}`);
-    const quick = candidate && !consumedLinkedQuickIds.has(candidate.id) ? candidate : undefined;
+    const candidate =
+      hintedQuick?.registrationType === entry.type
+        ? hintedQuick
+        : linkedQuickByDetailedId.get(`${entry.type}:${entry.sourceId}`);
+    const quick =
+      candidate && !consumedLinkedQuickIds.has(candidate.id)
+        ? candidate
+        : undefined;
     if (quick) consumedLinkedQuickIds.add(quick.id);
     const quickActionParts = quick
-      ? uniqueParts(optionPart(quick.chosenAction), textPart(quick.chosenActionOther))
+      ? uniqueParts(
+          optionPart(quick.chosenAction),
+          textPart(quick.chosenActionOther),
+        )
       : [];
     const actionParts = uniqueParts(quickActionParts, entry.actionParts);
     const quickIntensity = quick ? safeIntensity(quick.intensity) : null;
     entries.push({
       ...entry,
       source: quick ? "linked" : "detailed",
-      timestamp: quick?.timestamp ?? entry.timestamp,
+      timestamp: entry.eventTimeExplicit
+        ? entry.timestamp
+        : (quick?.occurredAt ?? quick?.timestamp ?? entry.timestamp),
+      quickId: quick?.id ?? null,
+      quickRecordedAt: quick ? (quick.createdAt ?? quick.timestamp) : null,
+      safetyObservations: [
+        ...(quick
+          ? [
+              {
+                source: "quick" as const,
+                sourceId: quick.id,
+                recordedAt: quick.createdAt ?? quick.timestamp,
+                editedAt: quick.editedAt ?? null,
+                answered: true,
+                values: [quick.immediateSafety],
+              },
+            ]
+          : []),
+        ...entry.safetyObservations,
+      ],
+      intensityObservations: [
+        ...(quick
+          ? [
+              {
+                source: "quick" as const,
+                sourceId: quick.id,
+                recordedAt: quick.createdAt ?? quick.timestamp,
+                editedAt: quick.editedAt ?? null,
+                value: quickIntensity,
+              },
+            ]
+          : []),
+        ...entry.intensityObservations,
+      ],
       intensity: quickIntensity ?? entry.intensity,
       laterIntensity:
-        quick && quickIntensity !== null && entry.intensity !== null && entry.intensity !== quickIntensity
+        quick &&
+        quickIntensity !== null &&
+        entry.intensity !== null &&
+        entry.intensity !== quickIntensity
           ? entry.intensity
           : null,
       immediateSafety: quick?.immediateSafety ?? null,
@@ -354,55 +616,73 @@ export function buildReviewRegistrations(
 
   for (const record of sources.cravingLogs) {
     if (record.status !== "completed") continue;
-    const type: RegistrationType = record.cravingType === "active" ? "trek" : "craving";
+    const type: RegistrationType =
+      record.cravingType === "active" ? "trek" : "craving";
     const contextParts = uniqueParts(
       answerOptionParts(record.answers, "situations", record.situationPresets),
-      textPart(record.situationOther),
+      answerTextPart(record, "situationOther", record.situationOther),
       answerOptionParts(record.answers, "location", record.location),
-      textPart(record.locationOther),
+      answerTextPart(record, "locationOther", record.locationOther),
     );
     const actionParts = uniqueParts(
       answerOptionParts(record.answers, "chosenAction", record.chosenAction),
-      textPart(record.chosenActionOther),
+      answerTextPart(record, "chosenActionOther", record.chosenActionOther),
     );
-    addDetailed({
-      id: `detailed:${type}:${record.id}`,
-      sourceId: record.id,
-      type,
-      timestamp: registrationTimestamp(record),
-      intensity: safeIntensity(record.intensity),
-      context: partsToLegacyText(contextParts),
-      contextParts,
-      action: partsToLegacyText(actionParts),
-      actionParts,
-      note: record.note?.trim() ?? "",
-    }, record.answers?.quickRegistrationId);
+    addDetailed(
+      {
+        ...detailedProvenance(record, type),
+        id: `detailed:${type}:${record.id}`,
+        sourceId: record.id,
+        type,
+        timestamp: registrationTimestamp(record),
+        intensity: recordedIntensity(record),
+        context: partsToLegacyText(contextParts),
+        contextParts,
+        action: partsToLegacyText(actionParts),
+        actionParts,
+        note: record.note?.trim() ?? "",
+      },
+      record.answers?.quickRegistrationId,
+    );
   }
 
   for (const record of sources.relapseLogs) {
     if (record.status !== "completed") continue;
     const contextParts = uniqueParts(
       answerOptionParts(record.answers, "label", record.label),
-      answerOptionParts(record.answers, "substances", record.substances ?? (record.primarySubstance ? [record.primarySubstance] : [])),
-      answerOptionParts(record.answers, "firstTriggerType", record.firstTriggerType),
-      textPart(record.firstTriggerText),
+      answerOptionParts(
+        record.answers,
+        "substances",
+        record.substances ??
+          (record.primarySubstance ? [record.primarySubstance] : []),
+      ),
+      answerOptionParts(
+        record.answers,
+        "firstTriggerType",
+        record.firstTriggerType,
+      ),
+      answerTextPart(record, "firstTriggerText", record.firstTriggerText),
     );
     const actionParts = uniqueParts(
       answerOptionParts(record.answers, "nextStep", record.nextStep),
-      textPart(record.nextStepOther),
+      answerTextPart(record, "nextStepOther", record.nextStepOther),
     );
-    addDetailed({
-      id: `detailed:relapse:${record.id}`,
-      sourceId: record.id,
-      type: "relapse",
-      timestamp: registrationTimestamp(record),
-      intensity: safeIntensity(record.intensity),
-      context: partsToLegacyText(contextParts),
-      contextParts,
-      action: partsToLegacyText(actionParts),
-      actionParts,
-      note: record.note?.trim() ?? "",
-    }, record.answers?.quickRegistrationId);
+    addDetailed(
+      {
+        ...detailedProvenance(record, "relapse"),
+        id: `detailed:relapse:${record.id}`,
+        sourceId: record.id,
+        type: "relapse",
+        timestamp: registrationTimestamp(record),
+        intensity: recordedIntensity(record),
+        context: partsToLegacyText(contextParts),
+        contextParts,
+        action: partsToLegacyText(actionParts),
+        actionParts,
+        note: record.note?.trim() ?? "",
+      },
+      record.answers?.quickRegistrationId,
+    );
   }
 
   for (const record of sources.anxietyLogs) {
@@ -410,41 +690,57 @@ export function buildReviewRegistrations(
       answerOptionParts(record.answers, "context", record.context),
       answerOptionParts(record.answers, "triggers", record.trigger),
     );
-    const actionParts = answerOptionParts(record.answers, "reaction", record.reaction);
-    addDetailed({
-      id: `detailed:anxiety:${record.id}`,
-      sourceId: record.id,
-      type: "anxiety",
-      timestamp: registrationTimestamp(record),
-      intensity: safeIntensity(record.intensity),
-      context: partsToLegacyText(contextParts),
-      contextParts,
-      action: partsToLegacyText(actionParts),
-      actionParts,
-      note: record.note?.trim() ?? "",
-    }, record.answers?.quickRegistrationId);
+    const actionParts = answerOptionParts(
+      record.answers,
+      "reaction",
+      record.reaction,
+    );
+    addDetailed(
+      {
+        ...detailedProvenance(record, "anxiety"),
+        id: `detailed:anxiety:${record.id}`,
+        sourceId: record.id,
+        type: "anxiety",
+        timestamp: registrationTimestamp(record),
+        intensity: recordedIntensity(record),
+        context: partsToLegacyText(contextParts),
+        contextParts,
+        action: partsToLegacyText(actionParts),
+        actionParts,
+        note: record.note?.trim() ?? "",
+      },
+      record.answers?.quickRegistrationId,
+    );
   }
 
   for (const record of sources.boredomLogs) {
     const contextParts = uniqueParts(
       answerOptionParts(record.answers, "situation", record.situation),
-      textPart(record.situationOther),
+      answerTextPart(record, "situationOther", record.situationOther),
       answerOptionParts(record.answers, "urge", record.urge),
-      textPart(record.urgeOther),
+      answerTextPart(record, "urgeOther", record.urgeOther),
     );
-    const actionParts = answerOptionParts(record.answers, "action", record.action);
-    addDetailed({
-      id: `detailed:boredom:${record.id}`,
-      sourceId: record.id,
-      type: "boredom",
-      timestamp: registrationTimestamp(record),
-      intensity: safeIntensity(record.intensity),
-      context: partsToLegacyText(contextParts),
-      contextParts,
-      action: partsToLegacyText(actionParts),
-      actionParts,
-      note: record.note?.trim() ?? "",
-    }, record.answers?.quickRegistrationId);
+    const actionParts = answerOptionParts(
+      record.answers,
+      "action",
+      record.action,
+    );
+    addDetailed(
+      {
+        ...detailedProvenance(record, "boredom"),
+        id: `detailed:boredom:${record.id}`,
+        sourceId: record.id,
+        type: "boredom",
+        timestamp: registrationTimestamp(record),
+        intensity: recordedIntensity(record),
+        context: partsToLegacyText(contextParts),
+        contextParts,
+        action: partsToLegacyText(actionParts),
+        actionParts,
+        note: record.note?.trim() ?? "",
+      },
+      record.answers?.quickRegistrationId,
+    );
   }
 
   for (const record of sources.quickRegistrations) {
@@ -454,17 +750,43 @@ export function buildReviewRegistrations(
     if (consumedLinkedQuickIds.has(record.id)) continue;
     const actionParts = uniqueParts(
       optionPart(record.chosenAction),
-      textPart(record.chosenActionOther),
+      answerTextPart(record, "chosenActionOther", record.chosenActionOther),
     );
     entries.push({
       id: `quick:${record.id}`,
       sourceId: record.id,
       source: "quick",
       type: record.registrationType,
-      timestamp: record.timestamp,
-      intensity: safeIntensity(record.intensity),
+      timestamp: record.occurredAt ?? record.timestamp,
+      intensity: recordedIntensity(record),
       laterIntensity: null,
       immediateSafety: record.immediateSafety,
+      quickId: record.id,
+      detailedId: null,
+      eventTimeExplicit: record.occurredAt !== undefined,
+      quickRecordedAt: record.createdAt ?? record.timestamp,
+      reflectionStartedAt: null,
+      reflectionCompletedAt: null,
+      editedAt: record.editedAt ?? null,
+      safetyObservations: [
+        {
+          source: "quick",
+          sourceId: record.id,
+          recordedAt: record.createdAt ?? record.timestamp,
+          editedAt: record.editedAt ?? null,
+          answered: true,
+          values: [record.immediateSafety],
+        },
+      ],
+      intensityObservations: [
+        {
+          source: "quick",
+          sourceId: record.id,
+          recordedAt: record.createdAt ?? record.timestamp,
+          editedAt: record.editedAt ?? null,
+          value: safeIntensity(record.intensity),
+        },
+      ],
       context: "",
       contextParts: [],
       action: partsToLegacyText(actionParts),
@@ -476,7 +798,10 @@ export function buildReviewRegistrations(
   return entries.sort((left, right) => right.timestamp - left.timestamp);
 }
 
-export function getLocalWeekRange(now = Date.now(), weekOffset = 0): LocalWeekRange {
+export function getLocalWeekRange(
+  now = Date.now(),
+  weekOffset = 0,
+): LocalWeekRange {
   const startDate = new Date(now);
   const day = startDate.getDay();
   const daysSinceMonday = day === 0 ? 6 : day - 1;
@@ -493,7 +818,8 @@ export function filterByPeriod<T extends { timestamp: number }>(
   range: LocalWeekRange,
 ): T[] {
   return records.filter(
-    (record) => record.timestamp >= range.start && record.timestamp < range.endExclusive,
+    (record) =>
+      record.timestamp >= range.start && record.timestamp < range.endExclusive,
   );
 }
 
@@ -596,10 +922,15 @@ export function buildSupportiveProgressSummary(input: {
   const detailedRegistrations = registrations.filter(
     (entry) => entry.source !== "quick",
   ).length;
-  const quickRegistrations = registrations.filter((entry) => entry.source === "quick").length;
-  const byActionType: Partial<Record<RecoveryActionRecord["actionType"], number>> = {};
+  const quickRegistrations = registrations.filter(
+    (entry) => entry.source === "quick",
+  ).length;
+  const byActionType: Partial<
+    Record<RecoveryActionRecord["actionType"], number>
+  > = {};
   for (const action of recoveryActions) {
-    byActionType[action.actionType] = (byActionType[action.actionType] ?? 0) + 1;
+    byActionType[action.actionType] =
+      (byActionType[action.actionType] ?? 0) + 1;
   }
   return {
     detailedRegistrations,
@@ -620,30 +951,48 @@ export function buildSelectiveReport(input: {
   const selected = new Set(input.fields);
   const registrationsInRange = filterByPeriod(input.registrations, input.range);
   const actionsInRange = filterByPeriod(input.recoveryActions, input.range);
-  const registrations = registrationsInRange.map((entry): SelectiveReportRow => {
-    const values: SelectiveReportRow["values"] = {};
-    if (selected.has("date")) values.date = entry.timestamp;
-    if (selected.has("source")) values.source = entry.source;
-    if (selected.has("type")) values.type = entry.type;
-    if (selected.has("intensity")) {
-      values.intensity = entry.laterIntensity === null
-        ? entry.intensity
-        : `${entry.intensity} → ${entry.laterIntensity}`;
-    }
-    if (selected.has("immediate-safety")) values["immediate-safety"] = entry.immediateSafety;
-    if (selected.has("context")) values.context = entry.contextParts;
-    if (selected.has("chosen-action")) values["chosen-action"] = entry.actionParts;
-    if (selected.has("notes")) values.notes = entry.note;
-    return { id: entry.id, values };
-  });
+  const registrations = registrationsInRange.map(
+    (entry): SelectiveReportRow => {
+      const values: SelectiveReportRow["values"] = {};
+      if (selected.has("date")) values.date = entry.timestamp;
+      if (selected.has("source")) values.source = entry.source;
+      if (selected.has("type")) values.type = entry.type;
+      if (selected.has("intensity"))
+        values.intensity = entry.intensityObservations;
+      if (selected.has("immediate-safety"))
+        values["immediate-safety"] = entry.safetyObservations;
+      if (selected.has("context")) values.context = entry.contextParts;
+      if (selected.has("chosen-action"))
+        values["chosen-action"] = entry.actionParts;
+      if (selected.has("notes")) values.notes = entry.note;
+      return {
+        id: entry.id,
+        values,
+        ...(selected.has("timing")
+          ? {
+              timing: {
+                quickRecordedAt: entry.quickRecordedAt,
+                reflectionStartedAt: entry.reflectionStartedAt,
+                reflectionCompletedAt: entry.reflectionCompletedAt,
+                editedAt: entry.editedAt,
+              },
+            }
+          : {}),
+      };
+    },
+  );
 
   const supportiveActions = input.fields.some(isReportSupportiveField)
     ? actionsInRange.map((action): SelectiveSupportiveActionRow => {
         const values: SelectiveSupportiveActionRow["values"] = {};
-        if (selected.has("supportive-date")) values["supportive-date"] = action.timestamp;
-        if (selected.has("supportive-category")) values["supportive-category"] = action.actionType;
-        if (selected.has("supportive-description")) values["supportive-description"] = action.label;
-        if (selected.has("supportive-notes")) values["supportive-notes"] = action.note;
+        if (selected.has("supportive-date"))
+          values["supportive-date"] = action.timestamp;
+        if (selected.has("supportive-category"))
+          values["supportive-category"] = action.actionType;
+        if (selected.has("supportive-description"))
+          values["supportive-description"] = action.label;
+        if (selected.has("supportive-notes"))
+          values["supportive-notes"] = action.note;
         return {
           id: action.id,
           actionType: action.actionType,

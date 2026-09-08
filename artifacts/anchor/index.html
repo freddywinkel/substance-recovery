@@ -4,10 +4,10 @@
     <meta charset="UTF-8" />
 
     <!-- ── Viewport ────────────────────────────────────────── -->
-    <!-- Prevent accidental pinch-zoom while retaining the stable iOS web-app viewport. -->
+    <!-- Permit user zoom and retain a responsive web-app viewport. -->
     <meta
       name="viewport"
-      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"
+      content="width=device-width, initial-scale=1"
     />
 
     <!-- ── Theme color ─────────────────────────────────────── -->
@@ -36,7 +36,7 @@
     <!-- ── Content Security Policy ───────────────────────── -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self';"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; base-uri 'self'; form-action 'self';"
     />
 
     <!-- ── Page title ──────────────────────────────────────── -->
@@ -55,21 +55,7 @@
 
     <!-- ── Fonts ───────────────────────────────────────────── -->
     <!-- ── Prevent flash of white on load ──────────────────── -->
-    <script>
-      try {
-        const savedTheme = localStorage.getItem("anchor-theme");
-        const theme = savedTheme === "light" ? "light" : "dark";
-        document.documentElement.dataset.theme = theme;
-        document.documentElement.classList.toggle("dark", theme === "dark");
-        document.querySelector('meta[name="theme-color"]')?.setAttribute(
-          "content",
-          theme === "light" ? "#F7F5F3" : "#0D0C0B",
-        );
-      } catch {
-        document.documentElement.dataset.theme = "dark";
-        document.documentElement.classList.add("dark");
-      }
-    </script>
+    <script src="%BASE_URL%theme-init.js"></script>
     <style>
       html,
       body {

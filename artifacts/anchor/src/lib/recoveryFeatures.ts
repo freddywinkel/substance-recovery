@@ -1,3 +1,5 @@
+import { isValidPreventionPlan, normalizePreventionPlan, type PreventionPlan } from "./preventionPlan";
+
 export const REGISTRATION_TYPES = [
   "trek",
   "craving",
@@ -81,6 +83,7 @@ export interface RecoveryPlan {
   callMessage: string;
   next24Hours: string[];
   updatedAt: number | null;
+  prevention?: PreventionPlan;
 }
 
 export const DEFAULT_CALL_MESSAGES = {
@@ -124,7 +127,13 @@ export interface QuickRegistrationRecord {
   timestamp: number;
   updatedAt: number;
   registrationType: RegistrationType;
-  intensity: number;
+  intensity: number | null;
+  occurredAt?: number;
+  createdAt?: number;
+  editedAt?: number;
+  target?: string;
+  useOutcome?: "used" | "not_used" | "unsure";
+  usePrescribed?: boolean;
   immediateSafety: QuickSafety;
   chosenAction: string;
   chosenActionOther: string;
@@ -179,6 +188,9 @@ export interface WeeklyReviewRecord {
   patternValue?: string;
   patternCount?: number;
   patternDenominator?: number;
+  planRevisionAt?: number | null;
+  linkedGoalId?: string | null;
+  reviewedEntryIds?: string[];
 }
 
 export type FeatureRecord =
@@ -249,15 +261,17 @@ export function parseHomePreferences(value: unknown): HomePreferences {
 
 export function parseRecoveryPlan(value: unknown): RecoveryPlan {
   if (!isRecord(value)) return { ...DEFAULT_RECOVERY_PLAN };
+  if (value.version !== undefined && value.version !== 1) throw new Error("Unsupported recovery plan version.");
   return {
     version: 1,
     warningSigns: isStringArray(value.warningSigns) ? value.warningSigns : [],
     reasonsForRecovery: isStringArray(value.reasonsForRecovery) ? value.reasonsForRecovery : [],
     situationsToAvoid: isStringArray(value.situationsToAvoid) ? value.situationsToAvoid : [],
-    trustedContactIds: isIdArray(value.trustedContactIds) ? value.trustedContactIds : [],
+    trustedContactIds: isIdArray(value.trustedContactIds, 50) ? value.trustedContactIds : [],
     callMessage: isString(value.callMessage, 1000) ? value.callMessage : DEFAULT_RECOVERY_PLAN.callMessage,
     next24Hours: isStringArray(value.next24Hours) ? value.next24Hours : [],
     updatedAt: isNullableTimestamp(value.updatedAt) ? value.updatedAt : null,
+    ...(value.prevention !== undefined ? { prevention: normalizePreventionPlan(value.prevention) } : {}),
   };
 }
 
@@ -277,6 +291,7 @@ export function isValidHomePreferences(value: unknown): value is HomePreferences
 
 export function isValidRecoveryPlan(value: unknown): value is RecoveryPlan {
   if (!isRecord(value) || value.version !== 1) return false;
+  if (value.prevention !== undefined && !isValidPreventionPlan(value.prevention)) return false;
   const normalized = parseRecoveryPlan(value);
   return (
     JSON.stringify(normalized.warningSigns) === JSON.stringify(value.warningSigns)
@@ -290,6 +305,18 @@ export function isValidRecoveryPlan(value: unknown): value is RecoveryPlan {
   );
 }
 
+/** Missing settings may initialize a plan; unreadable existing settings never do. */
+export function parseStoredRecoveryPlan(raw: unknown): RecoveryPlan {
+  if (raw === undefined || raw === "") return { ...DEFAULT_RECOVERY_PLAN };
+  const unsupported = () => new Error("The saved recovery plan cannot be read safely. Your existing data has not been changed.");
+  if (typeof raw !== "string") throw unsupported();
+  let parsed: unknown;
+  try { parsed = JSON.parse(raw); } catch { throw unsupported(); }
+  const fields = ["version", "warningSigns", "reasonsForRecovery", "situationsToAvoid", "trustedContactIds", "callMessage", "next24Hours", "updatedAt", "prevention"];
+  if (!isRecord(parsed) || !Object.keys(parsed).every(key => fields.includes(key)) || !isValidRecoveryPlan(parsed)) throw unsupported();
+  return parseRecoveryPlan(parsed);
+}
+
 export function parseFeatureRecord(value: unknown): FeatureRecord | null {
   if (!isRecord(value)) return null;
   if (!isString(value.id, 200) || value.id.trim() === "") return null;
@@ -297,7 +324,13 @@ export function parseFeatureRecord(value: unknown): FeatureRecord | null {
 
   if (value.recordType === "quick-registration") {
     if (!REGISTRATION_TYPES.includes(value.registrationType as RegistrationType)) return null;
-    if (!isScore(value.intensity)) return null;
+    if (!isNullableScore(value.intensity)) return null;
+    if (value.occurredAt !== undefined && !isFiniteTimestamp(value.occurredAt)) return null;
+    if (value.createdAt !== undefined && !isFiniteTimestamp(value.createdAt)) return null;
+    if (value.editedAt !== undefined && !isFiniteTimestamp(value.editedAt)) return null;
+    if (value.target !== undefined && !isString(value.target, 200)) return null;
+    if (value.useOutcome !== undefined && !["used", "not_used", "unsure"].includes(String(value.useOutcome))) return null;
+    if (value.usePrescribed !== undefined && typeof value.usePrescribed !== "boolean") return null;
     if (!["safe-for-now", "need-support", "urgent-danger"].includes(String(value.immediateSafety))) return null;
     if (!isString(value.chosenAction, 200) || value.chosenAction.trim() === "") return null;
     if (!isString(value.chosenActionOther, 500) || !isString(value.note, 2000)) return null;
@@ -341,6 +374,9 @@ export function parseFeatureRecord(value: unknown): FeatureRecord | null {
   }
 
   if (value.recordType === "weekly-review") {
+    if (value.planRevisionAt !== undefined && !isNullableTimestamp(value.planRevisionAt)) return null;
+    if (value.linkedGoalId !== undefined && value.linkedGoalId !== null && !isString(value.linkedGoalId, 200)) return null;
+    if (value.reviewedEntryIds !== undefined && !isIdArray(value.reviewedEntryIds, 10000)) return null;
     if (!isFiniteTimestamp(value.periodStart) || !isFiniteTimestamp(value.periodEnd) || value.periodEnd < value.periodStart) return null;
     if (!isString(value.chosenPattern, 1000) || !isString(value.nextWeekPlan, 4000)) return null;
     const hasStructuredPattern = [

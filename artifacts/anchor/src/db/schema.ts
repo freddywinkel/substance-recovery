@@ -1,3 +1,6 @@
+import { DatabaseBlockedError, DatabaseOutdatedError, publishDatabaseLifecycle } from "./lifecycle";
+import type { UseDetail } from "@/lib/useDetails";
+import type { CareRole } from "@/lib/careDirectory";
 import { openDB, type DBSchema, type IDBPDatabase } from "idb";
 import {
   migrateCravingRegistrationType,
@@ -53,6 +56,8 @@ export type RegistrationAnswerValue =
  * and analytics work.
  */
 export interface RegistrationRecordMetadata {
+  /** Time of a user correction; occurrence/start/completion remain separate. */
+  editedAt?: number;
   /** When the event occurred. Falls back to the legacy timestamp. */
   occurredAt?: number;
   /** When the user started this registration flow. */
@@ -77,7 +82,7 @@ export type FollowUpOutcome =
 export interface JournalEntry extends SyncFields {
   id: string;
   timestamp: number;
-  mood: 1 | 2 | 3 | 4 | 5;
+  mood: 1 | 2 | 3 | 4 | 5 | null;
   cravingIntensity: number | null; // 0-10
   note: string;
   toolUsed: string | null;
@@ -94,6 +99,7 @@ export interface AppSettings {
 
 // ── Craving Log ──────────────────────────────────────────────
 export interface CravingLog extends SyncFields, RegistrationRecordMetadata {
+  useDetails?: UseDetail[];
   id: string;
   timestamp: number;
   status: "draft" | "completed";
@@ -192,6 +198,7 @@ export type AmountCategory =
   | "unanswered";
 
 export interface RelapseLog extends SyncFields, RegistrationRecordMetadata {
+  useDetails?: UseDetail[];
   id: string;
   timestamp: number;
   status: "draft" | "completed";
@@ -318,6 +325,9 @@ export interface CigaretteLog extends SyncFields, RegistrationRecordMetadata {
 
 // ── Crisis & Emergency ────────────────────────────────────────
 export interface CrisisService {
+  role?: CareRole;
+  availability?: string;
+  eligibility?: string;
   id: string;
   name: string;
   number: string;
@@ -325,6 +335,12 @@ export interface CrisisService {
 }
 
 export interface EmergencyContact {
+  role?: string;
+  availability?: string;
+  supportNotes?: string;
+  fallback?: string;
+  /** Applies to a chosen report, not the private full backup or permission to send messages. */
+  sharingPreference?: "unanswered" | "ask-first" | "may-share" | "keep-private";
   id: string;
   name: string;
   relationship: string;
@@ -390,13 +406,46 @@ interface AnchorDB extends DBSchema {
   };
 }
 
+export const DATABASE_VERSION = 10;
 let dbInstance: IDBPDatabase<AnchorDB> | null = null;
+let opening: Promise<IDBPDatabase<AnchorDB>> | null = null;
+let blockedError: DatabaseBlockedError | null = null;
+let outdatedError: DatabaseOutdatedError | null = null;
 
 export async function getDB(): Promise<IDBPDatabase<AnchorDB>> {
+  if (outdatedError) throw outdatedError;
   if (dbInstance) return dbInstance;
+  if (opening) {
+    if (blockedError) throw blockedError;
+    return opening;
+  }
 
-  dbInstance = await openDB<AnchorDB>("anchor-recovery", 9, {
+  publishDatabaseLifecycle({ kind: "opening" });
+  let rejectBlocked!: (error: DatabaseBlockedError) => void;
+  const blocked = new Promise<never>((_resolve, reject) => { rejectBlocked = reject; });
+  const request = Promise.resolve().then(() => openDB<AnchorDB>("anchor-recovery", DATABASE_VERSION, {
+    blocked() {
+      blockedError = new DatabaseBlockedError();
+      publishDatabaseLifecycle({ kind: "blocked", error: blockedError });
+      // The native request stays queued, but callers are not left loading forever.
+      // There is only one queued request, including after repeated retry clicks.
+      rejectBlocked(blockedError);
+    },
+    blocking() {
+      dbInstance?.close();
+      dbInstance = null;
+      outdatedError = new DatabaseOutdatedError();
+      publishDatabaseLifecycle({ kind: "outdated", error: outdatedError });
+    },
+    terminated() {
+      dbInstance = null;
+      publishDatabaseLifecycle({ kind: "unavailable", error: new Error("The database connection was interrupted. Retry opening your data.") });
+    },
     upgrade(db, oldVersion, _newVersion, tx) {
+      // openDB's request reports upgrade failure to getDB. Also consume the
+      // transaction promise so a browser-aborted upgrade cannot leak a second,
+      // unhandled rejection while the UI is displaying the recoverable error.
+      void tx.done.catch(() => undefined);
       if (oldVersion < 1) {
         const journalStore = db.createObjectStore("journal", { keyPath: "id" });
         journalStore.createIndex("byTimestamp", "timestamp");
@@ -525,8 +574,29 @@ export async function getDB(): Promise<IDBPDatabase<AnchorDB>> {
         records.createIndex("byTimestamp", "timestamp");
         records.createIndex("byRecordType", "recordType");
       }
+      // v10 is a write-compatibility barrier for expanded recovery data.
+      // No store/record is rewritten here. An older v9 app cannot reopen this
+      // database and save an older representation over the new plan fields.
     },
+  }));
+  const ready = request.then((database) => {
+    dbInstance = database;
+    blockedError = null;
+    opening = null;
+    publishDatabaseLifecycle(null);
+    return database;
+  }, (cause: unknown) => {
+    opening = null;
+    blockedError = null;
+    const error = cause instanceof Error ? cause : new Error(String(cause));
+    if (error.name === "VersionError") {
+      outdatedError = new DatabaseOutdatedError();
+      publishDatabaseLifecycle({ kind: "outdated", error: outdatedError });
+      throw outdatedError;
+    }
+    publishDatabaseLifecycle({ kind: "unavailable", error });
+    throw error;
   });
-
-  return dbInstance;
+  opening = Promise.race([ready, blocked]);
+  return opening;
 }

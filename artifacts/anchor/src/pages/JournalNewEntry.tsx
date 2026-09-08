@@ -1,43 +1,33 @@
-import { useState } from "react";
+import { useLocalDraft } from "@/hooks/useLocalDraft";
+import { DraftStatus } from "@/components/DraftStatus";
+import { createJournalDraft, isJournalDraft, type JournalDraft } from "@/lib/journalDraft";
+import { useState, useRef } from "react";
 import { useLocation } from "wouter";
 import { useStore } from "@/hooks/useStore";
 import { useT } from "@/hooks/useTranslation";
 import { PageHeader } from "@/components/PageHeader";
 import { Star } from "lucide-react";
 
-function Slider({ value, onChange }: { value: number; onChange: (v: number) => void }) {
-  const { t } = useT();
-  return (
-    <div className="flex flex-col gap-4">
-      <div className="text-center">
-        <span className="text-7xl font-light text-primary tabular-nums">{value}</span>
-      </div>
-      <input
-        type="range"
-        aria-label={t("journal.craving_q")}
-        min={0}
-        max={10}
-        step={1}
-        value={value}
-        onChange={(e) => onChange(Number(e.target.value))}
-        className="intensity-slider w-full"
-      />
-      <div className="flex justify-between px-1">
-        <span className="text-xs text-muted-foreground">{t("journal.craving.scale_min")}</span>
-        <span className="text-xs text-muted-foreground">{t("journal.craving.scale_max")}</span>
-      </div>
-    </div>
-  );
+function CravingScore({ value, onChange }: { value: number | null; onChange: (v: number | null) => void }) {
+  const { t, language } = useT();
+  return <select aria-label={t("journal.craving_q")} value={value ?? ""} onChange={event => onChange(event.target.value === "" ? null : Number(event.target.value))} className="w-full rounded-xl border border-input bg-card p-3 text-foreground">
+    <option value="">{language === "nl" ? "Niet ingevuld" : "Unanswered"}</option>
+    {Array.from({ length: 11 }, (_, i) => <option key={i} value={i}>{i}/10</option>)}
+  </select>;
 }
 
 export function JournalNewEntry() {
-  const { t } = useT();
-  const [mood, setMood] = useState<1 | 2 | 3 | 4 | 5>(3);
-  const [craving, setCraving] = useState<number>(5);
-  const [note, setNote] = useState("");
-  const [trigger, setTrigger] = useState("");
-  const [coping, setCoping] = useState("");
-  const [favourite, setFavourite] = useState(false);
+  const { t, language } = useT();
+  const [initial] = useState(createJournalDraft);
+  const draft = useLocalDraft("journal-entry", initial, { validate: isJournalDraft });
+  const { mood, craving, note, trigger, coping, favourite } = draft.value;
+  const setField = <K extends keyof JournalDraft>(key: K, value: JournalDraft[K]) => draft.setValue(previous => ({ ...previous, [key]: value }));
+  const setMood = (value: JournalDraft["mood"]) => setField("mood", value);
+  const setCraving = (value: number | null) => setField("craving", value);
+  const setNote = (value: string) => setField("note", value);
+  const setTrigger = (value: string) => setField("trigger", value);
+  const setCoping = (value: string) => setField("coping", value);
+  const savingRef = useRef(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -53,11 +43,15 @@ export function JournalNewEntry() {
   ];
 
   const handleSave = async () => {
+    if (savingRef.current || !draft.hydrated) return;
+    savingRef.current = true;
     setSaving(true);
     setError("");
+    let committed = false;
     try {
       await logEntry({
-        timestamp: Date.now(),
+        id: draft.value.id,
+        timestamp: draft.value.timestamp,
         mood,
         cravingIntensity: craving,
         note: note.trim(),
@@ -66,10 +60,13 @@ export function JournalNewEntry() {
         coping: coping.trim() || undefined,
         favourite: favourite || undefined,
       });
+      committed = true;
+      await draft.clearDraft();
       navigate("/journal");
     } catch (e) {
-      setError(t("common.save_error") ?? "Could not save. Please try again.");
+      setError(committed ? (language === "nl" ? "Je notitie is opgeslagen, maar het concept kon niet worden afgerond. Opnieuw proberen gebruikt dezelfde notitie." : "Your note was saved, but the draft could not be cleared. Retrying uses the same note.") : t("common.save_error"));
     } finally {
+      savingRef.current = false;
       setSaving(false);
     }
   };
@@ -86,6 +83,8 @@ export function JournalNewEntry() {
       <div
         className="flex-1 overflow-y-auto scroll-smooth-ios px-4 pb-4 pt-4 flex flex-col gap-6"
       >
+        <DraftStatus {...draft} />
+        <fieldset disabled={!draft.hydrated || (!!draft.error && !draft.hasDraft) || saving} className="flex flex-col gap-6">
         {/* Mood */}
         <div>
           <p className="text-base font-medium text-foreground mb-3">{t("journal.mood_q")}</p>
@@ -108,11 +107,12 @@ export function JournalNewEntry() {
           </div>
         </div>
 
+        <button type="button" onClick={() => setMood(null)} className="self-start text-sm underline">{language === "nl" ? "Stemming niet invullen" : "Leave mood unanswered"}</button>
         {/* Craving */}
         <div>
           <p className="text-base font-medium text-foreground mb-1">{t("journal.craving_q")}</p>
           <p className="text-sm text-muted-foreground mb-4">{t("journal.craving_sub")}</p>
-          <Slider value={craving} onChange={setCraving} />
+          <CravingScore value={craving} onChange={setCraving} />
         </div>
 
         {/* Optional prompt: Trigger */}
@@ -163,7 +163,7 @@ export function JournalNewEntry() {
         {/* Favourite toggle */}
         <button
           type="button"
-          onClick={() => setFavourite((f) => !f)}
+          onClick={() => setField("favourite", !favourite)}
           className={`flex items-center gap-2 self-start rounded-xl border px-4 py-3 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 ${
             favourite
               ? "border-amber-300/40 bg-amber-400/10 text-amber-300"
@@ -175,6 +175,7 @@ export function JournalNewEntry() {
           <span className="text-sm font-medium">{t("journal.favourite")}</span>
         </button>
 
+        </fieldset>
         {/* Form actions belong at the end of the form, not over its content. */}
         <div className="mt-auto border-t border-border/70 pb-1 pt-4">
         {error && (
@@ -191,7 +192,7 @@ export function JournalNewEntry() {
           <button
             type="button"
             onClick={handleSave}
-            disabled={saving}
+            disabled={saving || !draft.hydrated || draft.conflict || (!!draft.error && !draft.hasDraft)}
             className="flex-1 bg-primary text-primary-foreground rounded-2xl py-3.5 font-semibold touch-target hover:opacity-90 active:scale-95 transition-all disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
           >
             {saving ? t("journal.saving") : t("journal.save")}

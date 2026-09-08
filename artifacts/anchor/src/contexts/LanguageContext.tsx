@@ -1,42 +1,25 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useState, useCallback, useRef } from "react";
 import { getSetting, setSetting } from "@/db";
 import type { Language } from "@/lib/translations";
-
-interface LanguageContextValue {
-  language: Language;
-  setLanguage: (lang: Language) => void;
-}
-
-const LanguageContext = createContext<LanguageContextValue>({
-  language: "nl",
-  setLanguage: () => {},
-});
-
+import { clearStorageIssue, registerStorageRetry, setStorageIssue } from "@/lib/storageIntegrity";
+interface LanguageContextValue { language: Language; setLanguage: (lang: Language) => Promise<void>; }
+const LanguageContext = createContext<LanguageContextValue>({ language: "nl", setLanguage: async () => {} });
 export function LanguageProvider({ children }: { children: React.ReactNode }) {
   const [language, setLanguageState] = useState<Language>("nl");
-
-  useEffect(() => {
-    getSetting("language", "nl").then((val) => {
-      if (val === "en" || val === "nl") setLanguageState(val);
-    });
+  const pending = useRef<Language | null>(null);
+  const load = useCallback(async () => {
+    try {
+      if (pending.current) { await setSetting("language", pending.current); setLanguageState(pending.current); pending.current = null; }
+      else { const value = await getSetting("language", "nl"); if (value === "en" || value === "nl") setLanguageState(value); }
+      clearStorageIssue("language");
+    } catch (error) { setStorageIssue("language", pending.current ? "write" : "read", error); }
   }, []);
-
-  useEffect(() => {
-    document.documentElement.lang = language;
-  }, [language]);
-
-  const setLanguage = (lang: Language) => {
-    setLanguageState(lang);
-    setSetting("language", lang);
-  };
-
-  return (
-    <LanguageContext.Provider value={{ language, setLanguage }}>
-      {children}
-    </LanguageContext.Provider>
-  );
+  useEffect(() => { const unregister = registerStorageRetry("language", load); void load(); return unregister; }, [load]);
+  useEffect(() => { document.documentElement.lang = language; }, [language]);
+  const setLanguage = useCallback(async (lang: Language) => {
+    pending.current = lang;
+    await load();
+  }, [load]);
+  return <LanguageContext.Provider value={{ language, setLanguage }}>{children}</LanguageContext.Provider>;
 }
-
-export function useLanguage() {
-  return useContext(LanguageContext);
-}
+export function useLanguage() { return useContext(LanguageContext); }

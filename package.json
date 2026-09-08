@@ -8,16 +8,20 @@
     "test": "pnpm --filter @workspace/anchor run test",
     "verify:pwa": "node scripts/verify-built-pwa.mjs",
     "typecheck:libs": "node ./node_modules/typescript/lib/tsc.js --build",
-    "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck"
+    "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck",
+    "test:browser": "playwright test",
+    "typecheck:tests": "pnpm --filter @workspace/anchor run typecheck:tests"
   },
   "packageManager": "pnpm@11.9.0",
   "private": true,
   "devDependencies": {
-    "@rollup/rollup-win32-x64-msvc": "^4.62.2",
-    "@tailwindcss/oxide-win32-x64-msvc": "^4.3.1",
-    "lightningcss-win32-x64-msvc": "^1.32.0",
-    "prettier": "^3.8.1",
-    "typescript": "~5.9.2",
-    "vitest": "4.1.10"
+    "@playwright/test": "1.62.1",
+    "prettier": "^3.9.6",
+    "typescript": "~5.9.3",
+    "vitest": "4.1.11"
+  },
+  "engines": {
+    "node": ">=24 <25",
+    "pnpm": "11.9.x"
   }
 }

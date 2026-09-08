@@ -58,3 +58,7 @@ artifacts/screenshots/
 artifacts/APP_CONSISTENCY_AUDIT*.md
 artifacts/anchor/serve-cors.cjs
 artifacts/anchor/dist/
+
+# Local browser test output
+/playwright-report/
+/test-results/

@@ -1,3 +1,7 @@
+import { RECOVERY_TARGET_VALUES, recoveryTargetLabel, isBehavioralTarget } from "@/lib/recoveryTargets";
+import { encodeUseDetails, selectedUseDetails, type UseDetail } from "@/lib/useDetails";
+import { UseDetailsEditor } from "@/components/UseDetailsEditor";
+import { TargetSafetyAdvice } from "@/components/TargetSafetyAdvice";
 import { useState, useCallback, useEffect, useMemo } from "react";
 import { useLocation } from "wouter";
 import { useStore } from "@/hooks/useStore";
@@ -103,7 +107,7 @@ const OUTCOMES = [
   { value: "dont-know", label: "Don't know" },
 ];
 
-const SUBSTANCES = ["Alcohol", "Cannabis", "Cocaine / stimulant", "Benzodiazepines", "Nicotine", "Opioids", "Gambling", "Sex / pornography", "Gaming", "Food / binge eating"];
+const SUBSTANCES = [...RECOVERY_TARGET_VALUES];
 
 const BEHAVIOURAL_TARGETS = new Set([
   "Gambling",
@@ -119,7 +123,7 @@ const BEHAVIOURAL_TARGETS = new Set([
  * do not receive substance-oriented emergency copy.
  */
 export function shouldShowMedicalSafetyForTargets(targets: string[]): boolean {
-  return targets.length === 0 || targets.some((target) => !BEHAVIOURAL_TARGETS.has(target));
+  return targets.length === 0 || targets.some((target) => !isBehavioralTarget(target));
 }
 
 /** A hidden follow-up value must not survive "don't know" or deselection. */
@@ -160,6 +164,7 @@ export interface CravingDraft {
   chosenAction: string;
   actionAttempted: boolean | null;
   substances: string[];
+  useDetails?: UseDetail[];
   cravingOutcome: string;
   intensityAfter: number | null;
   useOutcome: "" | "used" | "not_used" | "unsure";
@@ -183,6 +188,7 @@ export function createBlankCravingDraft(): CravingDraft {
     chosenAction: "",
     actionAttempted: null,
     substances: [],
+    useDetails: [],
     cravingOutcome: "",
     intensityAfter: null,
     useOutcome: "",
@@ -222,6 +228,7 @@ export function buildCravingAnswers(
     thoughts: stableIdsOrNull(draft.thoughtPresets),
     thoughtOther: textOrNull(draft.thoughtFreeText),
     targets: stableIdsOrNull(draft.substances),
+    useDetailsJson: encodeUseDetails(selectedUseDetails(draft.useOutcome === "not_used" ? [] : draft.useDetails, draft.substances)),
     chosenAction: draft.chosenAction,
     actionAttempted: draft.actionAttempted,
     useOutcome: draft.useOutcome,
@@ -281,7 +288,7 @@ export function CravingTracker() {
   };
 
   const update = useCallback(<K extends keyof CravingDraft>(key: K, value: CravingDraft[K]) => {
-    setDraft((prev) => ({ ...prev, [key]: value }));
+    setDraft((prev) => ({ ...prev, [key]: value, ...(key === "useOutcome" && value === "not_used" ? { useDetails: [] } : {}) }));
   }, []);
 
   const toggleArr = useCallback((key: "situationPresets" | "physicalSensations" | "substances", val: string) => {
@@ -297,6 +304,7 @@ export function CravingTracker() {
       return {
         ...prev,
         [key]: next,
+        ...(key === "substances" ? { useDetails: selectedUseDetails(prev.useDetails, next) } : {}),
         ...(key === "situationPresets" && !next.includes("Other") ? { triggerOther: "" } : {}),
       };
     });
@@ -398,6 +406,7 @@ export function CravingTracker() {
         locationOther: "",
         socialContext: [],
         substances: draft.substances,
+        useDetails: selectedUseDetails(draft.useOutcome === "not_used" ? [] : draft.useDetails, draft.substances),
         primarySubstance: "",
         buildupDuration: draft.buildupDuration,
         chosenAction: draft.chosenAction,
@@ -898,8 +907,9 @@ export function CravingTracker() {
               options={SUBSTANCES}
               value={draft.substances}
               onToggle={(v) => toggleArr("substances", v)}
-              translate={tOpt}
+              translate={(target) => recoveryTargetLabel(target, language)}
             />
+            <TargetSafetyAdvice targets={draft.substances} language={language} />
           </>
         )}
 
@@ -1000,6 +1010,7 @@ export function CravingTracker() {
                 </button>
               ))}
             </div>
+            {(draft.useOutcome === "used" || draft.useOutcome === "unsure") && <UseDetailsEditor targets={draft.substances} value={draft.useDetails} language={language} onChange={(value) => update("useDetails", value)} />}
             {draft.useOutcome === "used" && shouldShowMedicalSafetyForTargets(draft.substances) && (
               <div role="alert" className="space-y-3 rounded-2xl border border-amber-500/50 bg-card p-4">
                 <div className="flex items-start gap-2">

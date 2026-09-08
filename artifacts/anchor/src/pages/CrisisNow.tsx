@@ -1,10 +1,14 @@
+import { PersonalContactCard } from "@/components/PersonalContactCard";
+import { CareContactCard } from "@/components/CareContactCard";
+import { TargetSafetyAdvice } from "@/components/TargetSafetyAdvice";
+import { careFallback } from "@/lib/careDirectory";
 import { Link } from "wouter";
 import { useT } from "@/hooks/useTranslation";
 import { useStore } from "@/hooks/useStore";
 import { Wind, Eye, Waves, Rewind, Droplets, Heart, Shuffle, Phone } from "lucide-react";
 
 export function CrisisNow() {
-  const { t } = useT();
+  const { t, language } = useT();
   const { crisisService, emergencyContacts } = useStore();
 
   const TOOLS = [
@@ -113,27 +117,13 @@ export function CrisisNow() {
           </div>
         </section>
 
-        {/* ── Crisis Service (prominent) ─────────────────── */}
-        {crisisService && crisisService.name && crisisService.number && (
-          <div className="bg-red-950/20 border border-red-800/30 rounded-2xl p-5 flex flex-col gap-3">
-            <div className="flex items-center gap-2">
-              <div className="rounded-xl p-2.5 bg-red-600/20 text-red-400 shrink-0">
-                <Phone size={22} strokeWidth={1.8} />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-foreground">{t("help.crisisService.title")}</p>
-                <p className="text-xs text-muted-foreground truncate">{crisisService.name}</p>
-              </div>
-            </div>
-            <a
-              href={`tel:${crisisService.number.replace(/\s/g, "")}`}
-              className="flex items-center justify-center gap-2 w-full bg-red-600 hover:bg-red-700 text-white rounded-xl py-4 font-semibold text-base active:scale-[0.98] transition-all touch-target"
-            >
-              <Phone size={20} strokeWidth={2} />
-              {t("help.crisisService.call")} — {crisisService.number}
-            </a>
-          </div>
-        )}
+        <section className="rounded-2xl border border-border bg-card p-4 space-y-3">
+          <h2 className="text-sm font-semibold">{language === "nl" ? "Dringende zorg en medische veiligheid" : "Urgent care and medical safety"}</h2>
+          <p className="text-sm text-muted-foreground">{careFallback(language)}</p>
+          <a href="https://www.113.nl" target="_blank" rel="noopener noreferrer" className="touch-target inline-flex items-center text-primary underline">{language === "nl" ? "Chat via 113.nl" : "Chat at 113.nl"}</a>
+          <details><summary className="touch-target cursor-pointer text-sm">{language === "nl" ? "Stoppen of minderen met middelen" : "Stopping or reducing substance use"}</summary><TargetSafetyAdvice targets={["Alcohol", "Benzodiazepines", "GHB", "GBL", "Opioids", "Unknown substance"]} language={language} showScope={false} /></details>
+        </section>
+        {crisisService?.number && <CareContactCard service={crisisService} language={language} />}
 
         {/* ── Emergency Contacts ───────────────────────── */}
         {emergencyContacts.length > 0 && (
@@ -143,24 +133,7 @@ export function CrisisNow() {
               <p className="text-sm font-semibold text-foreground">{t("help.emergencyContacts.title")}</p>
             </div>
             <div className="flex flex-col gap-2">
-              {emergencyContacts.map((contact) => (
-                <div
-                  key={contact.id}
-                  className="flex items-center justify-between gap-3 bg-background border border-border rounded-xl px-4 py-3"
-                >
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-foreground truncate">{contact.name}</p>
-                    <p className="text-xs text-muted-foreground">{contact.relationship} · {contact.phone}</p>
-                  </div>
-                  <a
-                    href={`tel:${contact.phone.replace(/\s/g, "")}`}
-                    className="flex items-center gap-1.5 bg-primary/10 border border-primary/20 text-primary rounded-lg px-3 py-2 text-xs font-semibold hover:bg-primary/15 active:scale-[0.97] transition-all touch-target shrink-0"
-                  >
-                    <Phone size={13} strokeWidth={2} />
-                    {t("help.emergencyContacts.call")}
-                  </a>
-                </div>
-              ))}
+              {emergencyContacts.map((contact) => <PersonalContactCard key={contact.id} contact={contact} language={language} />)}
             </div>
           </div>
         )}

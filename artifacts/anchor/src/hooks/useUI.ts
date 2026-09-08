@@ -1,3 +1,4 @@
+import { clearStorageIssue, registerStorageRetry, setStorageIssue } from "@/lib/storageIntegrity";
 import { useState, useEffect, useCallback } from "react";
 import { getSetting, setSetting } from "@/db";
 
@@ -24,18 +25,21 @@ function persistBootTheme(theme: Theme) {
 export function useUI() {
   const [theme, setThemeState] = useState<Theme>(getBootTheme);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<Error | null>(null);
 
   const load = useCallback(async () => {
-    const savedTheme = await getSetting("theme", "dark");
-    const nextTheme: Theme = savedTheme === "light" ? "light" : "dark";
-    persistBootTheme(nextTheme);
-    setThemeState(nextTheme);
-    setLoading(false);
+    setLoading(true);
+    try {
+      const savedTheme = await getSetting("theme", "dark");
+      const nextTheme: Theme = savedTheme === "light" ? "light" : "dark";
+      persistBootTheme(nextTheme); setThemeState(nextTheme);
+      setLoadError(null); clearStorageIssue("theme");
+    } catch (cause) {
+      const error = cause instanceof Error ? cause : new Error(String(cause));
+      setLoadError(error); setStorageIssue("theme", "read", error);
+    } finally { setLoading(false); }
   }, []);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+  useEffect(() => { const unregister = registerStorageRetry("theme", load); void load(); return unregister; }, [load]);
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
@@ -54,5 +58,5 @@ export function useUI() {
     await load();
   }, [load]);
 
-  return { theme, loading, setTheme, reload };
+  return { theme, loading, loadError, setTheme, reload };
 }

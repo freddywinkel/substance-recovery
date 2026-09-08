@@ -13,11 +13,16 @@ import {
   type RegistrationType,
 } from "@/lib/recoveryFeatures";
 import { buildQuickRegistrationRecord } from "@/lib/quickFollowUp";
+import { useLocalDraft } from "@/hooks/useLocalDraft";
+import { DraftStatus } from "@/components/DraftStatus";
+import { RECOVERY_TARGET_VALUES, recoveryTargetLabel, isBehavioralTarget } from "@/lib/recoveryTargets";
+import { flushLocalDrafts } from "@/lib/localDrafts";
+import { createBlankQuickRegistrationDraft, isQuickRegistrationDraft, QUICK_ACTION_IDS, QUICK_SAFETY_IDS } from "@/lib/quickRegistrationDraft";
 
 const COPY = {
   en: {
     title: "Quick registration",
-    subtitle: "Record what matters in about 20 seconds",
+    subtitle: "Briefly record what matters now",
     type: "What is happening?",
     types: {
       trek: "I am heading toward using",
@@ -27,7 +32,7 @@ const COPY = {
       relapse: "Use or relapse",
     },
     intensity: "Intensity now",
-    intensityRequired: "Choose a score from 0 to 10.",
+    intensityRequired: "Optional: choose a score from 0 to 10, or leave unanswered.",
     intensityUnanswered: "Not chosen",
     low: "low",
     high: "high",
@@ -53,7 +58,7 @@ const COPY = {
     other: "Describe your next action",
     note: "Optional note",
     notePlaceholder: "A few words, if useful",
-    required: "Choose a type, intensity, safety answer and next action.",
+    required: "Choose a type, safety answer and next action.",
     otherRequired: "Describe the other action before saving.",
     save: "Save quick registration",
     saving: "Saving…",
@@ -66,7 +71,7 @@ const COPY = {
   },
   nl: {
     title: "Snelle registratie",
-    subtitle: "Leg in ongeveer 20 seconden vast wat nu belangrijk is",
+    subtitle: "Leg kort vast wat nu belangrijk is",
     type: "Wat gebeurt er?",
     types: {
       trek: "Ik beweeg richting gebruik",
@@ -76,7 +81,7 @@ const COPY = {
       relapse: "Gebruik of terugval",
     },
     intensity: "Intensiteit nu",
-    intensityRequired: "Kies een score van 0 tot en met 10.",
+    intensityRequired: "Optioneel: kies 0 tot en met 10, of laat onbeantwoord.",
     intensityUnanswered: "Niet gekozen",
     low: "laag",
     high: "hoog",
@@ -102,7 +107,7 @@ const COPY = {
     other: "Beschrijf je volgende actie",
     note: "Optionele notitie",
     notePlaceholder: "Een paar woorden, als dat helpt",
-    required: "Kies een type, intensiteit, veiligheidsantwoord en volgende actie.",
+    required: "Kies een type, veiligheidsantwoord en volgende actie.",
     otherRequired: "Beschrijf de andere actie voordat je opslaat.",
     save: "Snelle registratie opslaan",
     saving: "Opslaan…",
@@ -115,16 +120,8 @@ const COPY = {
   },
 } as const;
 
-const ACTION_IDS = [
-  "trusted-contact",
-  "coping-tool",
-  "wait-ten",
-  "safer-place",
-  "professional-help",
-  "other",
-] as const;
-
-const SAFETY_IDS: QuickSafety[] = ["safe-for-now", "need-support", "urgent-danger"];
+const ACTION_IDS = QUICK_ACTION_IDS;
+const SAFETY_IDS = QUICK_SAFETY_IDS;
 
 export function QuickRegistration() {
   const { language } = useLanguage();
@@ -136,12 +133,14 @@ export function QuickRegistration() {
     homePreferences,
     startQuickReflection,
   } = useRecoveryFeatures();
-  const [registrationType, setRegistrationType] = useState<RegistrationType | null>(null);
-  const [intensity, setIntensity] = useState<number | null>(null);
-  const [immediateSafety, setImmediateSafety] = useState<QuickSafety | null>(null);
-  const [chosenAction, setChosenAction] = useState<string>("");
-  const [chosenActionOther, setChosenActionOther] = useState("");
-  const [note, setNote] = useState("");
+  const draft = useLocalDraft("quick-registration", createBlankQuickRegistrationDraft(), { validate: isQuickRegistrationDraft });
+  const { registrationType, intensity, immediateSafety, chosenAction, chosenActionOther, note, target = "", useOutcome = "", usePrescribed = false } = draft.value;
+  const setRegistrationType = (value: RegistrationType) => draft.setValue(current => ({ ...current, registrationType: value }));
+  const setIntensity = (value: number | null) => draft.setValue(current => ({ ...current, intensity: value }));
+  const setImmediateSafety = (value: QuickSafety) => draft.setValue(current => ({ ...current, immediateSafety: value }));
+  const setChosenAction = (value: string) => draft.setValue(current => ({ ...current, chosenAction: value }));
+  const setChosenActionOther = (value: string) => draft.setValue(current => ({ ...current, chosenActionOther: value }));
+  const setNote = (value: string) => draft.setValue(current => ({ ...current, note: value }));
   const [savedRecord, setSavedRecord] = useState<QuickRegistrationRecord | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -153,9 +152,9 @@ export function QuickRegistration() {
   );
 
   const save = async () => {
-    if (savingRef.current) return;
-    if (!registrationType || intensity === null || !immediateSafety || !chosenAction) {
-      setError(copy.required);
+    if (savingRef.current || !draft.hydrated || draft.error || !isQuickRegistrationDraft(draft.value)) return;
+    if (!registrationType || !immediateSafety || !chosenAction) {
+      setError(language === "nl" ? "Kies een type, antwoord over veiligheid en volgende stap." : copy.required);
       return;
     }
     if (chosenAction === "other" && !chosenActionOther.trim()) {
@@ -165,7 +164,9 @@ export function QuickRegistration() {
     savingRef.current = true;
     setSaving(true);
     setError(null);
+    let committed = false;
     try {
+      await flushLocalDrafts();
       const input = buildQuickRegistrationRecord({
         registrationType,
         intensity,
@@ -173,11 +174,15 @@ export function QuickRegistration() {
         chosenAction,
         chosenActionOther,
         note,
-      });
-      const saved = await addRecord<QuickRegistrationRecord>(input);
+      }, draft.value.timestamp);
+      const saved = await addRecord<QuickRegistrationRecord>({ ...input, id: draft.value.id, createdAt: draft.value.timestamp, occurredAt: draft.value.timestamp, target, ...(useOutcome ? { useOutcome } : {}), usePrescribed });
       setSavedRecord(saved);
+      committed = true;
+      await draft.clearDraft();
     } catch {
-      setError(copy.saveError);
+      setError(committed
+        ? (language === "nl" ? "De registratie is opgeslagen. Het oude concept kon niet worden gewist; je opgeslagen registratie blijft beschikbaar." : "The registration was saved. The old draft could not be cleared; your saved registration remains available.")
+        : copy.saveError);
     } finally {
       savingRef.current = false;
       setSaving(false);
@@ -214,11 +219,13 @@ export function QuickRegistration() {
     }
   };
 
+  if (!draft.hydrated) return <div className="flex min-h-dvh flex-col bg-background"><PageHeader title={copy.title} back /><div className="p-5 text-sm" role="status">{language === "nl" ? "Concept laden…" : "Loading draft…"}</div></div>;
+
   if (savedRecord) {
     return (
       <div className="flex min-h-dvh flex-col bg-background">
         <PageHeader title={copy.title} back />
-        <main className="flex flex-1 flex-col items-center justify-center gap-5 overflow-y-auto scroll-smooth-ios px-5 py-8 text-center pb-safe">
+        <div className="flex flex-1 flex-col items-center justify-center gap-5 overflow-y-auto scroll-smooth-ios px-5 py-8 text-center pb-safe">
           <CheckCircle2 className="text-primary" size={56} strokeWidth={1.5} aria-hidden="true" />
           <div className="max-w-sm">
             <h2 className="text-2xl font-semibold text-foreground">{copy.saved}</h2>
@@ -244,7 +251,7 @@ export function QuickRegistration() {
               {copy.later}
             </button>
           </div>
-        </main>
+        </div>
       </div>
     );
   }
@@ -283,11 +290,13 @@ export function QuickRegistration() {
   return (
     <div className="flex min-h-dvh flex-col bg-background">
       <PageHeader title={copy.title} back subtitle={copy.subtitle} />
-      <main className="flex-1 overflow-y-auto scroll-smooth-ios px-4 py-5 pb-safe">
+      <div className="flex-1 overflow-y-auto scroll-smooth-ios px-4 py-5 pb-safe">
         <form
           className="mx-auto flex w-full max-w-lg flex-col gap-5"
           onSubmit={(event) => { event.preventDefault(); void save(); }}
         >
+          <DraftStatus {...draft} />
+          <fieldset disabled={saving} className="contents">
           <fieldset className="rounded-3xl border border-border bg-card p-4">
             <legend className="px-1 text-sm font-semibold text-foreground">{copy.type}</legend>
             <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -316,7 +325,6 @@ export function QuickRegistration() {
               role="radiogroup"
               aria-labelledby="quick-intensity-label"
               aria-describedby="quick-intensity-help"
-              aria-required="true"
               className="mt-4 grid grid-cols-6 gap-2"
             >
               {Array.from({ length: 11 }, (_, value) => (
@@ -326,6 +334,15 @@ export function QuickRegistration() {
                   role="radio"
                   aria-checked={intensity === value}
                   aria-label={`${copy.intensity} ${value}/10`}
+                  tabIndex={intensity === value || (intensity === null && value === 0) ? 0 : -1}
+                  onKeyDown={event => {
+                    if (!["ArrowRight", "ArrowLeft", "ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) return;
+                    event.preventDefault();
+                    const next = event.key === "Home" ? 0 : event.key === "End" ? 10 : (value + (["ArrowRight", "ArrowDown"].includes(event.key) ? 1 : 10)) % 11;
+                    setIntensity(next);
+                    const group = event.currentTarget.closest('[role="radiogroup"]');
+                    (group?.querySelectorAll<HTMLButtonElement>('[role="radio"]')[next])?.focus();
+                  }}
                   onClick={() => setIntensity(value)}
                   className={`min-h-11 rounded-xl border text-sm font-semibold transition-colors ${intensity === value ? "border-primary bg-primary text-primary-foreground" : "border-border bg-background text-foreground"}`}
                 >
@@ -334,8 +351,15 @@ export function QuickRegistration() {
               ))}
             </div>
             <div className="flex justify-between text-xs text-muted-foreground"><span>0 · {copy.low}</span><span>10 · {copy.high}</span></div>
-            {intensity === null && <p id="quick-intensity-help" className="mt-2 text-xs text-muted-foreground">{copy.intensityRequired}</p>}
+            <p id="quick-intensity-help" className="mt-2 text-xs text-muted-foreground">{copy.intensityRequired}</p>
+            {intensity !== null && <button className="min-h-11 text-xs underline" type="button" onClick={() => setIntensity(null)}>{language === "nl" ? "Laat deze score onbeantwoord" : "Leave this score unanswered"}</button>}
           </section>
+
+          <details className="rounded-3xl border border-border bg-card p-4"><summary className="min-h-11 cursor-pointer text-sm font-semibold">{language === "nl" ? "Middel, gedrag en gebruik (optioneel)" : "Target and use (optional)"}</summary>
+            <label className="block text-sm">{language === "nl" ? "Middel of gedrag" : "Substance or behavior"}<select aria-label={language === "nl" ? "Middel of gedrag" : "Substance or behavior"} className="mt-2 min-h-11 w-full rounded-xl border border-border bg-background px-3" value={target} onChange={event => draft.setValue(current => ({ ...current, target: event.target.value, usePrescribed: false }))}><option value="">{language === "nl" ? "Onbeantwoord" : "Unanswered"}</option>{RECOVERY_TARGET_VALUES.map(value => <option key={value} value={value}>{recoveryTargetLabel(value, language)}</option>)}</select></label>
+            <label className="mt-3 block text-sm">{language === "nl" ? "Heb ik dit middel gebruikt of deze gedraging uitgevoerd?" : "Did I use this substance or do this behavior?"}<select aria-label={language === "nl" ? "Heb ik dit middel gebruikt of deze gedraging uitgevoerd?" : "Did I use this substance or do this behavior?"} className="mt-2 min-h-11 w-full rounded-xl border border-border bg-background px-3" value={useOutcome} onChange={event => draft.setValue(current => ({ ...current, useOutcome: event.target.value as typeof useOutcome, usePrescribed: false }))}><option value="">{language === "nl" ? "Onbeantwoord" : "Unanswered"}</option><option value="used">{language === "nl" ? "Ja" : "Yes"}</option><option value="not_used">{language === "nl" ? "Nee" : "No"}</option><option value="unsure">{language === "nl" ? "Weet ik niet" : "I do not know"}</option></select></label>
+            {useOutcome === "used" && !isBehavioralTarget(target) && <label className="mt-3 flex min-h-11 items-center gap-3 text-sm"><input type="checkbox" checked={usePrescribed} onChange={event => draft.setValue(current => ({ ...current, usePrescribed: event.target.checked }))} />{language === "nl" ? "Dit was medicatie volgens voorschrift" : "This was medication taken as prescribed"}</label>}
+          </details>
 
           <fieldset className="rounded-3xl border border-border bg-card p-4">
             <legend className="px-1 text-sm font-semibold text-foreground">{copy.safety}</legend>
@@ -403,13 +427,14 @@ export function QuickRegistration() {
           {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
           <button
             type="submit"
-            disabled={saving}
+            disabled={saving || !draft.hydrated || !!draft.error}
             className="min-h-14 rounded-2xl bg-primary px-5 py-4 font-semibold text-primary-foreground active:scale-[0.98] disabled:opacity-60"
           >
             {saving ? copy.saving : copy.save}
           </button>
+          </fieldset>
         </form>
-      </main>
+      </div>
     </div>
   );
 }

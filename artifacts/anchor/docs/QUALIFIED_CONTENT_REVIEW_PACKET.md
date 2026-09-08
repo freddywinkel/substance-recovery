@@ -2,9 +2,9 @@
 
 Status: **PENDING QUALIFIED HUMAN REVIEW**
 
-Packet version: 1.0
-Prepared: 2026-08-02
-Product content version: `registration-v3`
+Packet version: 1.1
+Prepared: 2026-08-02; extended 2026-09-08
+Product content version: `registration-v3` with optional use-details extension; clinical-copy revision 2026-09-08
 Languages in scope: English and Dutch
 
 This packet is a controlled hand-off for an independent, qualified human review.
@@ -136,3 +136,36 @@ clinical assessment.
 After sign-off, those claims remain prohibited unless separate evidence and any
 required regulatory review specifically support them. Packet completion alone never
 establishes clinical efficacy, clinical validation, or medical-device approval.
+
+## 8 September 2026 extension — qualified review still pending
+
+This implementation responds to C01/C02/C04/C05/C07/C08 in the clinical audit. It is an AI-assisted source and software update, not human clinical sign-off. All reviewer credentials, decisions and signatures above remain PENDING.
+
+### Additional inventory and provenance
+
+| Area | Active files | Claim boundary and review requirement |
+| --- | --- | --- |
+| Target catalogue and behavior context | `src/lib/recoveryTargets.ts`, target selectors, `src/components/TargetSafetyAdvice.tsx` | Existing values retained; GHB/GBL/other/unknown added. Behavioral choices are not diagnoses. Review person-defined scope in both languages. |
+| Optional use details | `src/lib/useDetails.ts`, `src/components/UseDetailsEditor.tsx`, tracker builders | Original recording design, not a validated questionnaire. Approximate amount/unit, unknown/prefer-not and prescribed medication remain separate. No dose assessment. `useDetailsJson` preserves the existing primitive-answer contract; its contents are strictly validated. |
+| Care directory and routing | `src/lib/careDirectory.ts`, `CareContactCard.tsx`, `CareContactSettings.tsx`, CrisisNow/Tools | Each entry carries its primary URL/date. Role/hours/eligibility are shown, not promised. Referrer-only routes have no public call button. Changed saved numbers require explicit reselection. |
+| Personal support agreements | `PersonalContactsSettings.tsx`, `PersonalContactCard.tsx`, `src/lib/contactDrafts.ts` | Person-entered role, availability, agreed support and fallback are not a promise of monitoring or consent to message. Report-sharing preferences are distinct from full-backup preservation. Unsaved contact drafts remain available after opening help. |
+| Home inspiration | `src/lib/recoveryQuotes.ts` | Original supportive text, no fixed craving duration, universal effect or sufficient-treatment claim. Include all rotating messages in bilingual review. |
+| Play the tape / anxiety feedback | `src/lib/translations.ts`, rendered tool and AnxietyTracker | Hypothetical outcomes and personal goals; no clean/dirty wording or invented craving. Contextual review pending. |
+
+### Additional primary source checks
+
+- Thuisarts GHB stop/reduction page, revised 17 August 2026, reopened 8 September: https://www.thuisarts.nl/drugs/ik-wil-stoppen-met-ghb-of-minder-gebruiken — supports seeking medical help because withdrawal can be dangerous. No tapering schedule is incorporated.
+- Drugsinfo cold-turkey stopping, reopened 8 September: https://www.drugsinfo.nl/verslaving/cold-turkey-stoppen-met-drugs/ — dangerous withdrawal may involve GHB/GBL, alcohol or benzodiazepines.
+- Each care-directory source was checked in the 8 September directory audit. Tactus and GGNet were reopened for implementation. The Ypsilon homepage direct fetch failed; its own advice/contact text was available through primary search retrieval. Where opening times were unconfirmed the UI refers to the official page rather than inventing hours.
+
+### Added review scenarios
+
+1. GHB/GBL selected before use outcome: medical stop/reduction advice is available, with no autonomous detox instructions.
+2. Other/unknown substance and mixed entries: no false safe category or invented amount.
+3. Food/gaming/sexual behavior: personal boundary framing, no blanket abstinence or diagnosis.
+4. Tactus/VNN at night, Brijder prevention and GGNet for a client: GP/HAP fallback remains visible; restricted/advisory contacts do not become unrestricted crisis care.
+5. Old Indigo number is retained as unconfirmed; no silently substituted call destination.
+6. Multi-substance detail and prescribed medication survive draft/save/export/import. No-use changes remove incompatible details; unknown amount remains unknown.
+7. Offline advice is readable, but telephone services and external websites need the appropriate connection. Automated tests do not contact real services.
+8. Review both languages of Home quotes, anxiety distraction feedback, tools and new care/plan views. Passing tests and preparing this packet do not complete qualified review.
+9. Edit a support person's availability, agreed support and report preference, open help and return; confirm the unfinished draft is preserved. Review report selection and verify that “keep private” starts excluded while allowing the user to choose sharing explicitly for that report. Full backups retain all saved contact data.

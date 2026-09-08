@@ -121,7 +121,7 @@ describe("Boredom delay completion", () => {
 describe("Insights unanswered attention state", () => {
   it("shows a dash and explicit no-answer copy instead of a reassuring zero of zero", () => {
     const source = readFileSync(new URL("../src/pages/Insights.tsx", import.meta.url), "utf8");
-    expect(source).toContain('attentionStats.answeredCount === 0 ? "-"');
+    expect(source).toMatch(/attentionStats\.answeredCount\s*===\s*0\s*\?\s*"-"/);
     expect(source).toContain('t("insights.attention.empty")');
   });
 });

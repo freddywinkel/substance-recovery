@@ -1,5 +1,7 @@
 # Clerk Cloud Sync Setup Guide
 
+> Historical reference only. These Clerk/cloud-sync instructions do not describe the current offline PWA. Use [README.md](README.md) for the supported architecture, development and release workflow. The original content below is retained for provenance.
+
 This guide walks through setting up Clerk authentication for cloud sync across devices.
 
 ---

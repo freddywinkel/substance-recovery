@@ -1,92 +1,91 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useStore } from "@/hooks/useStore";
 import { usePWA } from "@/hooks/usePWA";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useT } from "@/hooks/useTranslation";
 import { PageHeader } from "@/components/PageHeader";
-import { useActiveRegistration } from "@/contexts/ActiveRegistrationContext";
-import { useRecoveryFeatures } from "@/contexts/RecoveryFeaturesContext";
 import { useToast } from "@/hooks/use-toast";
 import {
   Moon, Sun, Download, Trash2, Shield, Calendar,
-  Languages, UserPlus, X, FileDown,
-  FileUp, CheckCircle2, AlertCircle, Clock,
+  Languages, FileDown,
+  CheckCircle2, AlertCircle, Clock,
 } from "lucide-react";
-import { EmergencyContact } from "@/db";
-import { DEFAULT_CRISIS_SERVICES } from "@/lib/crisisServices";
 import { useLocation } from "wouter";
+import { ImportDataPanel } from "@/components/ImportDataPanel";
+import { PersonalContactsSettings } from "@/components/PersonalContactsSettings";
+import { CareContactSettings } from "@/components/CareContactSettings";
+import { flushLocalDrafts, resetLocalDraftMemory } from "@/lib/localDrafts";
+import { useLocalDraft } from "@/hooks/useLocalDraft";
+import { DraftStatus } from "@/components/DraftStatus";
+import { AlertDialog, AlertDialogContent, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel } from "@/components/ui/alert-dialog";
+import { isJourneyDateDraft, isValidSettingsDate, localSettingsDate, performSettingsReset } from "@/lib/settingsActions";
 
 const LAST_EXPORTED_KEY = "substance-recovery:last-exported";
 
 export function Settings() {
   const {
     theme, setTheme, resetAllData, sobrietyStartDate, setSobrietyStartDate,
-    crisisService, setCrisisService, emergencyContacts, setEmergencyContacts,
-    exportData, importData,
+    exportData, importData, loading,
   } = useStore();
   const { installPrompt, isInstalled, install } = usePWA();
   const { language, setLanguage } = useLanguage();
   const { t } = useT();
   const [, navigate] = useLocation();
   const { toast } = useToast();
-  const { resetSessions } = useActiveRegistration();
-  const { refresh: refreshRecoveryFeatures } = useRecoveryFeatures();
 
   const [confirmReset, setConfirmReset] = useState(false);
-  const [dateInput, setDateInput] = useState(sobrietyStartDate ?? "");
+  const resetTriggerRef = useRef<HTMLButtonElement>(null);
+  const dateDraft = useLocalDraft("journey-date", sobrietyStartDate ?? "", { ready: !loading, validate: isJourneyDateDraft });
+  const dateInput = dateDraft.value;
+  const dateSavingRef = useRef(false);
+  const [dateSaving, setDateSaving] = useState(false);
+  const [dateError, setDateError] = useState("");
+  const [themeError, setThemeError] = useState("");
+  const [themeSaving, setThemeSaving] = useState(false);
+  const themeSavingRef = useRef(false);
+  const [failedTheme, setFailedTheme] = useState<"dark" | "light" | null>(null);
+  const [resetBusy, setResetBusy] = useState(false);
+  const [resetCommitted, setResetCommitted] = useState(false);
+  const resetBusyRef = useRef(false);
+  const [resetError, setResetError] = useState("");
+  const [exportBusy, setExportBusy] = useState(false);
+  const exportBusyRef = useRef(false);
 
   const [lastExported, setLastExported] = useState<string | null>(null);
   const [exportStatus, setExportStatus] = useState<"idle" | "success" | "error">("idle");
-  const [importStatus, setImportStatus] = useState<"idle" | "success" | "error">("idle");
-  const [importMessage, setImportMessage] = useState("");
-  const [importConfirm, setImportConfirm] = useState(false);
-  const [pendingImport, setPendingImport] = useState<Record<string, unknown> | null>(null);
-
-  const [selectedServiceId, setSelectedServiceId] = useState<string>("");
-  const [customName, setCustomName] = useState("");
-  const [customNumber, setCustomNumber] = useState("");
-  const [customNameError, setCustomNameError] = useState("");
-  const [customNumberError, setCustomNumberError] = useState("");
-
-  const [showContactForm, setShowContactForm] = useState(false);
-  const [contactName, setContactName] = useState("");
-  const [contactRelation, setContactRelation] = useState("");
-  const [contactPhone, setContactPhone] = useState("");
-  const [contactErrors, setContactErrors] = useState<Record<string, string>>({});
-
   useEffect(() => {
-    const stored = localStorage.getItem(LAST_EXPORTED_KEY);
-    if (stored) setLastExported(stored);
+    try { const stored = localStorage.getItem(LAST_EXPORTED_KEY); if (stored) setLastExported(stored); } catch { /* Export metadata is optional. */ }
   }, []);
 
-  useEffect(() => {
-    if (crisisService) {
-      if (crisisService.isCustom) {
-        setSelectedServiceId("custom");
-        setCustomName(crisisService.name);
-        setCustomNumber(crisisService.number);
-      } else {
-        setSelectedServiceId(crisisService.id);
-      }
-    }
-  }, [crisisService]);
-
   const handleReset = async () => {
-    try {
-      const sessionsCleared = await resetSessions();
-      if (!sessionsCleared) throw new Error("Registration drafts could not be cleared.");
-      await resetAllData();
-      localStorage.removeItem("anchor-pinned-tools");
-      localStorage.removeItem(LAST_EXPORTED_KEY);
-      window.location.reload();
-    } catch {
+    if (resetBusyRef.current || resetCommitted) return;
+    resetBusyRef.current = true; setResetBusy(true); setResetError("");
+    const result = await performSettingsReset({
+      flush: flushLocalDrafts, erase: resetAllData,
+      committed: () => { setResetCommitted(true); setLastExported(null); },
+      clearDraftMemory: resetLocalDraftMemory,
+      clearBrowserMetadata: () => {
+        for (const key of ["anchor-pinned-tools", LAST_EXPORTED_KEY]) {
+          try { localStorage.removeItem(key); } catch { /* Optional display metadata. */ }
+        }
+      },
+      reload: () => window.location.reload(),
+    });
+    if (!result.committed) {
+      setResetError(t("settings.reset.error"));
       toast({ title: t("settings.reset.error"), variant: "destructive" });
+    } else {
+      setResetError(language === "nl" ? "De lokale appgegevens zijn gewist. Herlaad de app als dit niet automatisch gebeurt." : "Local app data has been erased. Reload the app if it does not reload automatically.");
     }
+    resetBusyRef.current = false; setResetBusy(false);
   };
 
   const handleExport = async () => {
+    if (exportBusyRef.current || resetBusyRef.current || resetCommitted) return;
+    exportBusyRef.current = true; setExportBusy(true);
     setExportStatus("idle");
     try {
+      await flushLocalDrafts();
       const data = await exportData();
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
       const url = URL.createObjectURL(blob);
@@ -99,7 +98,7 @@ export function Settings() {
       URL.revokeObjectURL(url);
 
       const now = new Date().toISOString();
-      localStorage.setItem(LAST_EXPORTED_KEY, now);
+      try { localStorage.setItem(LAST_EXPORTED_KEY, now); } catch { /* A downloaded backup is still successful. */ }
       setLastExported(now);
       setExportStatus("success");
       toast({
@@ -114,158 +113,38 @@ export function Settings() {
         variant: "destructive",
       });
       setTimeout(() => setExportStatus("idle"), 5000);
-    }
-  };
-
-  const handleImportFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      try {
-        const payload = JSON.parse(String(ev.target?.result ?? "{}"));
-        const requiredArrays = ["journal", "cravingLogs", "relapseLogs", "anxietyLogs", "boredomLogs", "settings"];
-        if (
-          !payload ||
-          typeof payload !== "object" ||
-          (payload.version !== 1 && payload.version !== 2) ||
-          !requiredArrays.every((key) => Array.isArray(payload[key]))
-          || (payload.version === 2 && !Array.isArray(payload.featureRecords))
-        ) {
-          setImportStatus("error");
-          setImportMessage(t("import.error"));
-          toast({
-            title: t("import.error"),
-            variant: "destructive",
-          });
-          return;
-        }
-        setPendingImport(payload);
-        setImportConfirm(true);
-      } catch {
-        setImportStatus("error");
-        setImportMessage(t("import.error"));
-        toast({
-          title: t("import.error"),
-          variant: "destructive",
-        });
-      }
-    };
-    reader.readAsText(file);
-    e.target.value = "";
-  };
-
-  const handleImportConfirm = async () => {
-    if (!pendingImport) return;
-    setImportConfirm(false);
-    try {
-      const result = await importData(pendingImport);
-      try {
-        localStorage.removeItem("anchor-pinned-tools");
-      } catch {
-        // Imported IndexedDB settings remain authoritative.
-      }
-      await refreshRecoveryFeatures();
-      const partial = result.skipped > 0 || result.errors.length > 0;
-      setImportStatus(partial ? "error" : "success");
-      setImportMessage(
-        partial
-          ? t("import.partial")
-              .replace("{imported}", String(result.imported))
-              .replace("{skipped}", String(result.skipped))
-          : t("import.success").replace("{n}", String(result.imported)),
-      );
-      toast({
-        title: partial ? t("import.partial_title") : t("import.success"),
-        description: partial
-          ? t("import.partial")
-              .replace("{imported}", String(result.imported))
-              .replace("{skipped}", String(result.skipped))
-          : t("import.restored").replace("{n}", String(result.imported)),
-        variant: partial ? "destructive" : undefined,
-      });
-      setPendingImport(null);
-      // A reload rehydrates every provider, including language and active or
-      // suspended registration drafts. This is required after partial imports
-      // too: successfully restored settings must not remain stale in memory.
-      setTimeout(() => window.location.reload(), partial ? 2500 : 800);
-    } catch {
-      setImportStatus("error");
-      setImportMessage(t("import.error"));
-      toast({
-        title: t("import.error"),
-        variant: "destructive",
-      });
-      setPendingImport(null);
-      setTimeout(() => setImportStatus("idle"), 5000);
+    } finally {
+      exportBusyRef.current = false; setExportBusy(false);
     }
   };
 
   const handleDateSave = async () => {
+    if (loading || !dateDraft.hydrated || dateDraft.conflict || dateSavingRef.current || resetBusyRef.current || resetCommitted || !dateDraft.hasDraft) return;
     const val = dateInput.trim();
-    await setSobrietyStartDate(val || null);
-  };
-
-  const handleServiceChange = async (id: string) => {
-    setSelectedServiceId(id);
-    setCustomNameError("");
-    setCustomNumberError("");
-    if (id === "custom") {
-      setCustomName("");
-      setCustomNumber("");
-      return;
+    if (!isValidSettingsDate(val)) { setDateError(language === "nl" ? "Kies een geldige datum die niet in de toekomst ligt." : "Choose a valid date that is not in the future."); return; }
+    dateSavingRef.current = true; setDateSaving(true); setDateError("");
+    let committed = false;
+    try {
+      await flushLocalDrafts();
+      await setSobrietyStartDate(val || null);
+      committed = true;
+      await dateDraft.clearDraft(val);
     }
-    const svc = DEFAULT_CRISIS_SERVICES.find((s) => s.id === id);
-    if (svc) {
-      await setCrisisService({ id: svc.id, name: t(svc.nameKey), number: svc.number, isCustom: false });
-    }
+    catch { setDateError(committed
+      ? (language === "nl" ? "De datum is opgeslagen, maar het concept kon niet worden afgerond. Je invoer blijft bewaard." : "The date was saved, but its draft could not be cleared. Your input is preserved.")
+      : (language === "nl" ? "De datum is niet opgeslagen. Je invoer blijft staan; probeer opnieuw." : "The date was not saved. Your input remains; please retry.")); }
+    finally { dateSavingRef.current = false; setDateSaving(false); }
   };
 
-  const handleCustomSave = async () => {
-    let valid = true;
-    setCustomNameError("");
-    setCustomNumberError("");
-    if (!customName.trim()) {
-      setCustomNameError(t("settings.emergencyContacts.name"));
-      valid = false;
-    }
-    const digits = customNumber.replace(/\D/g, "");
-    if (digits.length < 3) {
-      setCustomNumberError(t("settings.crisisService.customNumber"));
-      valid = false;
-    }
-    if (!valid) return;
-    await setCrisisService({ id: "custom", name: customName.trim(), number: customNumber.trim(), isCustom: true });
+  const handleThemeSave = async (nextTheme: "dark" | "light") => {
+    if (loading || themeSavingRef.current || resetBusyRef.current) return;
+    themeSavingRef.current = true; setThemeSaving(true); setThemeError(""); setFailedTheme(nextTheme);
+    try { await setTheme(nextTheme); setFailedTheme(null); }
+    catch { setThemeError(language === "nl" ? "Het thema is niet opgeslagen. Je huidige thema blijft behouden; probeer opnieuw." : "The theme was not saved. Your current theme is preserved; please retry."); }
+    finally { themeSavingRef.current = false; setThemeSaving(false); }
   };
 
-  const handleAddContact = async () => {
-    const errors: Record<string, string> = {};
-    if (!contactName.trim()) errors.name = "required";
-    if (!contactRelation.trim()) errors.relationship = "required";
-    const digits = contactPhone.replace(/\D/g, "");
-    if (!contactPhone.trim() || digits.length < 3) errors.phone = "invalid";
-    setContactErrors(errors);
-    if (Object.keys(errors).length > 0) return;
-
-    const newContact: EmergencyContact = {
-      id: crypto.randomUUID(),
-      name: contactName.trim(),
-      relationship: contactRelation.trim(),
-      phone: contactPhone.trim(),
-    };
-    await setEmergencyContacts([...emergencyContacts, newContact]);
-    setContactName("");
-    setContactRelation("");
-    setContactPhone("");
-    setContactErrors({});
-    setShowContactForm(false);
-  };
-
-  const handleRemoveContact = async (id: string) => {
-    await setEmergencyContacts(emergencyContacts.filter((c) => c.id !== id));
-  };
-
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = localSettingsDate();
 
   const formatLastExported = (iso: string | null) => {
     if (!iso) return t("export.lastExported") + ": never";
@@ -293,7 +172,7 @@ export function Settings() {
               <Calendar size={18} className="text-primary mt-0.5 shrink-0" />
               <div>
                 <p className="text-sm font-medium text-foreground">{t("settings.sobriety.label")}</p>
-                <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
+                <p id="journey-date-description" className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
                   {t("settings.sobriety.sub")}
                 </p>
               </div>
@@ -301,12 +180,19 @@ export function Settings() {
             <input
               type="date"
               aria-label={t("settings.sobriety.label")}
-              value={dateInput}
+              aria-describedby={`journey-date-description${dateError ? " journey-date-error" : ""}`}
+              aria-invalid={!!dateError}
+              value={resetCommitted ? "" : dateInput}
               max={todayStr}
-              onChange={(e) => setDateInput(e.target.value)}
+              disabled={loading || !dateDraft.hydrated || (!!dateDraft.error && !dateDraft.hasDraft) || dateSaving || resetBusy || resetCommitted}
+              onChange={(e) => { dateDraft.setValue(e.target.value); setDateError(""); }}
               onBlur={handleDateSave}
               className="w-full bg-background border border-input rounded-xl px-4 py-3 text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-ring appearance-none [color-scheme:inherit]"
             />
+            {dateSaving && <p role="status" className="text-xs text-muted-foreground">{language === "nl" ? "Datum opslaan…" : "Saving date…"}</p>}
+            {!resetCommitted && <DraftStatus {...dateDraft} />}
+            {dateError && <p id="journey-date-error" role="alert" className="text-xs text-destructive">{dateError}</p>}
+            {!resetCommitted && (dateDraft.hasDraft || dateError) && <button type="button" disabled={dateSaving || dateDraft.conflict} onClick={handleDateSave} className="min-h-11 self-start text-sm underline">{language === "nl" ? "Datum opslaan" : "Save date"}</button>}
             {sobrietyStartDate && (
               <p className="text-xs text-primary leading-snug break-words">
                 {t("settings.sobriety.saved")} {new Date(sobrietyStartDate + "T00:00:00").toLocaleDateString(language === "nl" ? "nl-NL" : "en-GB", {
@@ -334,7 +220,8 @@ export function Settings() {
                 </div>
               </div>
               <button
-                onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+                disabled={loading || themeSaving || resetBusy || resetCommitted}
+                onClick={() => handleThemeSave(theme === "dark" ? "light" : "dark")}
                 className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition-colors touch-target ${
                   theme === "light" ? "bg-primary" : "bg-muted"
                 }`}
@@ -349,6 +236,7 @@ export function Settings() {
                 />
               </button>
             </div>
+            {themeError && <div><p role="alert" className="mt-3 text-xs text-destructive">{themeError}</p><button type="button" disabled={themeSaving} onClick={() => handleThemeSave(failedTheme ?? (theme === "dark" ? "light" : "dark"))} className="min-h-11 text-sm underline">{language === "nl" ? "Opnieuw opslaan" : "Retry saving"}</button></div>}
           </div>
         </section>
 
@@ -413,176 +301,9 @@ export function Settings() {
           </section>
         )}
 
-        {/* ── Crisis Service picker ──────────────────────────── */}
-        <section>
-          <p className="text-xs text-muted-foreground uppercase tracking-widest px-1 mb-3">{t("settings.crisisService")}</p>
-          <div className="bg-card border border-border rounded-2xl p-4 flex flex-col gap-3">
-            <p className="text-xs text-muted-foreground leading-relaxed">{t("settings.crisisService.description")}</p>
-            <select
-              aria-label={t("settings.crisisService")}
-              value={selectedServiceId}
-              onChange={(e) => handleServiceChange(e.target.value)}
-              className="w-full bg-background border border-input rounded-xl px-4 py-3 text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-ring appearance-none"
-            >
-              <option value="">{t("settings.crisisService.choose")}</option>
-              {DEFAULT_CRISIS_SERVICES.map((svc) => (
-                <option key={svc.id} value={svc.id}>
-                  {t(svc.nameKey)} — {svc.number}
-                </option>
-              ))}
-              <option value="custom">{t("settings.crisisService.custom")}</option>
-            </select>
+        <CareContactSettings />
 
-            {selectedServiceId === "custom" && (
-              <div className="flex flex-col gap-2 pt-1">
-                <div>
-                  <input
-                    type="text"
-                    placeholder={t("settings.crisisService.customName")}
-                    aria-label={t("settings.crisisService.customName")}
-                    value={customName}
-                    onChange={(e) => setCustomName(e.target.value)}
-                    className={`w-full bg-background border rounded-xl px-4 py-3 text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-ring ${
-                      customNameError ? "border-destructive" : "border-input"
-                    }`}
-                  />
-                  {customNameError && <p className="text-xs text-destructive mt-1">{t("settings.emergencyContacts.name")} {language === "nl" ? "is verplicht" : "is required"}</p>}
-                </div>
-                <div>
-                  <input
-                    type="tel"
-                    placeholder={t("settings.crisisService.customNumber")}
-                    aria-label={t("settings.crisisService.customNumber")}
-                    value={customNumber}
-                    onChange={(e) => setCustomNumber(e.target.value)}
-                    className={`w-full bg-background border rounded-xl px-4 py-3 text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-ring ${
-                      customNumberError ? "border-destructive" : "border-input"
-                    }`}
-                  />
-                  {customNumberError && <p className="text-xs text-destructive mt-1">{language === "nl" ? "Minimaal 3 cijfers vereist" : "Minimum 3 digits required"}</p>}
-                </div>
-                <button
-                  onClick={handleCustomSave}
-                  className="w-full bg-primary text-primary-foreground rounded-xl py-3 font-semibold text-sm hover:opacity-90 active:scale-95 transition-all touch-target"
-                >
-                  {language === "nl" ? "Opslaan" : "Save"}
-                </button>
-              </div>
-            )}
-
-            {crisisService && !crisisService.isCustom && selectedServiceId && selectedServiceId !== "custom" && (
-              <p className="text-xs text-primary leading-snug">
-                ✓ {crisisService.name} — {crisisService.number}
-              </p>
-            )}
-            {crisisService?.isCustom && selectedServiceId === "custom" && crisisService.name && (
-              <p className="text-xs text-primary leading-snug">
-                ✓ {crisisService.name} — {crisisService.number}
-              </p>
-            )}
-          </div>
-        </section>
-
-        {/* ── Emergency Contacts ────────────────────────────── */}
-        <section>
-          <p className="text-xs text-muted-foreground uppercase tracking-widest px-1 mb-3">{t("settings.emergencyContacts")}</p>
-          <div className="bg-card border border-border rounded-2xl p-4 flex flex-col gap-3">
-            <p className="text-xs text-muted-foreground leading-relaxed">{t("settings.emergencyContacts.description")}</p>
-
-            {/* Existing contacts */}
-            {emergencyContacts.length > 0 && (
-              <div className="flex flex-col gap-2">
-                {emergencyContacts.map((contact) => (
-                  <div
-                    key={contact.id}
-                    className="flex items-center justify-between gap-3 bg-background border border-border rounded-xl px-4 py-3"
-                  >
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-foreground truncate">{contact.name}</p>
-                      <p className="text-xs text-muted-foreground">{contact.relationship} · {contact.phone}</p>
-                    </div>
-                    <button
-                      onClick={() => handleRemoveContact(contact.id)}
-                      className="text-muted-foreground hover:text-destructive transition-colors shrink-0 p-1 touch-target"
-                      aria-label={t("settings.emergencyContacts.remove")}
-                    >
-                      <X size={16} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Add contact form */}
-            {showContactForm ? (
-              <div className="flex flex-col gap-2 border border-border rounded-xl p-3">
-                <div>
-                  <input
-                    type="text"
-                    placeholder={t("settings.emergencyContacts.name")}
-                    aria-label={t("settings.emergencyContacts.name")}
-                    value={contactName}
-                    onChange={(e) => setContactName(e.target.value)}
-                    className={`w-full bg-background border rounded-xl px-4 py-3 text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-ring ${
-                      contactErrors.name ? "border-destructive" : "border-input"
-                    }`}
-                  />
-                  {contactErrors.name && <p className="text-xs text-destructive mt-1">{language === "nl" ? "Naam is verplicht" : "Name is required"}</p>}
-                </div>
-                <div>
-                  <input
-                    type="text"
-                    placeholder={t("settings.emergencyContacts.relationship")}
-                    aria-label={t("settings.emergencyContacts.relationship")}
-                    value={contactRelation}
-                    onChange={(e) => setContactRelation(e.target.value)}
-                    className={`w-full bg-background border rounded-xl px-4 py-3 text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-ring ${
-                      contactErrors.relationship ? "border-destructive" : "border-input"
-                    }`}
-                  />
-                  {contactErrors.relationship && <p className="text-xs text-destructive mt-1">{language === "nl" ? "Relatie is verplicht" : "Relationship is required"}</p>}
-                </div>
-                <div>
-                  <input
-                    type="tel"
-                    placeholder={t("settings.emergencyContacts.phone")}
-                    aria-label={t("settings.emergencyContacts.phone")}
-                    value={contactPhone}
-                    onChange={(e) => setContactPhone(e.target.value)}
-                    className={`w-full bg-background border rounded-xl px-4 py-3 text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-ring ${
-                      contactErrors.phone ? "border-destructive" : "border-input"
-                    }`}
-                  />
-                  {contactErrors.phone && <p className="text-xs text-destructive mt-1">{language === "nl" ? "Minimaal 3 cijfers vereist" : "Minimum 3 digits required"}</p>}
-                </div>
-                <div className="flex gap-2 pt-1">
-                  <button
-                    onClick={() => { setShowContactForm(false); setContactErrors({}); }}
-                    className="flex-1 border border-border rounded-xl py-2.5 text-sm font-medium text-foreground hover:bg-muted/40 transition-colors touch-target"
-                  >
-                    {t("common.cancel")}
-                  </button>
-                  <button
-                    onClick={handleAddContact}
-                    className="flex-1 bg-primary text-primary-foreground rounded-xl py-2.5 text-sm font-semibold hover:opacity-90 active:scale-95 transition-all touch-target"
-                  >
-                    {language === "nl" ? "Opslaan" : "Save"}
-                  </button>
-                </div>
-              </div>
-            ) : emergencyContacts.length < 3 ? (
-              <button
-                onClick={() => setShowContactForm(true)}
-                className="flex items-center justify-center gap-2 w-full border border-dashed border-border rounded-xl py-3 text-sm text-muted-foreground hover:border-primary/40 hover:text-primary transition-colors touch-target"
-              >
-                <UserPlus size={16} />
-                {t("settings.emergencyContacts.add")}
-              </button>
-            ) : (
-              <p className="text-xs text-muted-foreground text-center py-1">{t("settings.emergencyContacts.max")}</p>
-            )}
-          </div>
-        </section>
+        <PersonalContactsSettings />
 
         {/* Privacy */}
         <section>
@@ -629,6 +350,7 @@ export function Settings() {
               </div>
               <button
                 onClick={handleExport}
+                disabled={exportBusy || resetBusy || resetCommitted || loading}
                 className="w-full flex items-center justify-center gap-2 bg-primary text-primary-foreground rounded-xl py-3 font-semibold text-sm hover:opacity-90 active:scale-95 transition-all touch-target focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
               >
                 <FileDown size={16} />
@@ -654,35 +376,7 @@ export function Settings() {
               )}
             </div>
 
-            {/* Import card */}
-            <div className="rounded-[1.5rem] border border-border/50 bg-card/50 p-4 flex flex-col gap-3">
-              <div className="flex items-start gap-3">
-                <div className="rounded-xl bg-primary/10 p-2.5 text-primary shrink-0">
-                  <FileUp size={18} strokeWidth={1.8} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-foreground">{t("import.btn")}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{t("import.subtitle")}</p>
-                </div>
-              </div>
-              <label className="flex items-center justify-center gap-2 border border-border rounded-xl py-3 font-medium text-sm text-foreground hover:bg-muted/40 transition-colors touch-target cursor-pointer focus-within:ring-2 focus-within:ring-primary/50">
-                <FileUp size={16} />
-                {t("import.btn")}
-                <input type="file" accept="application/json" onChange={handleImportFile} className="sr-only" />
-              </label>
-              {importStatus === "success" && (
-                <div className="flex items-center gap-2 text-xs text-primary animate-fade-up">
-                  <CheckCircle2 size={14} />
-                  <span>{importMessage || t("import.success")}</span>
-                </div>
-              )}
-              {importStatus === "error" && (
-                <div className="flex items-center gap-2 text-xs text-destructive animate-fade-up">
-                  <AlertCircle size={14} />
-                  <span>{importMessage || t("import.error")}</span>
-                </div>
-              )}
-            </div>
+            <ImportDataPanel onImport={importData} />
           </div>
         </section>
 
@@ -691,7 +385,9 @@ export function Settings() {
           <p className="text-xs text-muted-foreground uppercase tracking-widest px-1 mb-3">{t("settings.section.data")}</p>
           <div className="bg-card border border-border rounded-2xl overflow-hidden">
             <button
-              onClick={() => setConfirmReset(true)}
+              disabled={loading || exportBusy || dateSaving || themeSaving || resetBusy || resetCommitted}
+              ref={resetTriggerRef}
+              onClick={() => { setResetError(""); setConfirmReset(true); }}
               className="w-full flex items-center justify-between px-4 py-3.5 hover:bg-destructive/5 transition-colors touch-target"
             >
               <div className="text-left">
@@ -718,55 +414,25 @@ export function Settings() {
       </div>
 
       {/* Confirm reset dialog */}
-      {confirmReset && (
-        <div className="fixed inset-0 z-[70] flex items-end justify-center bg-background/80 backdrop-blur-sm px-4 pb-[calc(2rem+env(safe-area-inset-bottom,0px))]">
-          <div role="alertdialog" aria-modal="true" aria-labelledby="reset-dialog-title" className="bg-card border border-border rounded-3xl p-6 w-full max-w-sm">
-            <h3 id="reset-dialog-title" className="font-semibold text-foreground mb-1">{t("settings.reset.title")}</h3>
-            <p className="text-sm text-muted-foreground mb-5 leading-relaxed">
+      <AlertDialog open={confirmReset} onOpenChange={open => { if (!resetBusy && !resetCommitted) setConfirmReset(open); }}>
+          <AlertDialogContent onCloseAutoFocus={event => { event.preventDefault(); resetTriggerRef.current?.focus(); }} onEscapeKeyDown={event => { if (resetBusy || resetCommitted) event.preventDefault(); }} className="z-[80] max-h-[85dvh] overflow-y-auto bg-card border border-border rounded-3xl p-6 w-[calc(100%_-_2rem)] max-w-sm">
+            <AlertDialogTitle className="font-semibold text-foreground mb-1">{t("settings.reset.title")}</AlertDialogTitle>
+            <AlertDialogDescription className="text-sm text-muted-foreground mb-5 leading-relaxed">
               {t("settings.reset.body")}
-            </p>
-            <div className="flex gap-3">
+            </AlertDialogDescription>
+            {resetError && <p role={resetCommitted ? "status" : "alert"} className="mb-3 text-sm">{resetError}</p>}
+            <AlertDialogFooter className="gap-3">
+              <AlertDialogCancel disabled={resetBusy || resetCommitted} className="min-h-11">{t("common.cancel")}</AlertDialogCancel>
               <button
-                onClick={() => setConfirmReset(false)}
-                className="flex-1 border border-border rounded-xl py-3 font-medium text-foreground touch-target"
-              >
-                {t("common.cancel")}
-              </button>
-              <button
-                onClick={handleReset}
+                disabled={resetBusy}
+                onClick={resetCommitted ? () => window.location.reload() : handleReset}
                 className="flex-1 bg-destructive text-destructive-foreground rounded-xl py-3 font-semibold touch-target"
               >
-                {t("settings.reset.confirm")}
+                {resetBusy ? (language === "nl" ? "Gegevens wissen…" : "Erasing data…") : resetCommitted ? (language === "nl" ? "App herladen" : "Reload app") : t("settings.reset.confirm")}
               </button>
-            </div>
-          </div>
-        </div>
-      )}
-      {/* Confirm import dialog */}
-      {importConfirm && (
-        <div className="fixed inset-0 z-[70] flex items-end justify-center bg-background/80 backdrop-blur-sm px-4 pb-[calc(2rem+env(safe-area-inset-bottom,0px))]">
-          <div role="alertdialog" aria-modal="true" aria-labelledby="import-dialog-title" className="bg-card border border-border rounded-3xl p-6 w-full max-w-sm">
-            <h3 id="import-dialog-title" className="font-semibold text-foreground mb-1">{t("import.confirm.title")}</h3>
-            <p className="text-sm text-muted-foreground mb-5 leading-relaxed">
-              {t("import.confirm.body")}
-            </p>
-            <div className="flex gap-3">
-              <button
-                onClick={() => { setImportConfirm(false); setPendingImport(null); }}
-                className="flex-1 border border-border rounded-xl py-3 font-medium text-foreground touch-target"
-              >
-                {t("common.cancel")}
-              </button>
-              <button
-                onClick={handleImportConfirm}
-                className="flex-1 bg-primary text-primary-foreground rounded-xl py-3 font-semibold touch-target"
-              >
-                {t("import.confirm.btn")}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+            </AlertDialogFooter>
+          </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

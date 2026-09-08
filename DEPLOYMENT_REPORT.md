@@ -1,5 +1,7 @@
 # Deployment Report — Substance Recovery
 
+> Historical reference only. This report is not evidence of the current deployed version or the current release procedure. Use [README.md](README.md) for the supported offline PWA architecture and release workflow. The original report below is retained for provenance.
+
 ## Project Info
 
 | Field | Value |

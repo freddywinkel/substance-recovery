@@ -105,11 +105,9 @@ type RegistrationLog = CravingLog | RelapseLog | AnxietyLog | BoredomLog;
 function upsertNewest<T extends { id: string; timestamp: number }>(
   records: T[],
   record: T,
-  limit = 200,
 ): T[] {
   return [record, ...records.filter((item) => item.id !== record.id)]
-    .sort((a, b) => b.timestamp - a.timestamp)
-    .slice(0, limit);
+    .sort((a, b) => b.timestamp - a.timestamp);
 }
 
 function withSessionMetadata<T extends RegistrationLog>(
@@ -383,15 +381,16 @@ export function useLogs() {
     }
   }, [clearReadbackIssue, noteReadbackFailure]);
 
-  const updateCigarette = useCallback(async (log: CigaretteLog) => {
-    await updateCigaretteLog(log);
+  const updateCigarette = useCallback(async (log: CigaretteLog, expected?: { timestamp: number; note?: string; updatedAt?: number | null }) => {
+    const saved = await updateCigaretteLog(log, expected);
     try {
       setCigaretteLogs(await getCigaretteLogs());
       clearReadbackIssue();
     } catch (error) {
-      setCigaretteLogs((current) => upsertNewest(current, log));
+      setCigaretteLogs((current) => upsertNewest(current, saved));
       noteReadbackFailure("updateCigaretteLog:refresh", error, log.id);
     }
+    return saved;
   }, [clearReadbackIssue, noteReadbackFailure]);
 
   const reload = useCallback(async () => {

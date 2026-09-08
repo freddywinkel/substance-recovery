@@ -1,4 +1,8 @@
-import { useEffect, useState } from "react";
+import { retryStorageIntegrity, useStorageIntegrity } from "@/lib/storageIntegrity";
+import { useEffect, useState, useSyncExternalStore } from "react";
+import { useLocation } from "wouter";
+import { getDB } from "@/db/schema";
+import { getDatabaseLifecycleStatus, subscribeDatabaseLifecycle } from "@/db/lifecycle";
 import { Database, RefreshCw } from "lucide-react";
 import {
   retryLogIntegrityChecks,
@@ -15,9 +19,17 @@ import { useRecoveryFeatures } from "@/contexts/RecoveryFeaturesContext";
 export function DataIntegrityBanner() {
   const { loadError, readbackIssue } = useLogIntegrityStatus();
   const { loadError: featureLoadError, refresh: refreshRecoveryFeatures } = useRecoveryFeatures();
-  const { t } = useT();
+  const { t, language } = useT();
+  const storageIssues = Object.values(useStorageIntegrity());
+  const readFailure = storageIssues.some(issue => issue.kind === "read");
+  const writeFailure = storageIssues.some(issue => issue.kind === "write");
   const [retrying, setRetrying] = useState(false);
-  const visible = loadError !== null || featureLoadError !== null || readbackIssue !== null;
+  const lifecycle = useSyncExternalStore(subscribeDatabaseLifecycle, getDatabaseLifecycleStatus);
+  const [location] = useLocation();
+  const databaseIssue = lifecycle !== null && lifecycle.kind !== "opening";
+  // DatabaseGate already explains database access failures on data screens.
+  // Help bypasses that gate and keeps this compact retry notice available.
+  const visible = !(databaseIssue && location !== "/help") && (databaseIssue || storageIssues.length > 0 || loadError !== null || featureLoadError !== null || readbackIssue !== null);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -38,7 +50,14 @@ export function DataIntegrityBanner() {
     if (retrying) return;
     setRetrying(true);
     try {
-      await Promise.all([retryLogIntegrityChecks(), refreshRecoveryFeatures()]);
+      if (databaseIssue) {
+        if (lifecycle?.kind !== "outdated") await getDB();
+        window.location.reload();
+      } else {
+        await Promise.allSettled([retryLogIntegrityChecks(), refreshRecoveryFeatures(), retryStorageIntegrity()]);
+      }
+    } catch {
+      // The persistent database status continues to explain a failed retry.
     } finally {
       setRetrying(false);
     }
@@ -56,7 +75,7 @@ export function DataIntegrityBanner() {
       <div className="mx-auto flex min-h-16 w-full max-w-lg items-center gap-3 rounded-2xl border border-destructive/40 bg-card px-3 py-2.5 shadow-xl">
         <Database className="shrink-0 text-destructive" size={19} aria-hidden="true" />
         <p className="min-w-0 flex-1 text-xs font-medium leading-5 text-foreground">
-          {loadError || featureLoadError
+          {databaseIssue ? (language === "nl" ? "Je database is niet geopend. Sluit andere Anchor-vensters en probeer opnieuw / herlaad. Hulp blijft beschikbaar." : "Your database is not open. Close other Anchor windows and retry / reload. Help remains available.") : writeFailure ? (language === "nl" ? "Een instelling is niet opgeslagen. Je vorige keuze blijft bewaard. Probeer opnieuw." : "A setting was not saved. Your previous choice is preserved. Please retry.") : loadError || featureLoadError || readFailure
             ? t("data.warning.read_failed")
             : t("data.warning.readback_failed")}
         </p>

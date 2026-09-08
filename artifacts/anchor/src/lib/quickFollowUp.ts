@@ -9,7 +9,7 @@ export const QUICK_REFLECTION_DELAY_MS = 10 * 60 * 1000;
 
 export interface QuickRegistrationInput {
   registrationType: RegistrationType;
-  intensity: number;
+  intensity: number | null;
   immediateSafety: QuickSafety;
   chosenAction: string;
   chosenActionOther?: string;
@@ -25,7 +25,7 @@ export function buildQuickRegistrationRecord(
     timestamp: now,
     updatedAt: now,
     registrationType: input.registrationType,
-    intensity: Math.max(0, Math.min(10, Math.round(input.intensity))),
+    intensity: input.intensity === null ? null : Math.max(0, Math.min(10, Math.round(input.intensity))),
     immediateSafety: input.immediateSafety,
     chosenAction: input.chosenAction.trim(),
     chosenActionOther: input.chosenActionOther?.trim() ?? "",

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useRef, useState, type SetStateAction } from "react";
 import {
   ArrowDown,
   ArrowUp,
@@ -16,7 +16,12 @@ import {
   type HomeWidgetId,
   type RecoveryToolId,
   type RegistrationType,
+  type HomePreferences,
 } from "@/lib/recoveryFeatures";
+import { useLocalDraft } from "@/hooks/useLocalDraft";
+import { DraftStatus } from "@/components/DraftStatus";
+import { isHomeCustomizationDraft } from "@/lib/homeCustomizationDraft";
+import { flushLocalDrafts } from "@/lib/localDrafts";
 
 const COPY = {
   en: {
@@ -45,7 +50,7 @@ const COPY = {
     saved: "Home layout saved offline",
     saveError: "The Home layout could not be saved. Please try again.",
     widgets: {
-      sobriety: { label: "Sobriety", description: "Optional recovery start date and day count" },
+      sobriety: { label: "Goals and journey", description: "Optional journey start and recorded progress per goal" },
       "quick-registration": { label: "Quick registration", description: "A short route for difficult moments" },
       "follow-ups": { label: "Follow-ups", description: "Always appears when a tool check-in or later reflection is due" },
       cigarettes: { label: "Cigarette counter", description: "Today’s cigarette total and add button" },
@@ -99,7 +104,7 @@ const COPY = {
     saved: "Indeling offline opgeslagen",
     saveError: "De indeling kon niet worden opgeslagen. Probeer het opnieuw.",
     widgets: {
-      sobriety: { label: "Nuchterheid", description: "Optionele startdatum en dagenteller" },
+      sobriety: { label: "Doelen en traject", description: "Optionele trajectstart en vastgelegde voortgang per doel" },
       "quick-registration": { label: "Snelle registratie", description: "Een korte route voor moeilijke momenten" },
       "follow-ups": { label: "Opvolging", description: "Verschijnt altijd zodra een tool-check-in of latere reflectie klaarstaat" },
       cigarettes: { label: "Sigarettenteller", description: "Het aantal van vandaag en de toevoegknop" },
@@ -157,25 +162,24 @@ export function HomeCustomization() {
   const { language } = useLanguage();
   const c = COPY[language];
   const { emergencyContacts } = useStore();
-  const { loading, homePreferences, saveHomePreferences } = useRecoveryFeatures();
-  const [widgetOrder, setWidgetOrder] = useState<HomeWidgetId[]>([]);
-  const [hiddenWidgets, setHiddenWidgets] = useState<HomeWidgetId[]>([]);
-  const [hiddenRegistrationTypes, setHiddenRegistrationTypes] = useState<RegistrationType[]>([]);
-  const [pinnedContactId, setPinnedContactId] = useState<string | null>(null);
-  const [pinnedToolIds, setPinnedToolIds] = useState<RecoveryToolId[]>([]);
+  const { loading, loadError, homePreferences, saveHomePreferences } = useRecoveryFeatures();
+  const draft = useLocalDraft("home-customization", homePreferences, {
+    ready: !loading && !loadError,
+    validate: isHomeCustomizationDraft,
+  });
+  const { widgetOrder, hiddenWidgets, hiddenRegistrationTypes, pinnedContactId, pinnedToolIds } = draft.value;
+  const setField = <K extends keyof HomePreferences>(key: K) => (update: SetStateAction<HomePreferences[K]>) => {
+    if (savingRef.current) return;
+    draft.setValue(current => ({ ...current, [key]: typeof update === "function" ? (update as (value: HomePreferences[K]) => HomePreferences[K])(current[key]) : update }));
+  };
+  const setWidgetOrder = setField("widgetOrder"), setHiddenWidgets = setField("hiddenWidgets"),
+    setHiddenRegistrationTypes = setField("hiddenRegistrationTypes"), setPinnedContactId = setField("pinnedContactId"), setPinnedToolIds = setField("pinnedToolIds");
   const [registrationWarning, setRegistrationWarning] = useState(false);
   const [toolWarning, setToolWarning] = useState(false);
   const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
+  const [saveError, setSaveError] = useState("");
   const [status, setStatus] = useState<"idle" | "saved" | "error">("idle");
-
-  useEffect(() => {
-    if (loading) return;
-    setWidgetOrder(homePreferences.widgetOrder.slice());
-    setHiddenWidgets(homePreferences.hiddenWidgets.filter((id) => id !== "follow-ups"));
-    setHiddenRegistrationTypes(homePreferences.hiddenRegistrationTypes.slice());
-    setPinnedContactId(homePreferences.pinnedContactId);
-    setPinnedToolIds(homePreferences.pinnedToolIds.slice());
-  }, [homePreferences, loading]);
 
   const toggleWidget = (id: HomeWidgetId) => {
     if (id === "follow-ups") return;
@@ -218,22 +222,25 @@ export function HomeCustomization() {
   };
 
   const save = async () => {
-    if (saving) return;
+    if (savingRef.current || !draft.hydrated || draft.error || loadError) return;
+    savingRef.current = true;
     setSaving(true);
     setStatus("idle");
+    setSaveError("");
+    let committed = false;
     try {
-      await saveHomePreferences({
-        ...homePreferences,
-        widgetOrder,
-        hiddenWidgets,
-        hiddenRegistrationTypes,
-        pinnedContactId,
-        pinnedToolIds,
-      });
+      await flushLocalDrafts();
+      await saveHomePreferences(draft.value);
+      committed = true;
+      await draft.clearDraft(draft.value);
       setStatus("saved");
     } catch {
+      setSaveError(committed
+        ? (language === "nl" ? "De indeling is opgeslagen; het concept kon niet worden gewist. Probeer opnieuw." : "The layout is saved; its draft could not be cleared. Please retry.")
+        : c.saveError);
       setStatus("error");
     } finally {
+      savingRef.current = false;
       setSaving(false);
     }
   };
@@ -246,6 +253,8 @@ export function HomeCustomization() {
           <p className="rounded-2xl border border-primary/25 bg-primary/8 px-4 py-3 text-sm leading-relaxed text-muted-foreground">
             {c.intro}
           </p>
+          <DraftStatus {...draft} />
+          <fieldset disabled={!draft.hydrated || saving || !!loadError} className="flex min-w-0 flex-col gap-4">
 
           <EditorSection title={c.sectionsTitle} body={c.sectionsBody}>
             <ol className="flex flex-col gap-2">
@@ -361,13 +370,14 @@ export function HomeCustomization() {
           <button
             type="button"
             onClick={() => { void save(); }}
-            disabled={loading || saving}
+            disabled={loading || saving || !draft.hydrated || !!draft.error || !!loadError}
             className="flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary/15 transition-transform active:scale-[0.98] disabled:opacity-55"
           >
             {status === "saved" ? <Check size={19} /> : <Save size={19} />}
             {saving ? c.saving : status === "saved" ? c.saved : c.save}
           </button>
-          {status === "error" && <p role="alert" className="text-center text-sm text-destructive">{c.saveError}</p>}
+          {status === "error" && <p role="alert" className="text-center text-sm text-destructive">{saveError}</p>}
+          </fieldset>
         </div>
       </div>
     </div>

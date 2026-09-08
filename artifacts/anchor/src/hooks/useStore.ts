@@ -11,6 +11,8 @@ import {
   clearAllData,
   exportAllData,
   importAllData,
+  type ImportMode,
+  type ImportResult,
 } from "@/db";
 import { useJournal } from "./useJournal";
 import { useLogs, type CommittedReadbackIssue } from "./useLogs";
@@ -36,10 +38,10 @@ interface StoreState {
 }
 
 interface StoreActions {
-  logEntry: (entry: Omit<JournalEntry, "id">) => Promise<void>;
+  logEntry: (entry: Omit<JournalEntry, "id"> & { id?: string }) => Promise<JournalEntry>;
   removeEntry: (id: string) => Promise<void>;
   logCigarette: (entry: Omit<CigaretteLog, "id">) => Promise<CigaretteLog>;
-  updateCigarette: (entry: CigaretteLog) => Promise<void>;
+  updateCigarette: (entry: CigaretteLog, expected?: { timestamp: number; note?: string; updatedAt?: number | null }) => Promise<CigaretteLog>;
   removeCigarette: (id: string) => Promise<void>;
   logCraving: (entry: Omit<CravingLog, "id">) => Promise<CravingLog>;
   updateCraving: (entry: CravingLog) => Promise<void>;
@@ -61,8 +63,8 @@ interface StoreActions {
   refresh: () => Promise<void>;
   exportData: () => Promise<Record<string, unknown>>;
   importData: (
-    payload: Record<string, unknown>
-  ) => Promise<{ imported: number; skipped: number; errors: string[] }>;
+    payload: Record<string, unknown>, options?: { mode?: ImportMode }
+  ) => Promise<ImportResult>;
   clearReadbackIssue: () => void;
 }
 
@@ -105,8 +107,8 @@ export function useStore(): StoreState & StoreActions {
   }, []);
 
   const importData = useCallback(
-    async (payload: Record<string, unknown>) => {
-      const result = await importAllData(payload);
+    async (payload: Record<string, unknown>, options?: { mode?: ImportMode }) => {
+      const result = await importAllData(payload, options);
       await refresh();
       return result;
     },
@@ -125,7 +127,7 @@ export function useStore(): StoreState & StoreActions {
     crisisService: settingsHook.crisisService,
     emergencyContacts: settingsHook.emergencyContacts,
     loading,
-    loadError: logsHook.loadError,
+    loadError: logsHook.loadError ?? journalHook.loadError ?? settingsHook.loadError ?? uiHook.loadError,
     readbackIssue: logsHook.readbackIssue,
     logEntry: journalHook.logEntry,
     removeEntry: journalHook.removeEntry,
