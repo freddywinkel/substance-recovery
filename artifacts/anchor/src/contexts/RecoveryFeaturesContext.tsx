@@ -35,6 +35,8 @@ import {
   type WeeklyReviewRecord,
 } from "@/lib/recoveryFeatures";
 import { commitRecoveryPlan } from "@/db/planPersistence";
+import { commitPersonalGrowthRecord, removePersonalGrowthRecord } from "@/db/personalGrowth";
+import type { PersonalGrowthRecord } from "@/lib/personalGrowth";
 
 const LEGACY_PINNED_TOOLS_KEY = "anchor-pinned-tools";
 
@@ -60,6 +62,8 @@ type RecoveryFeaturesContextValue = {
   addRecord: <T extends FeatureRecord>(record: NewFeatureRecord<T>) => Promise<T>;
   updateRecord: <T extends FeatureRecord>(record: T) => Promise<T>;
   removeRecord: (id: string) => Promise<void>;
+  savePersonalRecord: <T extends PersonalGrowthRecord>(record: T, expectedUpdatedAt: number | null) => Promise<T>;
+  removePersonalRecord: (record: PersonalGrowthRecord) => Promise<void>;
   addRecoveryAction: (input: {
     actionType: RecoveryActionType;
     label: string;
@@ -226,6 +230,17 @@ export function RecoveryFeaturesProvider({ children }: { children: React.ReactNo
     setRecords((current) => current.filter((record) => record.id !== id));
   }, []);
 
+  const savePersonalRecord = useCallback(async <T extends PersonalGrowthRecord>(record: T, expectedUpdatedAt: number | null): Promise<T> => {
+    const saved = await commitPersonalGrowthRecord(record, expectedUpdatedAt);
+    setRecords(current => sortRecords([saved, ...current.filter(item => item.id !== saved.id)]));
+    return saved;
+  }, []);
+
+  const removePersonalRecord = useCallback(async (record: PersonalGrowthRecord) => {
+    await removePersonalGrowthRecord(record);
+    setRecords(current => current.filter(item => item.id !== record.id));
+  }, []);
+
   const addRecoveryAction = useCallback(async (input: {
     actionType: RecoveryActionType;
     label: string;
@@ -328,6 +343,8 @@ export function RecoveryFeaturesProvider({ children }: { children: React.ReactNo
     addRecord,
     updateRecord,
     removeRecord,
+    savePersonalRecord,
+    removePersonalRecord,
     addRecoveryAction,
     scheduleToolFollowUp,
     startQuickReflection,
@@ -346,6 +363,8 @@ export function RecoveryFeaturesProvider({ children }: { children: React.ReactNo
     records,
     recoveryPlan,
     removeRecord,
+    savePersonalRecord,
+    removePersonalRecord,
     saveHomePreferences,
     saveRecoveryPlan,
     scheduleToolFollowUp,

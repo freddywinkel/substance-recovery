@@ -1,3 +1,4 @@
+import { BriefCompassionButton } from "@/components/BriefCompassionButton";
 import { RECOVERY_TARGET_VALUES, recoveryTargetLabel } from "@/lib/recoveryTargets";
 import { encodeUseDetails, selectedUseDetails } from "@/lib/useDetails";
 import { UseDetailsEditor } from "@/components/UseDetailsEditor";
@@ -1013,6 +1014,7 @@ export function RelapseLog() {
           )}
 
           <div className="flex flex-col gap-3 w-full max-w-xs">
+            <BriefCompassionButton disabled={isWriting} onOpen={() => void openSupportRoute("/tools/self-compassion/brief")} />
             <button
               type="button"
               disabled={isWriting}

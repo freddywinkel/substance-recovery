@@ -8,6 +8,7 @@ import { isRegistrationCorrectionDraft, registrationSourceSignature, Registratio
 import { isCigaretteEditDraft } from "@/lib/cigaretteEditDraft";
 import { isCareContactDraft, isPersonalContactDraft } from "@/lib/contactDrafts";
 import { isJournalDraft } from "@/lib/journalDraft";
+import { isGrowthMomentDraft, isCompassionDraft } from "@/lib/personalGrowth";
 import { isValidLocalDraftEnvelope } from "@/lib/localDrafts";
 import {
   getDB,
@@ -543,11 +544,16 @@ function normalizeImportedSetting(
     return { key, value: JSON.stringify(parseRecoveryPlan(parsed)) };
   }
 
-  if (/^draft:(recovery-plan|journal-entry|quick-registration|care-contact|personal-contact|supportive-action|home-customization|journey-date|registration-correction|cigarette-edit|weekly-review:[a-zA-Z0-9-]+)$/.test(key)) {
+  if (/^draft:(recovery-plan|journal-entry|quick-registration|care-contact|personal-contact|supportive-action|home-customization|journey-date|registration-correction|cigarette-edit|compassion-note|growth-moment:[a-zA-Z0-9%_.~!()*'-]+|weekly-review:[a-zA-Z0-9-]+)$/.test(key)) {
     if (settingValue === "") return { key, value: "" };
     if (typeof settingValue !== "string" || settingValue.length > 512_000) return null;
     const envelope = parseJsonSetting(settingValue);
     if (!isValidLocalDraftEnvelope(envelope)) return null;
+    if (key === "draft:compassion-note" && !isCompassionDraft(envelope.value)) return null;
+    if (key.startsWith("draft:growth-moment:")) {
+      if (!isGrowthMomentDraft(envelope.value)) return null;
+      if (key !== "draft:growth-moment:new" && key !== `draft:growth-moment:${encodeURIComponent(envelope.value.id)}`) return null;
+    }
     if (key === "draft:supportive-action" && !isSupportiveActionDraft(envelope.value)) return null;
     if (key === "draft:home-customization" && !isHomeCustomizationDraft(envelope.value)) return null;
     if (key === "draft:journey-date" && !isJourneyDateDraft(envelope.value)) return null;

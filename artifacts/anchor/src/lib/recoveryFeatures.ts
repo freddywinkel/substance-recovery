@@ -1,4 +1,5 @@
 import { isValidPreventionPlan, normalizePreventionPlan, type PreventionPlan } from "./preventionPlan";
+import { GROWTH_CATEGORIES, COMPASSION_NOTE_ID, type GrowthCategory } from "./personalGrowth";
 
 export const REGISTRATION_TYPES = [
   "trek",
@@ -197,7 +198,27 @@ export type FeatureRecord =
   | QuickRegistrationRecord
   | RecoveryActionRecord
   | ToolFollowUpRecord
-  | WeeklyReviewRecord;
+  | WeeklyReviewRecord
+  | GrowthMomentRecord
+  | CompassionNoteRecord;
+
+export interface GrowthMomentRecord {
+  id: string;
+  recordType: "growth-moment";
+  timestamp: number;
+  updatedAt: number;
+  note: string;
+  category: GrowthCategory | null;
+  favourite: boolean;
+}
+
+export interface CompassionNoteRecord {
+  id: typeof COMPASSION_NOTE_ID;
+  recordType: "compassion-note";
+  timestamp: number;
+  updatedAt: number;
+  text: string;
+}
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   !!value && typeof value === "object" && !Array.isArray(value);
@@ -321,6 +342,20 @@ export function parseFeatureRecord(value: unknown): FeatureRecord | null {
   if (!isRecord(value)) return null;
   if (!isString(value.id, 200) || value.id.trim() === "") return null;
   if (!isFiniteTimestamp(value.timestamp) || !isFiniteTimestamp(value.updatedAt)) return null;
+
+  if (value.recordType === "growth-moment") {
+    if (!Object.keys(value).every(key => ["id", "recordType", "timestamp", "updatedAt", "note", "category", "favourite"].includes(key))) return null;
+    if (value.id === "new" || value.id === COMPASSION_NOTE_ID || !isString(value.note, 2000) || !value.note.trim()) return null;
+    if (value.category !== null && !GROWTH_CATEGORIES.includes(value.category as GrowthCategory)) return null;
+    if (typeof value.favourite !== "boolean") return null;
+    return value as unknown as GrowthMomentRecord;
+  }
+
+  if (value.recordType === "compassion-note") {
+    if (!Object.keys(value).every(key => ["id", "recordType", "timestamp", "updatedAt", "text"].includes(key))) return null;
+    if (value.id !== COMPASSION_NOTE_ID || !isString(value.text, 500) || !value.text.trim()) return null;
+    return value as unknown as CompassionNoteRecord;
+  }
 
   if (value.recordType === "quick-registration") {
     if (!REGISTRATION_TYPES.includes(value.registrationType as RegistrationType)) return null;

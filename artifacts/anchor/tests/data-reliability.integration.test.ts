@@ -67,13 +67,13 @@ describe("backup preflight, preservation and atomic transactions", () => {
     }
     expect(await getEmergencyContacts()).toEqual([]);
   });
-  it("round-trips tombstones, legacy check-ins, explicit null and local drafts in v3", async () => {
+  it("round-trips tombstones, legacy check-ins, explicit null and local drafts in v4", async () => {
     const db = await getDB();
     await db.put("journal", { ...journal("deleted"), deleted: true }); await db.put("checkIns", { id: "legacy", date: "2020-01-01", timestamp: time });
     await addJournalEntry(journal("visible"));
     const value = { version: 1, revision: 1, updatedAt: time, clientId: "synthetic", value: createJournalDraft() };
     await setSetting("draft:journal-entry", JSON.stringify(value));
-    const exported = await exportAllData(); expect(exported.version).toBe(3); expect(exported.journal).toHaveLength(2); expect(exported.checkIns).toHaveLength(1);
+    const exported = await exportAllData(); expect(exported.version).toBe(4); expect(exported.journal).toHaveLength(2); expect(exported.checkIns).toHaveLength(1);
     await clearAllData(); const result = await importAllData(exported); expect(result.errors).toEqual([]); expect(result.committed).toBe(true);
     expect(await db.get("journal", "deleted")).toMatchObject({ deleted: true }); expect(await getJournalEntries()).toHaveLength(1); expect(await db.getAll("checkIns")).toHaveLength(1); expect(await getSetting("draft:journal-entry")).toBe(JSON.stringify(value));
   });

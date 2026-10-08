@@ -23,17 +23,17 @@ import { CigaretteCounter } from "@/components/CigaretteCounter";
 import { CigaretteDayDrawer } from "@/components/CigaretteDayDrawer";
 import { GoalProgressHome } from "@/components/GoalProgressHome";
 import { DeferredFollowUpCard } from "@/components/DeferredFollowUpCard";
+import { GrowthHomeCard } from "@/components/GrowthHomeCard";
 import { useRecoveryFeatures } from "@/contexts/RecoveryFeaturesContext";
 import {
   HOME_WIDGET_IDS,
   localizedCallMessage,
   type HomeWidgetId,
 } from "@/lib/recoveryFeatures";
-import { logicalTimestamp } from "@/lib/registrationIds";
 import {
   Wind, Eye, Droplets, Waves, Rewind, Heart, Shuffle,
   CalendarCheck, RotateCcw, Settings,
-  SlidersHorizontal, Phone, MessageCircle, Zap, Sparkles,
+  SlidersHorizontal, Phone, MessageCircle, Zap,
 } from "lucide-react";
 
 const TOOL_META: Record<string, { icon: typeof Wind; labelKey: string; to: string }> = {
@@ -110,7 +110,6 @@ export function Home() {
     homePreferences,
     recoveryPlan,
     quickRegistrations,
-    recoveryActions,
   } = useRecoveryFeatures();
   const todaysQuote = useMemo(() => getTodaysQuote(language), [language]);
   const [cigaretteDrawerOpen, setCigaretteDrawerOpen] = useState(false);
@@ -148,20 +147,6 @@ export function Home() {
   );
 
   const pinnedContact = emergencyContacts.find((contact) => contact.id === homePreferences.pinnedContactId) ?? null;
-  const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
-  const supportiveActionsThisWeek = useMemo(() => {
-    const detailed = [
-      ...completedCravingLogs,
-      ...completedRelapseLogs,
-      ...anxietyLogs,
-      ...boredomLogs,
-    ].filter((entry) => logicalTimestamp(entry) >= sevenDaysAgo).length;
-    const quick = quickRegistrations.filter(
-      (entry) => entry.timestamp >= sevenDaysAgo && !entry.linkedDetailedRecordId,
-    ).length;
-    const actions = recoveryActions.filter((entry) => entry.timestamp >= sevenDaysAgo).length;
-    return detailed + quick + actions;
-  }, [anxietyLogs, boredomLogs, completedCravingLogs, completedRelapseLogs, quickRegistrations, recoveryActions, sevenDaysAgo]);
 
   const isWidgetVisible = (id: HomeWidgetId) => !homePreferences.hiddenWidgets.includes(id);
   const urgentFollowUpFirst = quickRegistrations.some(
@@ -326,35 +311,7 @@ export function Home() {
         </HomeWidgetSlot>
 
         <HomeWidgetSlot key="supportive-progress" id="supportive-progress">
-        {isWidgetVisible("supportive-progress") && (
-          <section aria-label={language === "nl" ? "Steunende vooruitgang" : "Supportive progress"} className="animate-fade-up">
-            <Link href="/actions" asChild>
-              <a className="block rounded-[1.5rem] border border-emerald-500/20 bg-emerald-500/5 p-4 transition-all hover:bg-emerald-500/10 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/50">
-                <div className="flex items-start gap-3">
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-400">
-                    <Sparkles size={19} strokeWidth={1.9} />
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
-                      {language === "nl" ? "Ondersteunende vooruitgang" : "Supportive progress"}
-                    </span>
-                    <span className="mt-1 block text-2xl font-semibold tabular-nums text-foreground">
-                      {supportiveActionsThisWeek}
-                    </span>
-                    <span className="mt-1 block text-xs leading-relaxed text-muted-foreground">
-                      {language === "nl"
-                        ? "Registraties en ondersteunende acties in de afgelopen 7 dagen."
-                        : "Registrations and supportive actions during the past 7 days."}
-                    </span>
-                    <span className="mt-2 block text-xs font-medium text-primary">
-                      {language === "nl" ? "Actie vastleggen of bekijken →" : "Record or view an action →"}
-                    </span>
-                  </span>
-                </div>
-              </a>
-            </Link>
-          </section>
-        )}
+        {isWidgetVisible("supportive-progress") && <GrowthHomeCard />}
         </HomeWidgetSlot>
 
         <HomeWidgetSlot key="top-insight" id="top-insight">

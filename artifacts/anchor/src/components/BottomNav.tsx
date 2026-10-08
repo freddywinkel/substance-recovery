@@ -50,6 +50,8 @@ export function BottomNav() {
         path.startsWith("/recovery-plan") ||
         path.startsWith("/home-customization") ||
         path.startsWith("/actions") ||
+        path.startsWith("/growth") ||
+        path.startsWith("/moments") ||
         path.startsWith("/weekly-review") ||
         path.startsWith("/report") ||
         path.startsWith("/journal") ||

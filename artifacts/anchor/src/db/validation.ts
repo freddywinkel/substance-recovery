@@ -24,7 +24,7 @@ import type {
   RelapseLog,
 } from "./schema";
 
-export const BACKUP_FORMAT_VERSION = 3 as const;
+export const BACKUP_FORMAT_VERSION = 4 as const;
 
 export type ImportStoreKey =
   | "journal"
@@ -899,7 +899,7 @@ export function validateBackupEnvelope(
   value: unknown,
 ): ValidationResult<Record<string, unknown>> {
   if (!isRecord(value)) return failure("Backup must be an object.");
-  if (value.version !== 1 && value.version !== 2 && value.version !== BACKUP_FORMAT_VERSION) {
+  if (value.version !== 1 && value.version !== 2 && value.version !== 3 && value.version !== BACKUP_FORMAT_VERSION) {
     return failure("Unsupported backup version.");
   }
   for (const key of [
@@ -910,8 +910,8 @@ export function validateBackupEnvelope(
   if (value.cigaretteLogs !== undefined && !Array.isArray(value.cigaretteLogs)) {
     return failure("cigaretteLogs must be an array when present.");
   }
-  if ((value.version === 2 || value.version === 3) && !Array.isArray(value.featureRecords)) {
-    return failure("featureRecords must be an array in a version 2 backup.");
+  if (value.version !== 1 && !Array.isArray(value.featureRecords)) {
+    return failure("featureRecords must be an array in a version 2 or later backup.");
   }
   if (value.featureRecords !== undefined && !Array.isArray(value.featureRecords)) {
     return failure("featureRecords must be an array when present.");

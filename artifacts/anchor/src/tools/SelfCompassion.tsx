@@ -1,12 +1,13 @@
 import { useState } from "react";
 import { PageHeader } from "@/components/PageHeader";
-import { useLocation } from "wouter";
+import { Link, useLocation } from "wouter";
+import { GROWTH_COPY } from "@/lib/growthCopy";
 import { useT } from "@/hooks/useTranslation";
 import { Heart, CheckCircle2 } from "lucide-react";
 import { ToolFollowUpButton } from "@/components/ToolFollowUpButton";
 
 export function SelfCompassion() {
-  const { t } = useT();
+  const { t, language } = useT();
   const [step, setStep] = useState(0);
   const [done, setDone] = useState(false);
   const [, navigate] = useLocation();
@@ -59,6 +60,7 @@ export function SelfCompassion() {
       </div>
 
       <div className="flex-1 min-h-0 overflow-y-auto scroll-smooth-ios flex flex-col px-6 pb-safe pt-4 gap-5 animate-fade-up">
+        <Link href="/tools/self-compassion/brief" className="flex min-h-12 items-center justify-center rounded-2xl border border-primary/30 p-3 text-center text-sm text-primary">{GROWTH_COPY[language].short}</Link>
 
         <div className="bg-card border border-border rounded-3xl p-6 flex flex-col gap-3">
           <h2 className="text-xl font-semibold text-foreground">{current.title}</h2>
