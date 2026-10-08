@@ -5,7 +5,8 @@
   "scripts": {
     "preinstall": "node scripts/ensure-pnpm.cjs",
     "build": "pnpm run typecheck && pnpm -r --if-present run build",
-    "test": "pnpm --filter @workspace/anchor run test",
+    "test": "pnpm --filter @workspace/anchor run test && pnpm run test:release-tools",
+    "test:release-tools": "node --test artifacts/api-server/tests/clerk-proxy.test.mjs artifacts/mockup-sandbox/tests/mockup-discovery.test.mjs",
     "verify:pwa": "node scripts/verify-built-pwa.mjs",
     "typecheck:libs": "node ./node_modules/typescript/lib/tsc.js --build",
     "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck",

@@ -19,9 +19,9 @@
  *   app.use(CLERK_PROXY_PATH, clerkProxyMiddleware());
  */
 
-import { createProxyMiddleware } from "http-proxy-middleware";
+import { createProxyServer } from "httpxy";
 import type { RequestHandler } from "express";
-import type { IncomingHttpHeaders } from "http";
+import { ServerResponse, type IncomingHttpHeaders } from "node:http";
 
 const CLERK_FAPI = "https://frontend-api.clerk.dev";
 export const CLERK_PROXY_PATH = "/api/__clerk";
@@ -52,6 +52,29 @@ export function getClerkProxyHost(req: {
   return firstHop || req.headers.host?.trim() || undefined;
 }
 
+function sendProxyError(error: unknown, res: ServerResponse): void {
+  if (res.destroyed || res.writableEnded) return;
+  if (res.headersSent) {
+    res.destroy();
+    return;
+  }
+
+  const code =
+    error && typeof error === "object" && "code" in error
+      ? String(error.code)
+      : "";
+  // Preserve the previous middleware's status codes for transport failures.
+  res.statusCode = /HPE_INVALID/.test(code)
+    ? 502
+    : /HPM_ERR_INVALID_MULTIPART_/.test(code)
+      ? 400
+      : ["ECONNRESET", "ENOTFOUND", "ECONNREFUSED", "ETIMEDOUT"].includes(code)
+        ? 504
+        : 500;
+  res.setHeader("Content-Type", "text/plain; charset=utf-8");
+  res.end("Authentication proxy unavailable.");
+}
+
 export function clerkProxyMiddleware(): RequestHandler {
   // Only run proxy in production — Clerk proxying doesn't work for dev instances
   if (process.env.NODE_ENV !== "production") {
@@ -63,29 +86,36 @@ export function clerkProxyMiddleware(): RequestHandler {
     return (_req, _res, next) => next();
   }
 
-  return createProxyMiddleware({
+  // The route is mounted explicitly in app.ts, so glob/path matching is not
+  // needed. Use the same streaming transport directly without a glob parser.
+  const proxy = createProxyServer({
     target: CLERK_FAPI,
     changeOrigin: true,
-    pathRewrite: (path: string) =>
-      path.replace(new RegExp(`^${CLERK_PROXY_PATH}`), ""),
-    on: {
-      proxyReq: (proxyReq, req) => {
-        const protocol = req.headers["x-forwarded-proto"] || "https";
-        const host = getClerkProxyHost(req) || "";
-        const proxyUrl = `${protocol}://${host}${CLERK_PROXY_PATH}`;
+  });
+  proxy.on("proxyReq", (proxyReq, req) => {
+    const protocol = req.headers["x-forwarded-proto"] || "https";
+    const host = getClerkProxyHost(req) || "";
+    const proxyUrl = `${protocol}://${host}${CLERK_PROXY_PATH}`;
 
-        proxyReq.setHeader("Clerk-Proxy-Url", proxyUrl);
-        proxyReq.setHeader("Clerk-Secret-Key", secretKey);
+    proxyReq.setHeader("Clerk-Proxy-Url", proxyUrl);
+    proxyReq.setHeader("Clerk-Secret-Key", secretKey);
 
-        const xff = req.headers["x-forwarded-for"];
-        const clientIp =
-          (Array.isArray(xff) ? xff[0] : xff)?.split(",")[0]?.trim() ||
-          req.socket?.remoteAddress ||
-          "";
-        if (clientIp) {
-          proxyReq.setHeader("X-Forwarded-For", clientIp);
-        }
-      },
-    },
-  }) as RequestHandler;
+    const xff = req.headers["x-forwarded-for"];
+    const clientIp =
+      (Array.isArray(xff) ? xff[0] : xff)?.split(",")[0]?.trim() ||
+      req.socket?.remoteAddress ||
+      "";
+    if (clientIp) proxyReq.setHeader("X-Forwarded-For", clientIp);
+  });
+  // httpxy can report failures as an event or a rejected web() promise. Handle
+  // both without exposing authentication headers or leaving a response open.
+  proxy.on("error", (error, _req, res) => {
+    if (res instanceof ServerResponse) sendProxyError(error, res);
+    else res?.destroy();
+  });
+
+  return (req, res) => {
+    req.url = req.url.replace(new RegExp(`^${CLERK_PROXY_PATH}`), "");
+    void proxy.web(req, res).catch((error: unknown) => sendProxyError(error, res));
+  };
 }
