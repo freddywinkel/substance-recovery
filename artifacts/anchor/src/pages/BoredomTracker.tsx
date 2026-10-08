@@ -1,3 +1,4 @@
+import { BriefCompassionButton } from "@/components/BriefCompassionButton";
 /**
  * BoredomTracker v2 — 4-step restlessness + action log.
  *
@@ -568,7 +569,7 @@ export function BoredomTracker() {
     }
   }, [draft, navigate, reg, t, toast]);
 
-  const openTools = useCallback(async () => {
+  const openTools = useCallback(async (path = "/tools") => {
     if (navigationWriteLock.current || outcomeWriteLock.current) return;
     navigationWriteLock.current = true;
     setNavigationSaving(true);
@@ -580,7 +581,7 @@ export function BoredomTracker() {
         toast({ title: t("common.save_error"), variant: "destructive" });
         return;
       }
-      navigate("/tools");
+      navigate(path);
     } finally {
       navigationWriteLock.current = false;
       setNavigationSaving(false);
@@ -936,6 +937,7 @@ export function BoredomTracker() {
             </div>
 
             <div className="flex flex-col gap-3 w-full max-w-xs">
+              <BriefCompassionButton disabled={navigationSaving || outcomeSaving} onOpen={() => void openTools("/tools/self-compassion/brief")} />
               {boredomFollowUpTrackers(convertCheck, urge).map((tracker) => (
                 <button
                   key={tracker}

@@ -2,6 +2,27 @@
 
 Status: **PENDING QUALIFIED HUMAN REVIEW**
 
+### Personal growth extension — 8 October 2026
+
+New review scope: `src/lib/growthCopy.ts`, `src/pages/GrowthMoment.tsx`,
+`src/pages/MyGrowth.tsx`, `src/tools/BriefSelfCompassion.tsx` and their Home and
+completed-registration entry points. Dutch and English content remains pending
+qualified human review. No clinical approval is inferred from software tests.
+
+Phase 2 adds `src/lib/weeklyGrowthCopy.ts`, `src/pages/WeeklyReview.tsx`,
+`src/lib/selfCriticismCopy.ts` and `src/pages/SelfCriticism.tsx` to this scope.
+Review the optional weekly prompts and enjoyable-activity framing, the explicit
+self-criticism entry and support choices, and the absence of inferred diagnoses,
+mandatory positive feelings or automatic contact. The existing pattern/plan
+workflow remains optional alongside reflection without problem registrations.
+
+Review boundaries: optional everyday reflection and self-kindness, no validated
+assessment or treatment protocol, no prescribed exercise duration or promise of
+symptom reduction, no automatic inference from free text, no forced positivity,
+and no replacement or suppression of urgent support. Users may stop or skip,
+choose a practical action instead of words, and need not feel warmth or believe
+a suggested phrase. Only explicitly selected moments are shown on Home.
+
 Packet version: 1.1
 Prepared: 2026-08-02; extended 2026-09-08
 Product content version: `registration-v3` with optional use-details extension; clinical-copy revision 2026-09-08

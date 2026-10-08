@@ -51,3 +51,15 @@ The app contains common self-help exercises used in recovery and anxiety support
 - Safe-area insets respected on all modern mobile devices
 - Smooth, slow transitions — nothing jarring or fast
 - No confetti, streaks, gamification badges, or social pressure
+
+## Personal growth and brief self-compassion
+
+- A pleasant moment need not be an achievement. Entry categories, reminders and exercises are optional; skipping creates no failure record.
+- Moments have their own short route with no craving, trigger or mood questions. They never affect symptom summaries or sobriety calculations.
+- Only explicitly favourited moments may be resurfaced on Home. Personal self-compassion words are shown inside the brief exercise, not automatically on Home or in shared reports.
+- Difficulty and positive experiences may coexist. Do not imply that optimism prevents relapse, that an exercise must feel good, or that an absence of entries means an absence of progress.
+- Return-to-use records never reset personal growth history. Editing and deletion remain deliberate user choices.
+- Short self-compassion offers words or a practical action, not compulsory body focus, touch, breathing, positive reframing or professional treatment.
+- Saved moments, words and drafts stay local and are included in full backups. There is no model inference, remote processing or new tracking.
+- Weekly reflection works without problem registrations. Memories, personal choices, room for next week and a pleasant activity are optional; one answer can stand on its own. An activity is an invitation, not a task to score or complete.
+- Self-criticism support starts only through an explicit user choice. Offer grounding, kinder words, chosen memories or contact, with a clear exit and existing urgent help always available. Do not diagnose a negative spiral or send anything to a contact automatically.

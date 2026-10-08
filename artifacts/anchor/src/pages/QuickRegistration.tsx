@@ -1,3 +1,4 @@
+import { BriefCompassionButton } from "@/components/BriefCompassionButton";
 import { useMemo, useRef, useState } from "react";
 import { AlertTriangle, CheckCircle2, Phone, ShieldCheck } from "lucide-react";
 import { useLocation } from "wouter";
@@ -236,6 +237,7 @@ export function QuickRegistration() {
           )}
           {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
           <div className="flex w-full max-w-sm flex-col gap-3">
+            {savedRecord.immediateSafety === "safe-for-now" && <BriefCompassionButton onOpen={() => navigate("/tools/self-compassion/brief")} />}
             <button
               type="button"
               onClick={() => { void beginReflection(); }}

@@ -323,6 +323,10 @@ for (const width of [320, 390, 1280]) {
       "tools/tape",
       "tools/cold-water",
       "tools/self-compassion",
+      "tools/self-compassion/brief",
+      "tools/self-criticism",
+      "growth",
+      "moments/new",
       "tools/distraction",
       "anxiety",
       "boredom",
@@ -423,7 +427,7 @@ test('downloaded backup restores through explicit replacement and reload without
   const download=await downloadPromise;
   const backup=await readFile((await download.path())!);
   const payload=JSON.parse(backup.toString('utf8'));
-  expect(payload.version).toBe(3);expect(payload.journal).toHaveLength(1);
+  expect(payload.version).toBe(5);expect(payload.journal).toHaveLength(1);
   await page.goto('journal/new');
   await page.getByRole('textbox',{name:'Wat houdt je bezig?',exact:true}).fill('SYNTHETIC later entry');
   await page.getByRole('button',{name:'Invoer opslaan',exact:true}).click();

@@ -1,9 +1,10 @@
 import { useState, useMemo } from "react";
-import { useLocation } from "wouter";
+import { Link, useLocation } from "wouter";
 import { useStore } from "@/hooks/useStore";
 import { useT } from "@/hooks/useTranslation";
 import { PageHeader } from "@/components/PageHeader";
 import { Plus, Trash2, Star, Search, Calendar, X } from "lucide-react";
+import { GROWTH_COPY } from "@/lib/growthCopy";
 
 function formatDate(ts: number, locale: string) {
   return new Date(ts).toLocaleString(locale === "nl" ? "nl-NL" : "en-GB", {
@@ -77,6 +78,10 @@ export function Journal() {
       <PageHeader title={t("journal.title")} subtitle={t("journal.subtitle")} />
 
       <div className="px-4 flex flex-col gap-3">
+        <div className="grid grid-cols-2 gap-2">
+          <Link href="/moments/new" className="flex min-h-12 items-center justify-center rounded-2xl border border-primary/25 bg-primary/5 px-3 py-2 text-center text-sm font-medium text-primary">{GROWTH_COPY[language].add}</Link>
+          <Link href="/growth" className="flex min-h-12 items-center justify-center rounded-2xl border border-border px-3 py-2 text-center text-sm">{GROWTH_COPY[language].collection}</Link>
+        </div>
         {/* Search bar */}
         <div className="relative">
           <Search

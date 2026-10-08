@@ -1,3 +1,4 @@
+import { BriefCompassionButton } from "@/components/BriefCompassionButton";
 import { RECOVERY_TARGET_VALUES, recoveryTargetLabel, isBehavioralTarget } from "@/lib/recoveryTargets";
 import { encodeUseDetails, selectedUseDetails, type UseDetail } from "@/lib/useDetails";
 import { UseDetailsEditor } from "@/components/UseDetailsEditor";
@@ -615,6 +616,7 @@ export function CravingTracker() {
 
           {/* Navigation */}
           <div className="flex flex-col gap-3 w-full max-w-xs">
+            <BriefCompassionButton onOpen={() => void openToolPath("/tools/self-compassion/brief", "done")} />
             {draft.useOutcome === "used" && (
               <button
                 onClick={() => navigate("/relapse")}

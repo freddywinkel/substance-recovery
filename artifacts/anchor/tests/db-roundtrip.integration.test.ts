@@ -188,7 +188,7 @@ describe("IndexedDB backup and retry integration", () => {
     expect(await getCravingLogs()).toHaveLength(1);
     const backup = await exportAllData();
     expect(backup).toMatchObject({
-      version: 3,
+      version: 5,
       cravingLogs: [
         {
           id: "craving-roundtrip",
@@ -272,7 +272,7 @@ describe("IndexedDB backup and retry integration", () => {
     await setSetting("recoveryPlan", JSON.stringify(DEFAULT_RECOVERY_PLAN));
 
     const backup = await exportAllData();
-    expect(backup).toMatchObject({ version: 3 });
+    expect(backup).toMatchObject({ version: 5 });
     if (!Array.isArray(backup.featureRecords)) throw new Error("Expected feature records in backup");
     expect(backup.featureRecords).toEqual(expect.arrayContaining([
       expect.objectContaining({ id: "quick-backup", recordType: "quick-registration" }),

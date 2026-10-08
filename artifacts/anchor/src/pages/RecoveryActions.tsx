@@ -1,4 +1,6 @@
 import { useMemo, useRef, useState, type FormEvent } from "react";
+import { Link } from "wouter";
+import { GROWTH_COPY } from "@/lib/growthCopy";
 import {
   CalendarCheck2,
   CheckCircle2,
@@ -231,6 +233,11 @@ export function RecoveryActions() {
       <PageHeader title={copy.title} subtitle={copy.subtitle} back />
       <div className="flex-1 overflow-y-auto scroll-smooth-ios px-4 pb-safe pt-3">
         <div className="mx-auto flex w-full max-w-2xl flex-col gap-4 pb-8">
+          <section className="rounded-3xl border border-primary/25 bg-primary/5 p-4">
+            <h2 className="font-semibold">{GROWTH_COPY[language].collection}</h2>
+            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{GROWTH_COPY[language].collectionIntro}</p>
+            <Link href="/growth" className="mt-2 flex min-h-12 items-center text-sm font-medium text-primary underline">{GROWTH_COPY[language].allGrowth}</Link>
+          </section>
           <section className="rounded-[1.5rem] border border-primary/20 bg-primary/5 p-4" aria-labelledby="weekly-progress-title">
             <div className="flex items-start gap-3">
               <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary/15 text-primary">

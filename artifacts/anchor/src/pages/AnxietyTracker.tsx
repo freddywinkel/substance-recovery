@@ -1,3 +1,4 @@
+import { BriefCompassionButton } from "@/components/BriefCompassionButton";
 import { CareContactCard } from "@/components/CareContactCard";
 /**
  * AnxietyTracker v2 — 4-step awareness + action log.
@@ -953,6 +954,7 @@ export function AnxietyTracker() {
             )}
 
             <div className="flex flex-col gap-3 w-full max-w-xs">
+              <BriefCompassionButton disabled={isWriting} onOpen={() => void openSupportRoute("/tools/self-compassion/brief")} />
               <button
                 type="button"
                 disabled={isWriting}

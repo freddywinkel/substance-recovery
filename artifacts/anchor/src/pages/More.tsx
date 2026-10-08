@@ -37,8 +37,8 @@ export function More() {
       icon: CalendarRange,
       title: language === "nl" ? "Weekoverzicht" : "Weekly review",
       description: language === "nl"
-        ? "Bekijk patronen met aantallen en maak één plan voor volgende week."
-        : "Review patterns with denominators and make one plan for next week.",
+        ? "Sta stil bij fijne momenten, eigen keuzes en ruimte voor volgende week."
+        : "Reflect on good moments, your own choices and room for next week.",
     },
     {
       to: "/report",

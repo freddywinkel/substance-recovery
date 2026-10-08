@@ -6,6 +6,10 @@ A mobile-first Progressive Web App (PWA) for addiction recovery support, built a
 
 Substance Recovery is an offline-first application that helps users track their recovery journey with tools for:
 - **Journal** — Mood and craving logging with notes
+- **My growth** — Optional everyday moments and self-chosen reminders, with no symptom questions, streaks or scores; accessible from Home, Journal and supportive actions
+- **Brief self-compassion** — Optional acknowledgement, kind words or a practical action, and one editable personal phrase; no automatic tool-use or follow-up record
+- **Weekly reflection** — Optional memories, personal choices, room for next week and one enjoyable activity; usable without problem registrations, alongside the existing supportive plan
+- **Support for self-criticism** — An explicit choice of grounding, kinder words, chosen memories or contact options; no automatic analysis or registration
 - **Progress** — Personal recovery goals, recorded events, and optional goal-specific progress
 - **Tools** — Common self-help exercises (paced breathing, 5-4-3-2-1 grounding, urge surfing, sensory reset, etc.); these are not clinical treatment or validated assessment tools
 - **Trackers** — Multi-step flows for planned/active urges, cravings, relapse, anxiety, and boredom
@@ -92,6 +96,7 @@ The browser configuration serves the existing production artifact; rebuild after
 |---|---|---|---|
 | `PORT` | No (defaults 8080) | Frontend | Vite development/preview port |
 | `BASE_PATH` | No (defaults `/`) | Frontend | Vite base URL |
+| `PWA_TEST_PORT` | No (defaults `8752`) | Browser tests / built-PWA preview | Use a free port to avoid reusing another checkout's preview |
 
 No secrets, database, or authentication configuration is required.
 
@@ -118,9 +123,9 @@ Native binaries are normal optional dependencies selected for the current OS/CPU
 
 ### Import and backup versions
 
-New backups use format 3. Supported historical format-1 and format-2 backups are checked before import. Invalid/unsupported data blocks the import without partial writes; merge and replacement each use one IndexedDB transaction. The complete snapshot includes local drafts, historical check-ins and deletion markers. It excludes obsolete device-specific sync bookkeeping. Selective reports are separate from backups.
+New backups use format 5. Historical formats 1–4 remain supported and checked before import. Invalid/unsupported data blocks the import without partial writes; merge and replacement each use one IndexedDB transaction. The complete snapshot includes growth moments, reminder preferences, personal self-compassion words, weekly reflection fields, local drafts, historical check-ins and deletion markers. It excludes obsolete device-specific sync bookkeeping and content-free personal-growth/weekly-review retry guards. Selective reports are separate from backups; personal growth and optional weekly reflection fields are not automatically added to a shareable report.
 
-Database version 10 preserves existing stores and records while preventing older version-9 clients from reopening the database and overwriting expanded plan fields. If an update waits for another Anchor tab or installed app window, close those other windows and choose **Reopen / reload**. Help remains available during a database interruption. Do not clear browser site data to resolve an update. Rolling the app code back to a version-9 client after this upgrade will not restore database access; use a compatible updated client instead.
+Database version 12 preserves existing stores and records while preventing older clients from reopening a database containing expanded growth and weekly-review drafts that their backup catalog does not understand. The v11-to-v12 upgrade rewrites no records or stores. If an update waits for another Anchor tab or installed app window, close those other windows and choose **Reopen / reload**. Help remains available during a database interruption. Do not clear browser site data to resolve an update. Rolling the app code back to a version-11 or earlier client after this upgrade will not restore database access; use a compatible updated client instead.
 
 ### Dependency maintenance
 

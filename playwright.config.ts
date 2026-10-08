@@ -1,5 +1,8 @@
 import { defineConfig } from "@playwright/test";
 
+const port = Number(process.env.PWA_TEST_PORT || 8752);
+const baseURL = `http://127.0.0.1:${port}/substance-recovery/`;
+
 export default defineConfig({
   testDir: "./artifacts/anchor/browser-tests",
   fullyParallel: false,
@@ -12,7 +15,7 @@ export default defineConfig({
     ["html", { outputFolder: "playwright-report", open: "never" }],
   ],
   use: {
-    baseURL: "http://127.0.0.1:8752/substance-recovery/",
+    baseURL,
     viewport: { width: 390, height: 844 },
     locale: "nl-NL",
     trace: "retain-on-failure",
@@ -23,7 +26,7 @@ export default defineConfig({
   },
   webServer: {
     command: "node scripts/serve-pwa.mjs",
-    url: "http://127.0.0.1:8752/substance-recovery/",
+    url: baseURL,
     reuseExistingServer: !process.env.CI,
     timeout: 15_000,
   },
