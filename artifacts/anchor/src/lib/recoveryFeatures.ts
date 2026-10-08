@@ -192,6 +192,10 @@ export interface WeeklyReviewRecord {
   planRevisionAt?: number | null;
   linkedGoalId?: string | null;
   reviewedEntryIds?: string[];
+  rememberFromWeek?: string;
+  choseForMyself?: string;
+  makeRoomForNextWeek?: string;
+  pleasantActivity?: string;
 }
 
 export type FeatureRecord =
@@ -409,6 +413,9 @@ export function parseFeatureRecord(value: unknown): FeatureRecord | null {
   }
 
   if (value.recordType === "weekly-review") {
+    for (const field of ["rememberFromWeek", "choseForMyself", "makeRoomForNextWeek", "pleasantActivity"] as const) {
+      if (value[field] !== undefined && !isString(value[field], 2000)) return null;
+    }
     if (value.planRevisionAt !== undefined && !isNullableTimestamp(value.planRevisionAt)) return null;
     if (value.linkedGoalId !== undefined && value.linkedGoalId !== null && !isString(value.linkedGoalId, 200)) return null;
     if (value.reviewedEntryIds !== undefined && !isIdArray(value.reviewedEntryIds, 10000)) return null;

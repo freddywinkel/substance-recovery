@@ -24,7 +24,7 @@ import type {
   RelapseLog,
 } from "./schema";
 
-export const BACKUP_FORMAT_VERSION = 4 as const;
+export const BACKUP_FORMAT_VERSION = 5 as const;
 
 export type ImportStoreKey =
   | "journal"
@@ -899,7 +899,7 @@ export function validateBackupEnvelope(
   value: unknown,
 ): ValidationResult<Record<string, unknown>> {
   if (!isRecord(value)) return failure("Backup must be an object.");
-  if (value.version !== 1 && value.version !== 2 && value.version !== 3 && value.version !== BACKUP_FORMAT_VERSION) {
+  if (value.version !== 1 && value.version !== 2 && value.version !== 3 && value.version !== 4 && value.version !== BACKUP_FORMAT_VERSION) {
     return failure("Unsupported backup version.");
   }
   for (const key of [

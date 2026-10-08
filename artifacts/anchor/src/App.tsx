@@ -74,6 +74,7 @@ const WeeklyReview = lazy(() =>
 const MyGrowth = lazy(() => import("@/pages/MyGrowth").then(module => ({ default: module.MyGrowth })));
 const GrowthMoment = lazy(() => import("@/pages/GrowthMoment").then(module => ({ default: module.GrowthMoment })));
 const BriefSelfCompassion = lazy(() => import("@/tools/BriefSelfCompassion").then(module => ({ default: module.BriefSelfCompassion })));
+const SelfCriticism = lazy(() => import("@/pages/SelfCriticism").then(module => ({ default: module.SelfCriticism })));
 const ReportBuilder = lazy(() =>
   import("@/pages/ReportBuilder").then((module) => ({
     default: module.ReportBuilder,
@@ -195,6 +196,7 @@ function AppRoutes() {
       <Route path="/tools/cold-water" component={ColdWaterReset} />
       <Route path="/tools/self-compassion" component={SelfCompassion} />
       <Route path="/tools/self-compassion/brief" component={BriefSelfCompassion} />
+      <Route path="/tools/self-criticism" component={SelfCriticism} />
       <Route path="/tools/distraction" component={Distraction} />
       <Route path="/anxiety" component={AnxietyTracker} />
       <Route path="/boredom" component={BoredomTracker} />

@@ -36,6 +36,7 @@ import {
 } from "@/lib/recoveryFeatures";
 import { commitRecoveryPlan } from "@/db/planPersistence";
 import { commitPersonalGrowthRecord, removePersonalGrowthRecord } from "@/db/personalGrowth";
+import { commitWeeklyReviewRecord, removeWeeklyReviewRecord } from "@/db/weeklyReview";
 import type { PersonalGrowthRecord } from "@/lib/personalGrowth";
 
 const LEGACY_PINNED_TOOLS_KEY = "anchor-pinned-tools";
@@ -64,6 +65,8 @@ type RecoveryFeaturesContextValue = {
   removeRecord: (id: string) => Promise<void>;
   savePersonalRecord: <T extends PersonalGrowthRecord>(record: T, expectedUpdatedAt: number | null) => Promise<T>;
   removePersonalRecord: (record: PersonalGrowthRecord) => Promise<void>;
+  saveWeeklyReview: (record: WeeklyReviewRecord, expectedUpdatedAt: number | null) => Promise<WeeklyReviewRecord>;
+  removeWeeklyReview: (record: WeeklyReviewRecord) => Promise<void>;
   addRecoveryAction: (input: {
     actionType: RecoveryActionType;
     label: string;
@@ -241,6 +244,17 @@ export function RecoveryFeaturesProvider({ children }: { children: React.ReactNo
     setRecords(current => current.filter(item => item.id !== record.id));
   }, []);
 
+  const saveWeeklyReview = useCallback(async (record: WeeklyReviewRecord, expectedUpdatedAt: number | null) => {
+    const saved = await commitWeeklyReviewRecord(record, expectedUpdatedAt);
+    setRecords(current => sortRecords([saved, ...current.filter(item => item.id !== saved.id)]));
+    return saved;
+  }, []);
+
+  const removeWeeklyReview = useCallback(async (record: WeeklyReviewRecord) => {
+    await removeWeeklyReviewRecord(record);
+    setRecords(current => current.filter(item => item.id !== record.id));
+  }, []);
+
   const addRecoveryAction = useCallback(async (input: {
     actionType: RecoveryActionType;
     label: string;
@@ -345,6 +359,8 @@ export function RecoveryFeaturesProvider({ children }: { children: React.ReactNo
     removeRecord,
     savePersonalRecord,
     removePersonalRecord,
+    saveWeeklyReview,
+    removeWeeklyReview,
     addRecoveryAction,
     scheduleToolFollowUp,
     startQuickReflection,
@@ -365,6 +381,8 @@ export function RecoveryFeaturesProvider({ children }: { children: React.ReactNo
     removeRecord,
     savePersonalRecord,
     removePersonalRecord,
+    saveWeeklyReview,
+    removeWeeklyReview,
     saveHomePreferences,
     saveRecoveryPlan,
     scheduleToolFollowUp,

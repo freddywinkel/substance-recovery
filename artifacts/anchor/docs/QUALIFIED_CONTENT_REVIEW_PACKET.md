@@ -9,6 +9,13 @@ New review scope: `src/lib/growthCopy.ts`, `src/pages/GrowthMoment.tsx`,
 completed-registration entry points. Dutch and English content remains pending
 qualified human review. No clinical approval is inferred from software tests.
 
+Phase 2 adds `src/lib/weeklyGrowthCopy.ts`, `src/pages/WeeklyReview.tsx`,
+`src/lib/selfCriticismCopy.ts` and `src/pages/SelfCriticism.tsx` to this scope.
+Review the optional weekly prompts and enjoyable-activity framing, the explicit
+self-criticism entry and support choices, and the absence of inferred diagnoses,
+mandatory positive feelings or automatic contact. The existing pattern/plan
+workflow remains optional alongside reflection without problem registrations.
+
 Review boundaries: optional everyday reflection and self-kindness, no validated
 assessment or treatment protocol, no prescribed exercise duration or promise of
 symptom reduction, no automatic inference from free text, no forced positivity,

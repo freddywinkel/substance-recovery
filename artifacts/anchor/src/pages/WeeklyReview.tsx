@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent } from "react";
+import { useMemo, useRef, useState, type FormEvent } from "react";
 import { Link } from "wouter";
 import { CalendarDays, ChevronDown, ClipboardList, Save } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
@@ -23,7 +23,16 @@ import { normalizePreventionPlan } from "@/lib/preventionPlan";
 import { useLocalDraft } from "@/hooks/useLocalDraft";
 import { DraftStatus } from "@/components/DraftStatus";
 import { recoveryTargetLabel } from "@/lib/recoveryTargets";
-import { isWeeklyReviewDraft } from "@/lib/weeklyReviewDraft";
+import {
+  isWeeklyReviewDraft,
+  type WeeklyReviewDraft,
+} from "@/lib/weeklyReviewDraft";
+import {
+  WEEKLY_GROWTH_COPY,
+  WEEKLY_GROWTH_FIELDS,
+} from "@/lib/weeklyGrowthCopy";
+import { flushLocalDrafts } from "@/lib/localDrafts";
+import { WeeklyReviewConflictError } from "@/db/weeklyReview";
 
 const COPY = {
   en: {
@@ -170,23 +179,94 @@ function formatPeriod(
 }
 
 export function WeeklyReview() {
+  const [weekOffset, setWeekOffset] = useState(0);
+  const [session, setSession] = useState(0);
+  const [notice, setNotice] = useState("");
+  const { loading } = useRecoveryFeatures();
+  const store = useStore();
+  const { language } = useT();
+  if (loading || store.loading)
+    return (
+      <p role="status" className="p-5">
+        {COPY[language].loading}
+      </p>
+    );
+  return (
+    <WeeklyReviewEditor
+      key={`${weekOffset}:${session}`}
+      weekOffset={weekOffset}
+      setWeekOffset={(offset) => {
+        setWeekOffset(offset);
+        setNotice("");
+      }}
+      notice={notice}
+      onDeleted={() => {
+        setNotice(WEEKLY_GROWTH_COPY[language].removed);
+        setSession((value) => value + 1);
+      }}
+    />
+  );
+}
+
+function reviewDraft(record: WeeklyReviewRecord | null): WeeklyReviewDraft {
+  return {
+    recordId: record?.id ?? crypto.randomUUID(),
+    timestamp: record?.timestamp ?? Date.now(),
+    sourceUpdatedAt: record?.updatedAt ?? null,
+    selectedPatternId:
+      record?.patternKind === "registration-type"
+        ? `type:${record.patternValue}`
+        : record?.patternKind === "time-of-day"
+          ? `time:${record.patternValue}`
+          : record?.patternKind === "high-intensity"
+            ? "intensity:7-10"
+            : record?.chosenPattern
+              ? "own"
+              : "",
+    nextWeekPlan: record?.nextWeekPlan ?? "",
+    linkedGoalId: record?.linkedGoalId ?? "",
+    ownObservation: record && !record.patternKind ? record.chosenPattern : "",
+    rememberFromWeek: record?.rememberFromWeek ?? "",
+    choseForMyself: record?.choseForMyself ?? "",
+    makeRoomForNextWeek: record?.makeRoomForNextWeek ?? "",
+    pleasantActivity: record?.pleasantActivity ?? "",
+  };
+}
+
+function WeeklyReviewEditor({
+  weekOffset,
+  setWeekOffset,
+  notice,
+  onDeleted,
+}: {
+  weekOffset: number;
+  setWeekOffset: (value: number) => void;
+  notice: string;
+  onDeleted: () => void;
+}) {
   const { language, tOpt } = useT();
   const copy = COPY[language];
+  const growthCopy = WEEKLY_GROWTH_COPY[language];
   const locale = language === "nl" ? "nl-NL" : "en-GB";
   const store = useStore();
   const {
-    addRecord,
-    updateRecord,
+    saveWeeklyReview,
+    removeWeeklyReview,
+    refresh,
     loading: featureLoading,
     quickRegistrations,
     weeklyReviews,
     recoveryPlan,
     loadError: featureError,
   } = useRecoveryFeatures();
-  const [weekOffset, setWeekOffset] = useState(0);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const busy = useRef(false);
+  const [confirmation, setConfirmation] = useState<
+    "discard" | "remove" | "latest" | null
+  >(null);
+  const [conflict, setConflict] = useState(false);
 
   const allRegistrations = useMemo(
     () =>
@@ -227,41 +307,27 @@ export function WeeklyReview() {
     () => normalizePreventionPlan(recoveryPlan.prevention),
     [recoveryPlan.prevention],
   );
-  const draft = useLocalDraft(
-    `weekly-review:${range.start}`,
-    {
-      selectedPatternId:
-        savedReview?.patternKind === "registration-type"
-          ? `type:${savedReview.patternValue}`
-          : savedReview?.patternKind === "time-of-day"
-            ? `time:${savedReview.patternValue}`
-            : savedReview?.patternKind === "high-intensity"
-              ? "intensity:7-10"
-              : savedReview
-                ? "own"
-                : "",
-      nextWeekPlan: savedReview?.nextWeekPlan ?? "",
-      linkedGoalId: savedReview?.linkedGoalId ?? "",
-      ownObservation:
-        savedReview && !savedReview.patternKind
-          ? savedReview.chosenPattern
-          : "",
-    },
-    {
-      ready: !store.loading && !featureLoading,
-      validate: isWeeklyReviewDraft,
-    },
-  );
+  const [initialRecord] = useState(savedReview);
+  const [initial] = useState(() => reviewDraft(savedReview));
+  const draft = useLocalDraft(`weekly-review:${range.start}`, initial, {
+    ready: !store.loading && !featureLoading,
+    validate: isWeeklyReviewDraft,
+  });
   const {
     selectedPatternId,
     nextWeekPlan,
     linkedGoalId,
     ownObservation = "",
   } = draft.value;
+  const changeDraft = (patch: Partial<WeeklyReviewDraft>) => {
+    setMessage("");
+    setError("");
+    draft.setValue((current) => ({ ...initial, ...current, ...patch }));
+  };
   const setSelectedPatternId = (value: string) =>
-    draft.setValue((current) => ({ ...current, selectedPatternId: value }));
+    changeDraft({ selectedPatternId: value });
   const setNextWeekPlan = (value: string) =>
-    draft.setValue((current) => ({ ...current, nextWeekPlan: value }));
+    changeDraft({ nextWeekPlan: value });
 
   const patternText = (pattern: WeeklyPattern): string => {
     if (pattern.kind === "registration-type") {
@@ -322,54 +388,144 @@ export function WeeklyReview() {
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
+    if (
+      busy.current ||
+      !draft.hydrated ||
+      draft.error ||
+      store.loadError ||
+      featureError
+    )
+      return;
     setMessage("");
     const pattern = summary.patterns.find(
       (item) => item.id === selectedPatternId,
     );
-    if (!pattern && !(selectedPatternId === "own" && ownObservation.trim())) {
+    const retainedPattern =
+      !pattern &&
+      selectedPatternId !== "own" &&
+      selectedPatternId === initial.selectedPatternId
+        ? initialRecord
+        : null;
+    const hasPlanning = !!(
+      selectedPatternId ||
+      nextWeekPlan.trim() ||
+      ownObservation.trim() ||
+      linkedGoalId
+    );
+    const hasReflection = WEEKLY_GROWTH_FIELDS.some((field) =>
+      draft.value[field]?.trim(),
+    );
+    if (
+      hasPlanning &&
+      !pattern &&
+      !retainedPattern?.chosenPattern &&
+      !(selectedPatternId === "own" && ownObservation.trim())
+    ) {
       setError(copy.chooseError);
       return;
     }
-    if (!nextWeekPlan.trim()) {
+    if (hasPlanning && !nextWeekPlan.trim()) {
       setError(copy.planError);
       return;
     }
+    if (!hasPlanning && !hasReflection) {
+      setError(growthCopy.empty);
+      return;
+    }
+    if (selectedPatternId === "own" && ownObservation.trim().length > 1000) {
+      setError(growthCopy.longObservation);
+      return;
+    }
+    busy.current = true;
     setSaving(true);
     setError("");
+    setConflict(false);
+    let committed = false;
     try {
-      const reviewInput = {
+      await flushLocalDrafts();
+      const expectedUpdatedAt =
+        draft.value.sourceUpdatedAt === undefined
+          ? (initial.sourceUpdatedAt ?? null)
+          : draft.value.sourceUpdatedAt;
+      const reviewInput: WeeklyReviewRecord = {
+        ...initialRecord,
+        id: draft.value.recordId ?? initial.recordId!,
         recordType: "weekly-review" as const,
-        timestamp: savedReview?.timestamp ?? Date.now(),
+        timestamp: draft.value.timestamp ?? initial.timestamp!,
+        updatedAt:
+          expectedUpdatedAt ?? draft.value.timestamp ?? initial.timestamp!,
         periodStart: range.start,
         periodEnd: range.endExclusive - 1,
         chosenPattern: pattern
           ? `${patternText(pattern)} (${pattern.count}/${pattern.denominator})`
-          : ownObservation.trim(),
+          : (retainedPattern?.chosenPattern ??
+            (selectedPatternId === "own" ? ownObservation.trim() : "")),
         nextWeekPlan: nextWeekPlan.trim(),
-        patternKind: pattern?.kind,
-        patternValue: pattern?.value,
-        patternCount: pattern?.count,
-        patternDenominator: pattern?.denominator,
-        reviewedEntryIds: pattern?.entryIds ?? [],
+        patternKind: pattern?.kind ?? retainedPattern?.patternKind,
+        patternValue: pattern?.value ?? retainedPattern?.patternValue,
+        patternCount: pattern?.count ?? retainedPattern?.patternCount,
+        patternDenominator:
+          pattern?.denominator ?? retainedPattern?.patternDenominator,
+        reviewedEntryIds:
+          pattern?.entryIds ?? retainedPattern?.reviewedEntryIds ?? [],
         linkedGoalId: linkedGoalId || null,
-        planRevisionAt: recoveryPlan.updatedAt,
+        planRevisionAt: hasPlanning ? recoveryPlan.updatedAt : undefined,
+        rememberFromWeek: draft.value.rememberFromWeek?.trim() ?? "",
+        choseForMyself: draft.value.choseForMyself?.trim() ?? "",
+        makeRoomForNextWeek: draft.value.makeRoomForNextWeek?.trim() ?? "",
+        pleasantActivity: draft.value.pleasantActivity?.trim() ?? "",
       };
-      if (savedReview) {
-        await updateRecord<WeeklyReviewRecord>({
-          ...savedReview,
-          ...reviewInput,
-        });
-      } else {
-        await addRecord<WeeklyReviewRecord>(reviewInput);
-      }
-      setMessage(copy.saved);
-      await draft.clearDraft();
-    } catch {
-      setError(copy.saveError);
+      const saved = await saveWeeklyReview(reviewInput, expectedUpdatedAt);
+      committed = true;
+      await draft.clearDraft(reviewDraft(saved), { keepInputOnFailure: true });
+      setMessage(growthCopy.saved);
+    } catch (cause) {
+      setConflict(cause instanceof WeeklyReviewConflictError);
+      setError(
+        cause instanceof WeeklyReviewConflictError
+          ? growthCopy.conflict
+          : committed
+            ? growthCopy.cleanupError
+            : growthCopy.saveError,
+      );
     } finally {
+      busy.current = false;
       setSaving(false);
     }
   };
+
+  async function confirmAction() {
+    if (busy.current) return;
+    busy.current = true;
+    setSaving(true);
+    setError("");
+    setMessage("");
+    try {
+      if (confirmation === "remove" && savedReview) {
+        await removeWeeklyReview(savedReview);
+        onDeleted();
+      } else if (confirmation === "latest") {
+        await draft.clearDraft();
+        await refresh();
+      } else if (confirmation === "discard") {
+        await draft.clearDraft(reviewDraft(savedReview), {
+          keepInputOnFailure: true,
+        });
+        setConflict(false);
+      }
+      setConfirmation(null);
+    } catch (cause) {
+      setConflict(cause instanceof WeeklyReviewConflictError);
+      setError(
+        cause instanceof WeeklyReviewConflictError
+          ? growthCopy.conflict
+          : growthCopy.deleteError,
+      );
+    } finally {
+      busy.current = false;
+      setSaving(false);
+    }
+  }
 
   const renderEntry = (entry: ReviewRegistration) => (
     <li
@@ -441,13 +597,38 @@ export function WeeklyReview() {
   const quickCount = summary.entries.filter(
     (entry) => entry.source === "quick",
   ).length;
+  const blocked =
+    saving || !!store.loadError || !!featureError || !!draft.error;
+  const confirmationTitle =
+    confirmation === "remove"
+      ? growthCopy.confirmRemove
+      : confirmation === "latest"
+        ? growthCopy.confirmLatest
+        : growthCopy.confirmDiscard;
+  const confirmationAction =
+    confirmation === "remove"
+      ? growthCopy.removeAction
+      : confirmation === "latest"
+        ? growthCopy.latestAction
+        : growthCopy.discardAction;
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <PageHeader title={copy.title} subtitle={copy.subtitle} back />
+      <PageHeader title={copy.title} subtitle={growthCopy.subtitle} back />
       <div className="flex-1 overflow-y-auto scroll-smooth-ios px-4 pb-safe pt-3">
         <div className="mx-auto flex w-full max-w-2xl flex-col gap-4 pb-8">
           <DraftStatus {...draft} />
+          {notice && (
+            <p role="status" className="text-sm text-primary">
+              {notice}
+            </p>
+          )}
+          <Link
+            href="/"
+            className="inline-flex min-h-12 items-center text-sm underline"
+          >
+            {growthCopy.leave}
+          </Link>
           {(store.loadError || featureError) && (
             <p role="alert" className="text-sm text-destructive">
               {language === "nl"
@@ -458,9 +639,10 @@ export function WeeklyReview() {
           <div className="flex justify-between gap-2">
             <button
               type="button"
+              disabled={saving}
               className="min-h-11 text-sm underline"
               onClick={() => {
-                setWeekOffset((value) => value - 1);
+                setWeekOffset(weekOffset - 1);
                 setMessage("");
               }}
             >
@@ -469,9 +651,9 @@ export function WeeklyReview() {
             <button
               type="button"
               className="min-h-11 text-sm underline disabled:opacity-40"
-              disabled={weekOffset >= 0}
+              disabled={saving || weekOffset >= 0}
               onClick={() => {
-                setWeekOffset((value) => value + 1);
+                setWeekOffset(weekOffset + 1);
                 setMessage("");
               }}
             >
@@ -492,6 +674,7 @@ export function WeeklyReview() {
               <button
                 key={offset}
                 type="button"
+                disabled={saving}
                 aria-pressed={weekOffset === offset}
                 onClick={() => setWeekOffset(offset)}
                 className={`min-h-11 rounded-xl px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 ${
@@ -525,11 +708,8 @@ export function WeeklyReview() {
                 </p>
               </div>
             </div>
-            <p className="mt-4 text-3xl font-semibold tabular-nums text-foreground">
-              {summary.entries.length}
-            </p>
-            <p className="text-sm text-muted-foreground">
-              {copy.registrations}
+            <p className="mt-3 text-sm text-muted-foreground">
+              {summary.entries.length} {copy.registrations}
             </p>
             <p className="mt-1 text-xs text-muted-foreground">
               {summary.entries.length - quickCount} {copy.detailed} ·{" "}
@@ -547,195 +727,292 @@ export function WeeklyReview() {
               <p className="mt-3 text-sm leading-6 text-muted-foreground">
                 {copy.noData}
               </p>
+              <p className="mt-2 text-sm leading-6">{growthCopy.emptyWeek}</p>
             </section>
           )}
           <form onSubmit={submit} className="flex flex-col gap-4" noValidate>
-            <section
-              className="rounded-[1.5rem] border border-border/70 bg-card p-4"
-              aria-labelledby="observed-patterns-title"
+            <fieldset
+              disabled={blocked}
+              className="flex min-w-0 flex-col gap-4"
             >
-              <h2
-                id="observed-patterns-title"
-                className="text-base font-semibold text-foreground"
+              <section
+                className="rounded-3xl border border-primary/25 bg-primary/5 p-4"
+                aria-labelledby="weekly-growth-title"
               >
-                {copy.patterns}
-              </h2>
-              <p className="mt-1 text-sm leading-6 text-muted-foreground">
-                {copy.patternsIntro}
-              </p>
-              <fieldset className="mt-4 grid gap-3">
-                <legend className="sr-only">{copy.choose}</legend>
-                {summary.patterns.map((pattern) => {
-                  const selected = selectedPatternId === pattern.id;
-                  const sources = matchingEntries(pattern);
-                  return (
-                    <div
-                      key={pattern.id}
-                      className={`rounded-2xl border p-3 ${selected ? "border-primary bg-primary/5" : "border-border/70 bg-background"}`}
+                <h2 id="weekly-growth-title" className="text-lg font-semibold">
+                  {growthCopy.title}
+                </h2>
+                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                  {growthCopy.optional}
+                </p>
+                {WEEKLY_GROWTH_FIELDS.map((field) => (
+                  <div key={field} className="mt-5">
+                    <label
+                      htmlFor={`weekly-${field}`}
+                      className="block text-sm font-medium leading-relaxed"
                     >
-                      <label className="flex cursor-pointer items-start gap-3">
+                      {growthCopy[field]}
+                    </label>
+                    {field === "pleasantActivity" && (
+                      <p
+                        id="weekly-activity-hint"
+                        className="mt-2 text-sm leading-relaxed text-muted-foreground"
+                      >
+                        {growthCopy.activityHint}
+                      </p>
+                    )}
+                    <textarea
+                      id={`weekly-${field}`}
+                      rows={field === "pleasantActivity" ? 2 : 3}
+                      maxLength={2000}
+                      aria-describedby={
+                        field === "pleasantActivity"
+                          ? "weekly-activity-hint"
+                          : undefined
+                      }
+                      value={draft.value[field] ?? ""}
+                      onChange={(event) =>
+                        changeDraft({ [field]: event.target.value })
+                      }
+                      className="mt-2 w-full resize-y rounded-xl border border-input bg-background p-3 text-base leading-relaxed"
+                    />
+                  </div>
+                ))}
+              </section>
+              <details className="rounded-3xl border border-border bg-card p-4">
+                <summary className="min-h-12 cursor-pointer py-2 text-sm font-semibold">
+                  {growthCopy.planning}
+                </summary>
+                <p className="mb-4 text-sm leading-relaxed text-muted-foreground">
+                  {growthCopy.planningHint}
+                </p>
+                <div className="flex flex-col gap-4">
+                  <section
+                    className="rounded-[1.5rem] border border-border/70 bg-card p-4"
+                    aria-labelledby="observed-patterns-title"
+                  >
+                    <h2
+                      id="observed-patterns-title"
+                      className="text-base font-semibold text-foreground"
+                    >
+                      {copy.patterns}
+                    </h2>
+                    <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                      {copy.patternsIntro}
+                    </p>
+                    <fieldset className="mt-4 grid gap-3">
+                      <legend className="sr-only">{copy.choose}</legend>
+                      <label className="flex min-h-12 items-center gap-3 text-sm">
                         <input
                           type="radio"
                           name="weekly-pattern"
-                          value={pattern.id}
-                          checked={selected}
-                          onChange={() => {
-                            setSelectedPatternId(pattern.id);
-                            setError("");
-                          }}
-                          className="mt-1 h-4 w-4 accent-primary"
+                          checked={
+                            !selectedPatternId &&
+                            !nextWeekPlan.trim() &&
+                            !ownObservation.trim() &&
+                            !linkedGoalId
+                          }
+                          onChange={() =>
+                            changeDraft({
+                              selectedPatternId: "",
+                              ownObservation: "",
+                              nextWeekPlan: "",
+                              linkedGoalId: "",
+                            })
+                          }
+                          className="h-4 w-4 shrink-0 accent-primary"
                         />
-                        <span className="min-w-0">
-                          <span className="block text-sm font-semibold leading-5 text-foreground">
-                            {patternText(pattern)}
-                          </span>
-                          <span className="mt-1 block text-xs text-muted-foreground">
-                            {denominatorText(pattern)}
-                          </span>
-                        </span>
+                        {growthCopy.noPattern}
                       </label>
-                      <details className="mt-3 border-t border-border/50 pt-2">
-                        <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 text-xs font-medium text-primary">
-                          {copy.inspect}
-                          <ChevronDown size={16} aria-hidden="true" />
-                        </summary>
-                        {sources.length === 0 ? (
-                          <p className="mt-2 text-xs text-muted-foreground">
-                            {copy.noneMatching}
-                          </p>
-                        ) : (
-                          <ol className="mt-2 grid gap-2">
-                            {sources.map(renderEntry)}
-                          </ol>
+                      {initialRecord?.patternKind &&
+                        selectedPatternId === initial.selectedPatternId &&
+                        !summary.patterns.some(
+                          (pattern) => pattern.id === selectedPatternId,
+                        ) && (
+                          <label className="flex items-start gap-3 rounded-xl border border-primary/30 p-3 text-sm">
+                            <input
+                              type="radio"
+                              name="weekly-pattern"
+                              checked
+                              readOnly
+                              className="mt-1 h-4 w-4 accent-primary"
+                            />
+                            <span>
+                              {growthCopy.retainedPattern}:{" "}
+                              {savedPatternText(initialRecord)}
+                            </span>
+                          </label>
                         )}
-                      </details>
-                    </div>
-                  );
-                })}
-                <div className="rounded-2xl border border-border/70 p-3">
-                  <label className="flex min-h-11 items-center gap-3 text-sm">
-                    <input
-                      type="radio"
-                      name="weekly-pattern"
-                      checked={selectedPatternId === "own"}
-                      onChange={() => setSelectedPatternId("own")}
-                      className="h-4 w-4 accent-primary"
-                    />
-                    {language === "nl"
-                      ? "Mijn eigen waarneming, ook zonder registraties"
-                      : "My own observation, including weeks without records"}
-                  </label>
-                  {selectedPatternId === "own" && (
-                    <label className="mt-2 block text-sm">
+                      {summary.patterns.map((pattern) => {
+                        const selected = selectedPatternId === pattern.id;
+                        const sources = matchingEntries(pattern);
+                        return (
+                          <div
+                            key={pattern.id}
+                            className={`rounded-2xl border p-3 ${selected ? "border-primary bg-primary/5" : "border-border/70 bg-background"}`}
+                          >
+                            <label className="flex cursor-pointer items-start gap-3">
+                              <input
+                                type="radio"
+                                name="weekly-pattern"
+                                value={pattern.id}
+                                checked={selected}
+                                onChange={() => {
+                                  setSelectedPatternId(pattern.id);
+                                  setError("");
+                                }}
+                                className="mt-1 h-4 w-4 accent-primary"
+                              />
+                              <span className="min-w-0">
+                                <span className="block text-sm font-semibold leading-5 text-foreground">
+                                  {patternText(pattern)}
+                                </span>
+                                <span className="mt-1 block text-xs text-muted-foreground">
+                                  {denominatorText(pattern)}
+                                </span>
+                              </span>
+                            </label>
+                            <details className="mt-3 border-t border-border/50 pt-2">
+                              <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 text-xs font-medium text-primary">
+                                {copy.inspect}
+                                <ChevronDown size={16} aria-hidden="true" />
+                              </summary>
+                              {sources.length === 0 ? (
+                                <p className="mt-2 text-xs text-muted-foreground">
+                                  {copy.noneMatching}
+                                </p>
+                              ) : (
+                                <ol className="mt-2 grid gap-2">
+                                  {sources.map(renderEntry)}
+                                </ol>
+                              )}
+                            </details>
+                          </div>
+                        );
+                      })}
+                      <div className="rounded-2xl border border-border/70 p-3">
+                        <label className="flex min-h-11 items-center gap-3 text-sm">
+                          <input
+                            type="radio"
+                            name="weekly-pattern"
+                            checked={selectedPatternId === "own"}
+                            onChange={() => setSelectedPatternId("own")}
+                            className="h-4 w-4 accent-primary"
+                          />
+                          {language === "nl"
+                            ? "Mijn eigen waarneming, ook zonder registraties"
+                            : "My own observation, including weeks without records"}
+                        </label>
+                        {selectedPatternId === "own" && (
+                          <label className="mt-2 block text-sm">
+                            {language === "nl"
+                              ? "Wat merkte je deze week?"
+                              : "What did you notice this week?"}
+                            <textarea
+                              aria-label={
+                                language === "nl"
+                                  ? "Wat merkte je deze week?"
+                                  : "What did you notice this week?"
+                              }
+                              value={ownObservation}
+                              onChange={(event) =>
+                                changeDraft({
+                                  ownObservation: event.target.value,
+                                })
+                              }
+                              maxLength={1000}
+                              rows={3}
+                              className="mt-2 w-full rounded-xl border border-input bg-background p-3 text-base"
+                            />
+                          </label>
+                        )}
+                      </div>
+                    </fieldset>
+                  </section>
+
+                  <details className="rounded-[1.5rem] border border-border/70 bg-card p-4">
+                    <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 text-sm font-semibold text-foreground">
+                      {copy.allRegistrations}
+                      <ChevronDown size={18} aria-hidden="true" />
+                    </summary>
+                    <ol className="mt-3 grid gap-2">
+                      {summary.entries.map(renderEntry)}
+                    </ol>
+                  </details>
+
+                  <section
+                    className="rounded-[1.5rem] border border-border/70 bg-card p-4"
+                    aria-labelledby="next-week-plan-title"
+                  >
+                    <h2
+                      id="next-week-plan-title"
+                      className="text-base font-semibold text-foreground"
+                    >
+                      {copy.plan}
+                    </h2>
+                    <p
+                      id="next-week-plan-help"
+                      className="mt-1 text-sm text-muted-foreground"
+                    >
                       {language === "nl"
-                        ? "Wat merkte je deze week?"
-                        : "What did you notice this week?"}
-                      <textarea
+                        ? "Welke haalbare stap past bij de waarneming die je hierboven hebt gekozen?"
+                        : "What achievable step fits the observation you chose above?"}
+                    </p>
+                    <label className="mt-3 block text-sm font-medium">
+                      {language === "nl"
+                        ? "Koppelen aan mijn doel (optioneel)"
+                        : "Link to my goal (optional)"}
+                      <select
                         aria-label={
                           language === "nl"
-                            ? "Wat merkte je deze week?"
-                            : "What did you notice this week?"
+                            ? "Koppelen aan mijn doel (optioneel)"
+                            : "Link to my goal (optional)"
                         }
-                        value={ownObservation}
+                        value={linkedGoalId}
                         onChange={(event) =>
-                          draft.setValue((current) => ({
-                            ...current,
-                            ownObservation: event.target.value,
-                          }))
+                          changeDraft({ linkedGoalId: event.target.value })
                         }
-                        maxLength={4000}
-                        rows={3}
-                        className="mt-2 w-full rounded-xl border border-input bg-background p-3 text-base"
-                      />
+                        className="mt-2 min-h-12 w-full rounded-xl border border-input bg-background p-3"
+                      >
+                        <option value="">
+                          {language === "nl"
+                            ? "Geen doel gekoppeld"
+                            : "No linked goal"}
+                        </option>
+                        {prevention.goals
+                          .filter((goal) => goal.active)
+                          .map((goal) => (
+                            <option key={goal.id} value={goal.id}>
+                              {recoveryTargetLabel(goal.target, language)} ·{" "}
+                              {goal.description}
+                            </option>
+                          ))}
+                      </select>
                     </label>
-                  )}
+                    <Link
+                      href="/recovery-plan"
+                      className="mt-2 inline-flex min-h-11 items-center text-sm text-primary underline"
+                    >
+                      {language === "nl"
+                        ? "Mijn preventieplan bekijken of aanpassen"
+                        : "View or update my prevention plan"}
+                    </Link>
+                    <textarea
+                      aria-labelledby="next-week-plan-title"
+                      aria-describedby="next-week-plan-help"
+                      value={nextWeekPlan}
+                      onChange={(event) => {
+                        setNextWeekPlan(event.target.value);
+                        setError("");
+                      }}
+                      rows={4}
+                      maxLength={4000}
+                      placeholder={copy.planPlaceholder}
+                      className="mt-3 w-full resize-y rounded-xl border border-input bg-background px-3 py-3 text-base text-foreground outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-primary/50"
+                    />
+                  </section>
                 </div>
-              </fieldset>
-            </section>
-
-            <details className="rounded-[1.5rem] border border-border/70 bg-card p-4">
-              <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 text-sm font-semibold text-foreground">
-                {copy.allRegistrations}
-                <ChevronDown size={18} aria-hidden="true" />
-              </summary>
-              <ol className="mt-3 grid gap-2">
-                {summary.entries.map(renderEntry)}
-              </ol>
-            </details>
-
-            <section
-              className="rounded-[1.5rem] border border-border/70 bg-card p-4"
-              aria-labelledby="next-week-plan-title"
-            >
-              <h2
-                id="next-week-plan-title"
-                className="text-base font-semibold text-foreground"
-              >
-                {copy.plan}
-              </h2>
-              <p
-                id="next-week-plan-help"
-                className="mt-1 text-sm text-muted-foreground"
-              >
-                {language === "nl"
-                  ? "Welke haalbare stap past bij de waarneming die je hierboven hebt gekozen?"
-                  : "What achievable step fits the observation you chose above?"}
-              </p>
-              <label className="mt-3 block text-sm font-medium">
-                {language === "nl"
-                  ? "Koppelen aan mijn doel (optioneel)"
-                  : "Link to my goal (optional)"}
-                <select
-                  aria-label={
-                    language === "nl"
-                      ? "Koppelen aan mijn doel (optioneel)"
-                      : "Link to my goal (optional)"
-                  }
-                  value={linkedGoalId}
-                  onChange={(event) =>
-                    draft.setValue((current) => ({
-                      ...current,
-                      linkedGoalId: event.target.value,
-                    }))
-                  }
-                  className="mt-2 min-h-12 w-full rounded-xl border border-input bg-background p-3"
-                >
-                  <option value="">
-                    {language === "nl"
-                      ? "Geen doel gekoppeld"
-                      : "No linked goal"}
-                  </option>
-                  {prevention.goals
-                    .filter((goal) => goal.active)
-                    .map((goal) => (
-                      <option key={goal.id} value={goal.id}>
-                        {recoveryTargetLabel(goal.target, language)} ·{" "}
-                        {goal.description}
-                      </option>
-                    ))}
-                </select>
-              </label>
-              <Link
-                href="/recovery-plan"
-                className="mt-2 inline-flex min-h-11 items-center text-sm text-primary underline"
-              >
-                {language === "nl"
-                  ? "Mijn preventieplan bekijken of aanpassen"
-                  : "View or update my prevention plan"}
-              </Link>
-              <textarea
-                aria-labelledby="next-week-plan-title"
-                aria-describedby="next-week-plan-help"
-                value={nextWeekPlan}
-                onChange={(event) => {
-                  setNextWeekPlan(event.target.value);
-                  setError("");
-                }}
-                rows={4}
-                maxLength={4000}
-                placeholder={copy.planPlaceholder}
-                className="mt-3 w-full resize-y rounded-xl border border-input bg-background px-3 py-3 text-base text-foreground outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-primary/50"
-              />
+              </details>
               {error && (
                 <p role="alert" className="mt-2 text-sm text-destructive">
                   {error}
@@ -749,7 +1026,7 @@ export function WeeklyReview() {
                 className="mt-3 flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground transition-opacity disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
               >
                 <Save size={18} strokeWidth={1.8} />
-                {saving ? copy.saving : copy.save}
+                {saving ? copy.saving : growthCopy.save}
               </button>
               <div
                 aria-live="polite"
@@ -757,8 +1034,55 @@ export function WeeklyReview() {
               >
                 {message}
               </div>
-            </section>
+            </fieldset>
           </form>
+          {conflict && (
+            <button
+              type="button"
+              disabled={saving}
+              onClick={() => setConfirmation("latest")}
+              className="min-h-12 rounded-xl border border-border p-3 text-sm underline"
+            >
+              {growthCopy.loadLatest}
+            </button>
+          )}
+          {draft.hasDraft && (
+            <button
+              type="button"
+              disabled={saving}
+              onClick={() => setConfirmation("discard")}
+              className="min-h-12 text-sm underline"
+            >
+              {growthCopy.discard}
+            </button>
+          )}
+          {confirmation && (
+            <div
+              role="group"
+              aria-label={confirmationTitle}
+              className="rounded-2xl border border-border bg-card p-4"
+            >
+              <p className="text-sm leading-relaxed">{confirmationTitle}</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  disabled={saving}
+                  onClick={() => void confirmAction()}
+                  className="min-h-12 rounded-xl border border-border p-3 text-sm"
+                >
+                  {confirmationAction}
+                </button>
+                <button
+                  type="button"
+                  disabled={saving}
+                  onClick={() => setConfirmation(null)}
+                  className="min-h-12 p-3 text-sm"
+                >
+                  {growthCopy.cancel}
+                </button>
+              </div>
+            </div>
+          )}
 
           {savedReview && (
             <section
@@ -769,14 +1093,32 @@ export function WeeklyReview() {
                 id="saved-review-title"
                 className="text-sm font-semibold text-foreground"
               >
-                {copy.priorPlan}
+                {growthCopy.savedTitle}
               </h2>
-              <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                {savedPatternText(savedReview)}
-              </p>
-              <p className="mt-2 whitespace-pre-wrap text-sm font-medium leading-6 text-foreground">
-                {savedReview.nextWeekPlan}
-              </p>
+              {savedReview.chosenPattern && (
+                <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                  {savedPatternText(savedReview)}
+                </p>
+              )}
+              {savedReview.nextWeekPlan && (
+                <p className="mt-2 whitespace-pre-wrap text-sm font-medium leading-6 text-foreground">
+                  {savedReview.nextWeekPlan}
+                </p>
+              )}
+              <dl className="mt-3 space-y-3">
+                {WEEKLY_GROWTH_FIELDS.map((field) =>
+                  savedReview[field] ? (
+                    <div key={field}>
+                      <dt className="text-xs text-muted-foreground">
+                        {growthCopy[field]}
+                      </dt>
+                      <dd className="mt-1 whitespace-pre-wrap break-words text-sm leading-relaxed">
+                        {savedReview[field]}
+                      </dd>
+                    </div>
+                  ) : null,
+                )}
+              </dl>
               {savedReview.linkedGoalId && (
                 <p className="mt-2 text-xs">
                   {language === "nl" ? "Gekoppeld doel" : "Linked goal"}:{" "}
@@ -814,6 +1156,14 @@ export function WeeklyReview() {
                   timeStyle: "short",
                 }).format(savedReview.timestamp)}
               </p>
+              <button
+                type="button"
+                disabled={saving || !!featureError || !!store.loadError}
+                onClick={() => setConfirmation("remove")}
+                className="mt-3 min-h-12 text-left text-sm underline"
+              >
+                {growthCopy.remove}
+              </button>
             </section>
           )}
         </div>

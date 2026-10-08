@@ -286,7 +286,7 @@ describe("personal growth persistence", () => {
     for (const setting of settings)
       await setSetting(setting.key, setting.value);
     const exported = await exportAllData();
-    expect(exported.version).toBe(4);
+    expect(exported.version).toBe(5);
     expect((await previewImportData(exported)).canImport).toBe(true);
     await clearAllData();
     expect((await importAllData(exported, { mode: "replace" })).committed).toBe(

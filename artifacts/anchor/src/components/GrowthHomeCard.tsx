@@ -4,6 +4,7 @@ import { useT } from "@/hooks/useTranslation";
 import { useRecoveryFeatures } from "@/contexts/RecoveryFeaturesContext";
 import { growthReminder } from "@/lib/personalGrowth";
 import { GROWTH_COPY } from "@/lib/growthCopy";
+import { SELF_CRITICISM_COPY } from "@/lib/selfCriticismCopy";
 
 export function GrowthHomeCard() {
   const { language } = useT();
@@ -72,6 +73,12 @@ export function GrowthHomeCard() {
         >
           <Heart size={17} aria-hidden="true" />
           {copy.short}
+        </Link>
+        <Link
+          href="/tools/self-criticism"
+          className="flex min-h-12 items-center justify-center rounded-2xl border border-border px-4 py-3 text-center text-sm font-medium"
+        >
+          {SELF_CRITICISM_COPY[language].entry}
         </Link>
         <Link
           href="/actions"

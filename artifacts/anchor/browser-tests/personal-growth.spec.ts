@@ -658,7 +658,7 @@ test("new memories and unfinished words survive a downloaded backup and replacem
     .click();
   const bytes = await readFile((await (await downloaded).path())!);
   const payload = JSON.parse(bytes.toString());
-  expect(payload.version).toBe(4);
+  expect(payload.version).toBe(5);
   expect(payload.featureRecords).toHaveLength(1);
   await page.getByLabel("JSON-back-up kiezen").setInputFiles({
     name: "synthetic-growth.json",

@@ -73,7 +73,7 @@ describe("backup preflight, preservation and atomic transactions", () => {
     await addJournalEntry(journal("visible"));
     const value = { version: 1, revision: 1, updatedAt: time, clientId: "synthetic", value: createJournalDraft() };
     await setSetting("draft:journal-entry", JSON.stringify(value));
-    const exported = await exportAllData(); expect(exported.version).toBe(4); expect(exported.journal).toHaveLength(2); expect(exported.checkIns).toHaveLength(1);
+    const exported = await exportAllData(); expect(exported.version).toBe(5); expect(exported.journal).toHaveLength(2); expect(exported.checkIns).toHaveLength(1);
     await clearAllData(); const result = await importAllData(exported); expect(result.errors).toEqual([]); expect(result.committed).toBe(true);
     expect(await db.get("journal", "deleted")).toMatchObject({ deleted: true }); expect(await getJournalEntries()).toHaveLength(1); expect(await db.getAll("checkIns")).toHaveLength(1); expect(await getSetting("draft:journal-entry")).toBe(JSON.stringify(value));
   });

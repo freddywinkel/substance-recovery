@@ -61,3 +61,5 @@ The app contains common self-help exercises used in recovery and anxiety support
 - Return-to-use records never reset personal growth history. Editing and deletion remain deliberate user choices.
 - Short self-compassion offers words or a practical action, not compulsory body focus, touch, breathing, positive reframing or professional treatment.
 - Saved moments, words and drafts stay local and are included in full backups. There is no model inference, remote processing or new tracking.
+- Weekly reflection works without problem registrations. Memories, personal choices, room for next week and a pleasant activity are optional; one answer can stand on its own. An activity is an invitation, not a task to score or complete.
+- Self-criticism support starts only through an explicit user choice. Offer grounding, kinder words, chosen memories or contact, with a clear exit and existing urgent help always available. Do not diagnose a negative spiral or send anything to a contact automatically.

@@ -5,6 +5,7 @@ import { ToolCard } from "@/components/ToolCard";
 import { useT } from "@/hooks/useTranslation";
 import { useStore } from "@/hooks/useStore";
 import { usePinnedTools } from "@/hooks/usePinnedTools";
+import { SELF_CRITICISM_COPY } from "@/lib/selfCriticismCopy";
 import { Link } from "wouter";
 import {
   Droplets,
@@ -128,6 +129,16 @@ export function Tools() {
           </p>
 
           <div className="flex flex-col gap-2">
+            <Link
+              href="/tools/self-criticism"
+              className="flex min-h-12 items-start gap-3 rounded-2xl border border-primary/25 bg-primary/5 p-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            >
+              <Heart size={22} className="mt-0.5 shrink-0 text-primary" aria-hidden="true" />
+              <span className="min-w-0">
+                <span className="block text-sm font-semibold">{SELF_CRITICISM_COPY[language].entry}</span>
+                <span className="mt-1 block text-sm leading-relaxed text-muted-foreground">{SELF_CRITICISM_COPY[language].toolDescription}</span>
+              </span>
+            </Link>
             {tools.map((tool) => (
               <ToolCard
                 key={tool.to}
