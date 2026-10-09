@@ -9,6 +9,7 @@ import { isCigaretteEditDraft } from "@/lib/cigaretteEditDraft";
 import { isCareContactDraft, isPersonalContactDraft } from "@/lib/contactDrafts";
 import { isJournalDraft } from "@/lib/journalDraft";
 import { isGrowthMomentDraft, isCompassionDraft } from "@/lib/personalGrowth";
+import { isUsePeriodDraft, isUsePeriodRecord, overlappingUsePeriod, type UsePeriodRecord } from "@/lib/usePeriods";
 import { isValidLocalDraftEnvelope } from "@/lib/localDrafts";
 import {
   getDB,
@@ -544,7 +545,7 @@ function normalizeImportedSetting(
     return { key, value: JSON.stringify(parseRecoveryPlan(parsed)) };
   }
 
-  if (/^draft:(recovery-plan|journal-entry|quick-registration|care-contact|personal-contact|supportive-action|home-customization|journey-date|registration-correction|cigarette-edit|compassion-note|growth-moment:[a-zA-Z0-9%_.~!()*'-]+|weekly-review:[a-zA-Z0-9-]+)$/.test(key)) {
+  if (/^draft:(recovery-plan|journal-entry|quick-registration|care-contact|personal-contact|supportive-action|home-customization|journey-date|registration-correction|cigarette-edit|compassion-note|growth-moment:[a-zA-Z0-9%_.~!()*'-]+|use-period:[a-zA-Z0-9%_.~!()*'-]+|weekly-review:[a-zA-Z0-9-]+)$/.test(key)) {
     if (settingValue === "") return { key, value: "" };
     if (typeof settingValue !== "string" || settingValue.length > 512_000) return null;
     const envelope = parseJsonSetting(settingValue);
@@ -553,6 +554,10 @@ function normalizeImportedSetting(
     if (key.startsWith("draft:growth-moment:")) {
       if (!isGrowthMomentDraft(envelope.value)) return null;
       if (key !== "draft:growth-moment:new" && key !== `draft:growth-moment:${encodeURIComponent(envelope.value.id)}`) return null;
+    }
+    if (key.startsWith("draft:use-period:")) {
+      if (!isUsePeriodDraft(envelope.value)) return null;
+      if (key !== "draft:use-period:new" && key !== `draft:use-period:${encodeURIComponent(envelope.value.id)}`) return null;
     }
     if (key === "draft:supportive-action" && !isSupportiveActionDraft(envelope.value)) return null;
     if (key === "draft:home-customization" && !isHomeCustomizationDraft(envelope.value)) return null;
@@ -625,6 +630,9 @@ function prepareImport(payload: Record<string, unknown>) {
     if (!parsed) errors.push(`Invalid featureRecords item ${index + 1}.`);
     else add("featureRecords", parsed.id, parsed);
   });
+  if (overlappingUsePeriod(rows.filter(row => row.store === "featureRecords" && isUsePeriodRecord(row.value)).map(row => row.value as UsePeriodRecord))) {
+    errors.push("Overlapping use periods for the same target in backup. Correct the periods before importing.");
+  }
   if (Array.isArray(payload.settings)) payload.settings.forEach(item => {
     const parsed = normalizeImportedSetting(item);
     if (!parsed) errors.push(`Invalid or unsupported setting ${isRecord(item) && typeof item.key === "string" ? item.key : "<unknown>"}.`);
@@ -667,18 +675,33 @@ function prepareImport(payload: Record<string, unknown>) {
 }
 
 /** Read-only preflight. No settings or contact writes are performed here. */
-export async function previewImportData(payload: Record<string, unknown>): Promise<ImportPreview> {
+export async function previewImportData(payload: Record<string, unknown>, options: { mode?: ImportMode } = {}): Promise<ImportPreview> {
   const prepared = prepareImport(payload);
   const db = await getDB();
   const tx = db.transaction(BACKUP_STORES, "readonly");
   const done = tx.done;
   void done.catch(() => {});
-  const keys = await Promise.all(BACKUP_STORES.map(async store => tx.objectStore(store).getAllKeys()));
+  const [keys, savedFeatures] = await Promise.all([
+    Promise.all(BACKUP_STORES.map(async store => tx.objectStore(store).getAllKeys())),
+    tx.objectStore("featureRecords").getAll(),
+  ]);
   await done;
   const counts = Object.fromEntries(BACKUP_STORES.map(store => [store, prepared.rows.filter(row => row.store === store).length]));
   const existingKeys = new Map(BACKUP_STORES.map((store, index) => [store, new Set(keys[index])]));
   const conflicts = prepared.rows.filter(row => existingKeys.get(row.store)?.has(row.key)).length;
+  if (options.mode !== "replace" && overlappingMergedUsePeriod(savedFeatures, prepared.rows)) {
+    prepared.errors.push("A restored use period overlaps an existing period for the same target. Correct the periods or choose replacement.");
+  }
   return { canImport: prepared.errors.length === 0, incoming: prepared.rows.length, existing: keys.reduce((n, items) => n + items.length, 0), conflicts, counts, errors: prepared.errors, warnings: prepared.warnings };
+}
+
+function overlappingMergedUsePeriod(existing: readonly unknown[], rows: readonly PreparedRow[]): UsePeriodRecord | null {
+  // Incoming IDs replace their existing version, even when the type changes.
+  const incoming = rows.filter(row => row.store === "featureRecords");
+  const replaced = new Set(incoming.map(row => row.key));
+  const periods = existing.filter(isUsePeriodRecord).filter(record => !replaced.has(record.id));
+  for (const row of incoming) if (isUsePeriodRecord(row.value)) periods.push(row.value);
+  return overlappingUsePeriod(periods);
 }
 
 /** Validate the entire payload before one atomic merge/replacement transaction. */
@@ -687,7 +710,11 @@ export async function importAllData(payload: Record<string, unknown>, options: {
   if (errors.length) return { imported: 0, skipped: errors.length, errors, committed: false };
   const db = await getDB();
   const tx = db.transaction(ALL_STORES, "readwrite");
+  void tx.done.catch(() => undefined);
   try {
+    if (options.mode !== "replace" && overlappingMergedUsePeriod(await tx.objectStore("featureRecords").getAll(), rows)) {
+      throw new Error("A restored use period overlaps an existing period for the same target. Correct the periods or choose replacement.");
+    }
     if (options.mode === "replace") await Promise.all(ALL_STORES.map(async store => tx.objectStore(store).clear()));
     for (const row of rows) {
       let value = row.value;

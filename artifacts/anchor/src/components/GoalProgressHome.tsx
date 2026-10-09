@@ -5,6 +5,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { computeGoalProgress, computeSobrietyStats } from "@/lib/analytics";
 import { normalizePreventionPlan } from "@/lib/preventionPlan";
 import { recoveryTargetLabel } from "@/lib/recoveryTargets";
+import { GoalUseSummary } from "@/components/GoalUseSummary";
 
 export function GoalProgressHome() {
   const {
@@ -18,6 +19,7 @@ export function GoalProgressHome() {
   const {
     recoveryPlan,
     quickRegistrations,
+    usePeriods,
     loadError: planError,
     loading: planLoading,
   } = useRecoveryFeatures();
@@ -43,7 +45,7 @@ export function GoalProgressHome() {
   const goals = normalizePreventionPlan(recoveryPlan.prevention).goals;
   const progress = computeGoalProgress(
     goals.filter((goal) => goal.active && goal.showProgress),
-    { cravingLogs, relapseLogs, cigaretteLogs, quickRegistrations },
+    { cravingLogs, relapseLogs, cigaretteLogs, quickRegistrations, usePeriods },
   );
   const journey = computeSobrietyStats(sobrietyStartDate, []);
   return (
@@ -78,29 +80,19 @@ export function GoalProgressHome() {
               <p className="mt-1 whitespace-pre-wrap break-words text-sm">
                 {item.goal.description}
               </p>
-              <p className="mt-2 text-sm text-muted-foreground">
-                {nl ? "Vastgelegde gebruiksmomenten" : "Recorded use events"}:{" "}
-                {item.confirmedUseEpisodes}
-              </p>
-              <p className="text-sm text-muted-foreground">
-                {nl
-                  ? "Expliciet geen gebruik gemeld"
-                  : "Explicit no-use observations"}
-                : {item.explicitNotUsedObservations}
-              </p>
-              <p className="text-sm text-muted-foreground">
-                {nl ? "Uitkomst niet vastgesteld" : "Outcome not established"}:{" "}
-                {item.unknownOutcomeObservations}
-              </p>
+              <GoalUseSummary progress={item} language={language} />
+              <Link href={`/use-periods/new?target=${encodeURIComponent(item.goal.target)}`} className="mt-2 inline-flex min-h-11 items-center text-sm font-medium text-primary underline">{nl ? "Gebruik achteraf vastleggen" : "Record use retrospectively"}</Link>
             </div>
           ))}
         </div>
       )}
       <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
         {nl
-          ? "Dit beschrijft je registraties. Een dag zonder invoer telt niet als bewezen abstinentie."
-          : "This describes your entries. A day without an entry is not confirmed abstinence."}
+          ? "Dit beschrijft je registraties. Een periode telt als één registratie; momenten daarbinnen tellen niet dubbel. Dagen sinds de laatste gemelde gebruiksdag zijn geen bevestigde abstinentie."
+          : "This describes your entries. A period counts as one record; events within it are not counted twice. Days since the last reported use day are not confirmed abstinence."}
       </p>
+      {progress.length === 0 && <Link href="/use-periods/new" className="mt-3 flex min-h-11 items-center text-sm font-medium text-primary underline">{nl ? "Gebruik achteraf vastleggen" : "Record use retrospectively"}</Link>}
+      <Link href="/use-periods" className="mt-1 flex min-h-11 items-center text-sm font-medium text-primary underline">{nl ? "Bekijk vastgelegd gebruik" : "View recorded use"}</Link>
       <Link
         href="/recovery-plan"
         className="mt-3 inline-flex min-h-11 items-center text-sm font-medium text-primary underline"

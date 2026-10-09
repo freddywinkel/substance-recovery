@@ -70,6 +70,13 @@ describe("versioned prevention plan", () => {
 });
 
 describe("durable local drafts", () => {
+  it("lets an explicit discard finish when another window already removed the draft", async () => {
+    const revision = await writeLocalDraft("use-period:new", { note: "interrupted edit" }, 0, "tab-a");
+    await removeLocalDraft("use-period:new", revision);
+    await expect(queueDraftWrite("use-period:new", () => removeLocalDraft("use-period:new", revision))).resolves.toBeUndefined();
+    await expect(flushLocalDrafts()).resolves.toBeUndefined();
+    expect(await readLocalDraft("use-period:new")).toBeNull();
+  });
   it("serializes rapid writes and reads back the final value", async () => {
     let revision = 0;
     const first = queueDraftWrite("recovery-plan", async () => { revision = await writeLocalDraft("recovery-plan", { text: "First" }, revision, "tab-a"); });

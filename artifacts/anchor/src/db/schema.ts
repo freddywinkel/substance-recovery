@@ -406,7 +406,7 @@ interface AnchorDB extends DBSchema {
   };
 }
 
-export const DATABASE_VERSION = 12;
+export const DATABASE_VERSION = 13;
 let dbInstance: IDBPDatabase<AnchorDB> | null = null;
 let opening: Promise<IDBPDatabase<AnchorDB>> | null = null;
 let blockedError: DatabaseBlockedError | null = null;
@@ -574,6 +574,9 @@ export async function getDB(): Promise<IDBPDatabase<AnchorDB>> {
         records.createIndex("byTimestamp", "timestamp");
         records.createIndex("byRecordType", "recordType");
       }
+      // v13 protects retrospective use periods and their typed drafts from
+      // older clients whose closed parser and backup catalog cannot retain them.
+      // No store or record is rewritten; existing local data stays intact.
       // v12 protects optional weekly reflections and their revision-aware drafts.
       // No store or record is rewritten; older clients must update before writing.
       // v11 adds a write-compatibility barrier for personal growth records.

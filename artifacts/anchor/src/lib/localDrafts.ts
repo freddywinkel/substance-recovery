@@ -166,7 +166,10 @@ export async function removeLocalDraft(
         : null;
       if (parsed !== null && !isValidLocalDraftEnvelope(parsed))
         throw new Error("Unsupported saved draft.");
-      if ((parsed?.revision ?? 0) !== expectedRevision)
+      // Deleting in another window may already have removed this draft.
+      // An explicit discard is then complete; a newer existing draft still
+      // requires its matching revision and must never be erased here.
+      if (parsed !== null && parsed.revision !== expectedRevision)
         throw new DraftConflictError();
       await tx.store.put({ key: `draft:${key}`, value: "" });
       await tx.done;

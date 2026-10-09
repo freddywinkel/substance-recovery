@@ -6,6 +6,7 @@ import type {
   CigaretteLog,
 } from "@/db";
 import type { QuickRegistrationRecord } from "@/lib/recoveryFeatures";
+import type { UsePeriodRecord } from "@/lib/usePeriods";
 import { useDetailsForRecord } from "@/lib/useDetails";
 import { buildReviewRegistrations } from "@/lib/recoveryProgress";
 import { logicalTimestamp } from "@/lib/registrationIds";
@@ -33,14 +34,76 @@ export interface ProgressGoal {
 }
 export interface GoalProgress {
   goal: ProgressGoal;
-  elapsedDays: number;
+  elapsedDays: number | null;
   confirmedUseEpisodes: number;
+  recordedUsePeriods: number;
+  coveredUseEpisodes: number;
+  totalUseRecords: number;
+  reportedUseDays: number;
+  useDaysAreMinimum: boolean;
   explicitNotUsedObservations: number;
   unknownOutcomeObservations: number;
   lastRecordedUseAt: number | null;
+  lastRecordedUseDate: string | null;
   daysSinceLastRecordedUse: number | null;
   excludedAsPrescribed: number;
 }
+
+const DAY_MS = 86_400_000;
+
+/** Date-only evidence stays a calendar day; it never acquires an invented time. */
+function calendarDay(value: string): number | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  const parsed = new Date(`${value}T12:00:00Z`);
+  if (
+    !Number.isFinite(parsed.getTime()) ||
+    parsed.toISOString().slice(0, 10) !== value
+  )
+    return null;
+  return Math.floor(parsed.getTime() / DAY_MS);
+}
+
+function localCalendarDate(timestamp: number): string {
+  const date = new Date(timestamp);
+  return `${date.getFullYear().toString().padStart(4, "0")}-${(date.getMonth() + 1).toString().padStart(2, "0")}-${date.getDate().toString().padStart(2, "0")}`;
+}
+
+function explicitUseTimestamp(value: string, now: number): number | null {
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value)) return null;
+  const date = new Date(value);
+  const timestamp = date.getTime();
+  if (!Number.isFinite(timestamp) || timestamp < 0 || timestamp > now)
+    return null;
+  const localTime = `${date.getHours().toString().padStart(2, "0")}:${date.getMinutes().toString().padStart(2, "0")}`;
+  return localCalendarDate(timestamp) === value.slice(0, 10) &&
+    localTime === value.slice(11)
+    ? timestamp
+    : null;
+}
+
+type DaySpan = { start: number; end: number };
+
+function mergeDaySpans(
+  spans: readonly DaySpan[],
+  mergeAdjacent = true,
+): DaySpan[] {
+  const result: DaySpan[] = [];
+  for (const span of [...spans].sort(
+    (a, b) => a.start - b.start || a.end - b.end,
+  )) {
+    const previous = result.at(-1);
+    if (previous && span.start <= previous.end + (mergeAdjacent ? 1 : 0)) {
+      previous.end = Math.max(previous.end, span.end);
+    } else result.push({ ...span });
+  }
+  return result;
+}
+
+const coveredDayCount = (spans: readonly DaySpan[]) =>
+  mergeDaySpans(spans).reduce(
+    (count, span) => count + span.end - span.start + 1,
+    0,
+  );
 
 /** Describes target-specific self-reports. Missing days never become abstinent days. */
 export function computeGoalProgress(
@@ -50,6 +113,7 @@ export function computeGoalProgress(
     relapseLogs: readonly RelapseLog[];
     cigaretteLogs: readonly CigaretteLog[];
     quickRegistrations: readonly QuickRegistrationRecord[];
+    usePeriods?: readonly UsePeriodRecord[];
   },
   now = Date.now(),
 ): GoalProgress[] {
@@ -59,7 +123,13 @@ export function computeGoalProgress(
     targets: string[];
     outcome: "used" | "not_used" | "unsure";
     prescribed: string[];
+    useTimes?: { target: string; timestamp: number }[];
   };
+  const useTimes = (details: ReturnType<typeof useDetailsForRecord>) =>
+    details.flatMap((detail) => {
+      const timestamp = explicitUseTimestamp(detail.occurredAt, now);
+      return timestamp === null ? [] : [{ target: detail.target, timestamp }];
+    });
   const observations: Observation[] = [];
   const episodes = buildReviewRegistrations({
     cravingLogs: sources.cravingLogs,
@@ -82,27 +152,31 @@ export function computeGoalProgress(
     (r) => r.status === "completed",
   )) {
     const value = registrationOptionId(record, "useOutcome", record.useOutcome);
+    const details = useDetailsForRecord(record);
     observations.push({
       key: keyFor(record),
       timestamp: byDetail.get(record.id)?.timestamp ?? logicalTimestamp(record),
       targets: registrationOptionIds(record, "targets", record.substances),
       outcome: value === "used" || value === "not_used" ? value : "unsure",
-      prescribed: useDetailsForRecord(record)
+      prescribed: details
         .filter((d) => d.prescribedUse === "as-prescribed")
         .map((d) => d.target),
+      useTimes: useTimes(details),
     });
   }
   for (const record of sources.relapseLogs.filter(
     (r) => r.status === "completed",
   )) {
+    const details = useDetailsForRecord(record);
     observations.push({
       key: keyFor(record),
       timestamp: byDetail.get(record.id)?.timestamp ?? logicalTimestamp(record),
       targets: registrationOptionIds(record, "substances", record.substances),
       outcome: "used",
-      prescribed: useDetailsForRecord(record)
+      prescribed: details
         .filter((d) => d.prescribedUse === "as-prescribed")
         .map((d) => d.target),
+      useTimes: useTimes(details),
     });
   }
   for (const record of sources.cigaretteLogs)
@@ -128,33 +202,146 @@ export function computeGoalProgress(
     });
   }
   const targetKey = (value: string) => canonicalizeLegacyOption(value);
+  // A reflection may explicitly date each substance separately. Apply that
+  // evidence to its linked quick entry too, preserving one episode and day.
+  const episodeTargetTimes = new Map<string, number>();
+  for (const observation of observations) {
+    for (const time of observation.useTimes ?? []) {
+      episodeTargetTimes.set(
+        `${observation.key}:${targetKey(time.target)}`,
+        time.timestamp,
+      );
+    }
+  }
+  const today = calendarDay(localCalendarDate(now))!;
   return goals
     .filter((g) => g.active && g.showProgress)
     .flatMap((goal) => {
-      const start = new Date(`${goal.startDate}T00:00:00`).getTime();
-      if (!Number.isFinite(start) || start > now || !goal.target) return [];
+      const startDay =
+        goal.startDate === "" ? null : calendarDay(goal.startDate);
+      if (
+        (goal.startDate !== "" && startDay === null) ||
+        (startDay !== null && startDay > today) ||
+        !goal.target
+      )
+        return [];
       const target = targetKey(goal.target);
-      const matched = observations.filter(
+      const targetObservations = observations
+        .filter((o) => o.targets.some((t) => targetKey(t) === target))
+        .map((o) => ({
+          ...o,
+          timestamp:
+            episodeTargetTimes.get(`${o.key}:${target}`) ?? o.timestamp,
+        }));
+      const matched = targetObservations.filter(
         (o) =>
-          o.timestamp >= start &&
-          o.timestamp <= now &&
-          o.targets.some((t) => targetKey(t) === target),
+          Number.isFinite(o.timestamp) &&
+          (startDay === null ||
+            calendarDay(localCalendarDate(o.timestamp))! >= startDay) &&
+          o.timestamp <= now,
+      );
+      const prescribedEpisodeKeys = new Set(
+        observations
+          .filter((o) => o.prescribed.some((t) => targetKey(t) === target))
+          .map((o) => o.key),
       );
       const prescribedKeys = new Set(
         matched
-          .filter((o) => o.prescribed.some((t) => targetKey(t) === target))
+          .filter((o) => prescribedEpisodeKeys.has(o.key))
           .map((o) => o.key),
       );
       const included = matched.filter((o) => !prescribedKeys.has(o.key));
       const used = included.filter((o) => o.outcome === "used");
+      const usedKeys = new Set(used.map((o) => o.key));
+      // Period creation time is not use time. Only explicit first/last use days
+      // determine scope; a partially intersecting daily period is clipped.
+      const periods = [
+        ...new Map(
+          (sources.usePeriods ?? []).map((period) => [period.id, period]),
+        ).values(),
+      ].flatMap((period) => {
+        const start = calendarDay(period.startDate);
+        const end = calendarDay(period.endDate);
+        if (
+          targetKey(period.target) !== target ||
+          start === null ||
+          end === null ||
+          end < start ||
+          end > today ||
+          (startDay !== null && end < startDay)
+        )
+          return [];
+        return [
+          {
+            period,
+            start,
+            end,
+            clippedStart: Math.max(start, startDay ?? start),
+          },
+        ];
+      });
+      // Defensive merging also keeps duplicate or overlapping restored legacy
+      // periods from inflating the combined total, even before correction.
+      const periodSpans = mergeDaySpans(
+        periods.map(({ clippedStart, end }) => ({ start: clippedStart, end })),
+        false,
+      );
+      const coveredKeys = new Set(
+        used
+          .filter((o) => {
+            const day = calendarDay(localCalendarDate(o.timestamp))!;
+            return periodSpans.some(
+              (span) => day >= span.start && day <= span.end,
+            );
+          })
+          .map((o) => o.key),
+      );
+      const knownDaySpans: DaySpan[] = used.map((o) => {
+        const day = calendarDay(localCalendarDate(o.timestamp))!;
+        return { start: day, end: day };
+      });
+      for (const { period, start, clippedStart, end } of periods) {
+        if (period.frequency === "daily")
+          knownDaySpans.push({ start: clippedStart, end });
+        else {
+          if (start >= clippedStart) knownDaySpans.push({ start, end: start });
+          knownDaySpans.push({ start: end, end });
+        }
+      }
+      const knownDays = mergeDaySpans(knownDaySpans);
+      const useDaysAreMinimum = periods.some(
+        ({ period, clippedStart, end }) =>
+          period.frequency !== "daily" &&
+          coveredDayCount(
+            knownDays.flatMap((span) => {
+              const start = Math.max(span.start, clippedStart);
+              const through = Math.min(span.end, end);
+              return start <= through ? [{ start, end: through }] : [];
+            }),
+          ) <
+            end - clippedStart + 1,
+      );
       const last = used.length
         ? Math.max(...used.map((o) => o.timestamp))
         : null;
+      const lastDate =
+        [
+          ...used.map((o) => localCalendarDate(o.timestamp)),
+          ...periods.map(({ period }) => period.endDate),
+        ]
+          .sort()
+          .at(-1) ?? null;
       return [
         {
           goal,
-          elapsedDays: Math.max(0, Math.floor((now - start) / 86_400_000)),
-          confirmedUseEpisodes: new Set(used.map((o) => o.key)).size,
+          elapsedDays: startDay === null ? null : today - startDay,
+          confirmedUseEpisodes: usedKeys.size,
+          recordedUsePeriods: periodSpans.length,
+          coveredUseEpisodes: coveredKeys.size,
+          totalUseRecords:
+            usedKeys.size - coveredKeys.size + periodSpans.length,
+          reportedUseDays: coveredDayCount(knownDays),
+          useDaysAreMinimum,
           explicitNotUsedObservations: new Set(
             included.filter((o) => o.outcome === "not_used").map((o) => o.key),
           ).size,
@@ -162,10 +349,9 @@ export function computeGoalProgress(
             included.filter((o) => o.outcome === "unsure").map((o) => o.key),
           ).size,
           lastRecordedUseAt: last,
+          lastRecordedUseDate: lastDate,
           daysSinceLastRecordedUse:
-            last === null
-              ? null
-              : Math.max(0, Math.floor((now - last) / 86_400_000)),
+            lastDate === null ? null : today - calendarDay(lastDate)!,
           excludedAsPrescribed: prescribedKeys.size,
         },
       ];
@@ -192,22 +378,25 @@ export function computeSobrietyStats(
   now = Date.now(),
 ): SobrietyStats | null {
   if (!sobrietyStartDate) return null;
-  const start = new Date(`${sobrietyStartDate}T00:00:00`).getTime();
-  if (!Number.isFinite(start) || start > now) return null;
+  const startDay = calendarDay(sobrietyStartDate);
+  const today = calendarDay(localCalendarDate(now))!;
+  if (startDay === null || startDay > today) return null;
   const completedRelapses = completedStatusEntries(relapseLogs).filter(
     (entry) =>
-      logicalTimestamp(entry) >= start && logicalTimestamp(entry) <= now,
+      calendarDay(localCalendarDate(logicalTimestamp(entry)))! >= startDay &&
+      logicalTimestamp(entry) <= now,
   );
   const latestRelapse = completedRelapses.reduce(
-    (latest, entry) => Math.max(latest, logicalTimestamp(entry)),
-    start,
+    (latest, entry) =>
+      Math.max(
+        latest,
+        calendarDay(localCalendarDate(logicalTimestamp(entry)))!,
+      ),
+    startDay,
   );
   return {
-    totalDays: Math.max(0, Math.floor((now - start) / 86_400_000)),
-    currentStreakDays: Math.max(
-      0,
-      Math.floor((now - latestRelapse) / 86_400_000),
-    ),
+    totalDays: today - startDay,
+    currentStreakDays: today - latestRelapse,
     hasRelapse: completedRelapses.length > 0,
     startDate: sobrietyStartDate,
   };

@@ -33,6 +33,7 @@ import { Link } from "wouter";
 import { recoveryToolLabel, type RecoveryToolId } from "@/lib/recoveryFeatures";
 import { normalizePreventionPlan } from "@/lib/preventionPlan";
 import { recoveryTargetLabel } from "@/lib/recoveryTargets";
+import { GoalUseSummary } from "@/components/GoalUseSummary";
 
 function StatCard({
   label,
@@ -145,6 +146,7 @@ export function Insights() {
     recoveryActions,
     toolFollowUps,
     quickRegistrations,
+    usePeriods,
     recoveryPlan,
     loadError: featureError,
   } = useRecoveryFeatures();
@@ -154,7 +156,13 @@ export function Insights() {
     () =>
       computeGoalProgress(
         normalizePreventionPlan(recoveryPlan.prevention).goals,
-        { cravingLogs, relapseLogs, cigaretteLogs, quickRegistrations },
+        {
+          cravingLogs,
+          relapseLogs,
+          cigaretteLogs,
+          quickRegistrations,
+          usePeriods,
+        },
       ),
     [
       recoveryPlan.prevention,
@@ -162,6 +170,7 @@ export function Insights() {
       relapseLogs,
       cigaretteLogs,
       quickRegistrations,
+      usePeriods,
     ],
   );
 
@@ -429,8 +438,8 @@ export function Insights() {
               </h2>
               <p className="mt-2 text-xs leading-5 text-muted-foreground">
                 {language === "nl"
-                  ? "Sinds de startdatum van elk doel, op basis van passende expliciete antwoorden uit alle registratieroutes. Geen invoer is geen bewijs van abstinentie. Gebruik volgens voorschrift telt niet automatisch als terugval."
-                  : "Since each goal’s start date, using matching explicit answers across registration routes. Missing entries are not evidence of abstinence. Use as prescribed does not automatically count as a return to use."}
+                  ? "Sinds de startdatum van elk doel, of alle beschikbare invoer als je geen startdatum koos. Momenten en achteraf ingevulde periodes tellen mee; momenten binnen een periode tellen niet nogmaals in het totaal. Geen invoer is geen bewijs van abstinentie. Gebruik volgens voorschrift telt niet automatisch als terugval."
+                  : "Since each goal’s start date, or all available entries if no start date was chosen. Moments and retrospectively entered periods are included; moments within a period are not added again to the total. Missing entries are not evidence of abstinence. Use as prescribed does not automatically count as a return to use."}
               </p>
               {goalProgress.length === 0 ? (
                 <Link
@@ -452,16 +461,14 @@ export function Insights() {
                         {recoveryTargetLabel(progress.goal.target, language)} ·{" "}
                         {progress.goal.description}
                       </p>
-                      <p className="mt-1 text-sm">
-                        {language === "nl"
-                          ? `${progress.elapsedDays} dagen sinds de doelstart · ${progress.confirmedUseEpisodes} gebeurtenissen met gemeld gebruik`
-                          : `${progress.elapsedDays} days since goal start · ${progress.confirmedUseEpisodes} episodes with reported use`}
-                      </p>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        {language === "nl"
-                          ? `${progress.explicitNotUsedObservations} keer expliciet niet gebruikt · ${progress.unknownOutcomeObservations} uitkomsten onbekend`
-                          : `${progress.explicitNotUsedObservations} explicit not-used answers · ${progress.unknownOutcomeObservations} unknown outcomes`}
-                      </p>
+                      {progress.elapsedDays !== null && (
+                        <p className="mt-1 text-sm text-muted-foreground">
+                          {language === "nl"
+                            ? `${progress.elapsedDays} dagen sinds de doelstart`
+                            : `${progress.elapsedDays} days since goal start`}
+                        </p>
+                      )}
+                      <GoalUseSummary progress={progress} language={language} />
                       {progress.excludedAsPrescribed > 0 && (
                         <p className="mt-1 text-xs text-muted-foreground">
                           {language === "nl"

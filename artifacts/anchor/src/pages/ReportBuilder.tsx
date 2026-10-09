@@ -48,6 +48,20 @@ const COPY = {
     supportiveEmpty: "No supportive actions were recorded in this date range.",
     registrationCount: "Registrations in range",
     actionCount: "Supportive actions in range",
+    usePeriods: "Retrospective use (periods)",
+    usePeriodCount: "Reported use periods overlapping this range",
+    usePeriodsEmpty: "No reported use periods overlap this date range.",
+    usePeriodHint:
+      "Includes the substance or behavior, original dates and reported frequency. Period notes are included only when Registration notes is also ticked. Periods are counted separately from individual registrations.",
+    usePeriodRange: "Original reported period",
+    usePeriodWithinRange: "Part within this report range",
+    target: "Substance or behavior",
+    frequency: "Reported frequency",
+    frequencies: {
+      daily: "Every day",
+      "some-days": "Some days; exact days not recorded",
+      unknown: "Frequency unknown",
+    },
     noValue: "Not recorded",
     loading: "Loading…",
     fieldsMap: {
@@ -128,6 +142,20 @@ const COPY = {
       "In dit datumbereik zijn geen ondersteunende acties vastgelegd.",
     registrationCount: "Registraties in periode",
     actionCount: "Ondersteunende acties in periode",
+    usePeriods: "Gebruik achteraf (perioden)",
+    usePeriodCount: "Gemelde gebruiksperioden die dit bereik overlappen",
+    usePeriodsEmpty: "Er overlappen geen gemelde gebruiksperioden met dit datumbereik.",
+    usePeriodHint:
+      "Neemt het middel of gedrag, de oorspronkelijke datums en de gemelde frequentie op. Notities uit perioden worden alleen opgenomen als ook Notities bij registraties is aangevinkt. Perioden tellen afzonderlijk van losse registraties.",
+    usePeriodRange: "Oorspronkelijke gemelde periode",
+    usePeriodWithinRange: "Deel binnen dit verslagbereik",
+    target: "Middel of gedrag",
+    frequency: "Gemelde frequentie",
+    frequencies: {
+      daily: "Elke dag",
+      "some-days": "Op sommige dagen; precieze dagen niet vastgelegd",
+      unknown: "Frequentie onbekend",
+    },
     noValue: "Niet vastgelegd",
     loading: "Laden…",
     fieldsMap: {
@@ -216,8 +244,10 @@ export function ReportBuilder() {
     recoveryActions,
     toolFollowUps,
     recoveryPlan,
+    usePeriods,
   } = useRecoveryFeatures();
   const [includePlan, setIncludePlan] = useState(false);
+  const [includeUsePeriods, setIncludeUsePeriods] = useState(false);
   const [includedContactIds, setIncludedContactIds] = useState<string[]>([]);
   const prevention = useMemo(
     () => normalizePreventionPlan(recoveryPlan.prevention),
@@ -268,6 +298,15 @@ export function ReportBuilder() {
     [from, through],
   );
   const effectiveRange = range ?? { start: 0, endExclusive: 0 };
+  const reportUsePeriods = useMemo(
+    () =>
+      range && includeUsePeriods
+        ? usePeriods
+            .filter((period) => period.startDate <= through && period.endDate >= from)
+            .sort((a, b) => a.startDate.localeCompare(b.startDate) || a.id.localeCompare(b.id))
+        : [],
+    [from, through, range, includeUsePeriods, usePeriods],
+  );
   const report = useMemo(
     () =>
       buildSelectiveReport({
@@ -405,7 +444,11 @@ export function ReportBuilder() {
   });
   const readError = store.loadError || featureError;
   const printDisabled =
-    (fields.length === 0 && !includePlan) || range === null || !!readError;
+    (fields.length === 0 && !includePlan && !includeUsePeriods) || range === null || !!readError;
+  const formatPeriodDate = (date: string) => {
+    const dateRange = buildLocalDateRange(date, date);
+    return dateRange ? dateOnlyFormatter.format(dateRange.start) : copy.noValue;
+  };
 
   return (
     <div className="report-page flex h-full min-h-0 flex-col">
@@ -471,6 +514,10 @@ export function ReportBuilder() {
                 const timestamps = [
                   ...registrations.map((entry) => entry.timestamp),
                   ...recoveryActions.map((entry) => entry.timestamp),
+                  ...usePeriods.flatMap((period) => {
+                    const periodRange = buildLocalDateRange(period.startDate, period.endDate);
+                    return periodRange ? [periodRange.start, periodRange.endExclusive - 1] : [];
+                  }),
                 ];
                 setFrom(
                   toDateInput(
@@ -523,6 +570,18 @@ export function ReportBuilder() {
                 </label>
               ))}
             </div>
+            <label className="mt-3 flex min-h-12 cursor-pointer items-center gap-3 rounded-xl border border-border/70 bg-background px-3 py-2 text-sm text-foreground">
+              <input
+                type="checkbox"
+                checked={includeUsePeriods}
+                onChange={(event) => setIncludeUsePeriods(event.target.checked)}
+                className="h-4 w-4 shrink-0 accent-primary"
+              />
+              <span>{copy.usePeriods}</span>
+            </label>
+            <p className="mt-2 text-xs leading-5 text-muted-foreground">
+              {copy.usePeriodHint}
+            </p>
             <label className="mt-3 flex min-h-12 items-center gap-3 text-sm text-foreground">
               <input
                 type="checkbox"
@@ -634,6 +693,9 @@ export function ReportBuilder() {
                 {language === "nl"
                   ? "Bereik: snelle en uitgebreide registraties van trek, craving, angst, verveling en gebruik, plus ondersteunende acties. Losse sigaretten en dagboekteksten maken geen deel uit van dit verslag."
                   : "Scope: quick and detailed records of urges, craving, anxiety, boredom and use, plus supportive actions. Individual cigarettes and journal text are not included in this report."}
+                {includeUsePeriods && (language === "nl"
+                  ? " Achteraf gemelde gebruiksperioden zijn afzonderlijk opgenomen als ze dit datumbereik overlappen."
+                  : " Retrospectively reported use periods are included separately when they overlap this date range.")}
               </p>
               <p className="mt-2 text-xs text-muted-foreground">
                 {language === "nl" ? "Opgenomen onderdelen" : "Included fields"}
@@ -643,6 +705,7 @@ export function ReportBuilder() {
                     ? "; huidig preventieplan"
                     : "; current prevention plan"
                   : ""}
+                {includeUsePeriods ? `; ${copy.usePeriods}` : ""}
                 .
               </p>
             </header>
@@ -656,7 +719,7 @@ export function ReportBuilder() {
               </p>
             )}
 
-            {fields.length === 0 && (
+            {fields.length === 0 && !includePlan && !includeUsePeriods && (
               <p className="mt-5 rounded-xl bg-muted/60 p-4 text-sm text-muted-foreground">
                 {copy.noFields}
               </p>
@@ -683,6 +746,66 @@ export function ReportBuilder() {
                     {copy.actionCount}
                   </p>
                 </div>
+              </section>
+            )}
+
+            {range && includeUsePeriods && (
+              <section className="mt-6" aria-labelledby="report-use-periods-title">
+                <h2 id="report-use-periods-title" className="text-lg font-semibold text-foreground">
+                  {copy.usePeriods}
+                </h2>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  {copy.usePeriodCount}: {reportUsePeriods.length}
+                </p>
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                  {language === "nl"
+                    ? "Achteraf gemelde perioden worden niet omgezet in losse gebeurtenissen. Bij sommige dagen of een onbekende frequentie zijn de precieze gebruiksdagen niet bekend."
+                    : "Retrospectively reported periods are not converted into individual events. For some days or an unknown frequency, the exact use days are unknown."}
+                </p>
+                {reportUsePeriods.length === 0 ? (
+                  <p className="mt-2 text-sm text-muted-foreground">{copy.usePeriodsEmpty}</p>
+                ) : (
+                  <ol className="mt-3 grid gap-2">
+                    {reportUsePeriods.map((period) => (
+                      <li key={period.id} className="break-inside-avoid rounded-xl border border-border p-3">
+                        <dl className="grid gap-2 text-sm">
+                          <div>
+                            <dt className="text-xs font-semibold text-foreground">{copy.target}</dt>
+                            <dd className="mt-0.5 text-muted-foreground">{recoveryTargetLabel(period.target, language)}</dd>
+                          </div>
+                          <div>
+                            <dt className="text-xs font-semibold text-foreground">{copy.usePeriodRange}</dt>
+                            <dd className="mt-0.5 text-muted-foreground">
+                              <time dateTime={period.startDate}>{formatPeriodDate(period.startDate)}</time>
+                              {" – "}
+                              <time dateTime={period.endDate}>{formatPeriodDate(period.endDate)}</time>
+                            </dd>
+                          </div>
+                          {(period.startDate < from || period.endDate > through) && (
+                            <div>
+                              <dt className="text-xs font-semibold text-foreground">{copy.usePeriodWithinRange}</dt>
+                              <dd className="mt-0.5 text-muted-foreground">
+                                {formatPeriodDate(period.startDate < from ? from : period.startDate)}
+                                {" – "}
+                                {formatPeriodDate(period.endDate > through ? through : period.endDate)}
+                              </dd>
+                            </div>
+                          )}
+                          <div>
+                            <dt className="text-xs font-semibold text-foreground">{copy.frequency}</dt>
+                            <dd className="mt-0.5 text-muted-foreground">{copy.frequencies[period.frequency]}</dd>
+                          </div>
+                          {fields.includes("notes") && period.note && (
+                            <div>
+                              <dt className="text-xs font-semibold text-foreground">{copy.columns.notes}</dt>
+                              <dd className="mt-0.5 whitespace-pre-wrap break-words text-muted-foreground">{period.note}</dd>
+                            </div>
+                          )}
+                        </dl>
+                      </li>
+                    ))}
+                  </ol>
+                )}
               </section>
             )}
 

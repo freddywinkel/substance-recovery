@@ -1,5 +1,7 @@
 import { isValidPreventionPlan, normalizePreventionPlan, type PreventionPlan } from "./preventionPlan";
 import { GROWTH_CATEGORIES, COMPASSION_NOTE_ID, type GrowthCategory } from "./personalGrowth";
+import { isUsePeriodRecord, type UsePeriodRecord } from "./usePeriods";
+export type { UsePeriodRecord } from "./usePeriods";
 
 export const REGISTRATION_TYPES = [
   "trek",
@@ -204,7 +206,8 @@ export type FeatureRecord =
   | ToolFollowUpRecord
   | WeeklyReviewRecord
   | GrowthMomentRecord
-  | CompassionNoteRecord;
+  | CompassionNoteRecord
+  | UsePeriodRecord;
 
 export interface GrowthMomentRecord {
   id: string;
@@ -346,6 +349,8 @@ export function parseFeatureRecord(value: unknown): FeatureRecord | null {
   if (!isRecord(value)) return null;
   if (!isString(value.id, 200) || value.id.trim() === "") return null;
   if (!isFiniteTimestamp(value.timestamp) || !isFiniteTimestamp(value.updatedAt)) return null;
+
+  if (value.recordType === "use-period") return isUsePeriodRecord(value) ? value : null;
 
   if (value.recordType === "growth-moment") {
     if (!Object.keys(value).every(key => ["id", "recordType", "timestamp", "updatedAt", "note", "category", "favourite"].includes(key))) return null;

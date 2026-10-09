@@ -7,21 +7,34 @@ export function ImportDataPanel({ onImport }: { onImport: (payload: Record<strin
   const { language } = useLanguage(); const nl = language === "nl";
   const [payload, setPayload] = useState<Record<string, unknown> | null>(null);
   const [preview, setPreview] = useState<ImportPreview | null>(null);
+  const [validReplacement, setValidReplacement] = useState(false);
   const [mode, setMode] = useState<ImportMode>("merge");
   const [acknowledged, setAcknowledged] = useState(false);
   const [busy, setBusy] = useState(false); const busyRef = useRef(false);
   const [error, setError] = useState(""); const [committed, setCommitted] = useState(false);
   const readFile = async (file: File | undefined) => {
-    if (!file) return;
-    setBusy(true); setError(""); setPreview(null); setPayload(null); setCommitted(false); setAcknowledged(false);
+    if (!file || busyRef.current) return;
+    busyRef.current = true;
+    setBusy(true); setError(""); setPreview(null); setPayload(null); setValidReplacement(false); setMode("merge"); setCommitted(false); setAcknowledged(false);
     try {
       if (file.size > 50 * 1024 * 1024) throw new Error(nl ? "Dit bestand is groter dan 50 MB. Gebruik een kleinere back-up of vraag ondersteuning." : "This file exceeds 50 MB. Use a smaller backup or seek support.");
       const parsed: unknown = JSON.parse(await file.text());
       if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error(nl ? "Geen geldig back-upobject." : "Invalid backup object.");
       const value = parsed as Record<string, unknown>;
-      setPreview(await previewImportData(value)); setPayload(value);
+      const [merge, replacement] = await Promise.all([
+        previewImportData(value, { mode: "merge" }),
+        previewImportData(value, { mode: "replace" }),
+      ]);
+      setPreview(merge); setValidReplacement(replacement.canImport); setPayload(value);
     } catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); }
-    finally { setBusy(false); }
+    finally { busyRef.current = false; setBusy(false); }
+  };
+  const chooseMode = async (selected: ImportMode) => {
+    if (!payload || busyRef.current) return;
+    busyRef.current = true; setBusy(true); setError(""); setMode(selected); setAcknowledged(false);
+    try { setPreview(await previewImportData(payload, { mode: selected })); }
+    catch (cause) { setPreview(null); setError(cause instanceof Error ? cause.message : String(cause)); }
+    finally { busyRef.current = false; setBusy(false); }
   };
   const saveCurrentBackup = async () => {
     setError("");
@@ -54,14 +67,14 @@ export function ImportDataPanel({ onImport }: { onImport: (payload: Record<strin
       <details><summary>{nl ? "Aantallen per onderdeel" : "Counts by section"}</summary><ul className="text-sm list-disc pl-5">{Object.entries(preview.counts).map(([key,count]) => <li key={key}>{key}: {count}</li>)}</ul></details>
       {!!preview.errors.length && <div role="alert"><p>{nl ? "Import geblokkeerd; er is niets gewijzigd." : "Import blocked; nothing has changed."}</p><ul className="text-sm list-disc pl-5">{preview.errors.map((item,index) => <li key={index}>{item}</li>)}</ul></div>}
       {!!preview.warnings.length && <ul className="text-sm list-disc pl-5">{preview.warnings.map((item,index) => <li key={index}>{item}</li>)}</ul>}
-      {preview.canImport && <>
+      {validReplacement && <>
         <fieldset disabled={busy} className="space-y-2"><legend>{nl ? "Hoe herstellen?" : "Restore mode"}</legend>
-          <label className="flex gap-2"><input type="radio" name="restore-mode" checked={mode === "merge"} onChange={() => { setMode("merge"); setAcknowledged(false); }} /><span>{nl ? "Samenvoegen: gelijke record-IDs en instellingen worden vervangen; andere records en contact-IDs blijven." : "Merge: matching record IDs and settings are replaced; other records and contact IDs remain."}</span></label>
-          <label className="flex gap-2"><input type="radio" name="restore-mode" checked={mode === "replace"} onChange={() => setMode("replace")} /><span>{nl ? "Vervangen: alle huidige appgegevens worden vervangen door dit bestand, ook concepten en contacten." : "Replace: all current app data is replaced by this file, including drafts and contacts."}</span></label>
+          <label className="flex gap-2"><input type="radio" name="restore-mode" checked={mode === "merge"} onChange={() => void chooseMode("merge")} /><span>{nl ? "Samenvoegen: gelijke record-IDs en instellingen worden vervangen; andere records en contact-IDs blijven." : "Merge: matching record IDs and settings are replaced; other records and contact IDs remain."}</span></label>
+          <label className="flex gap-2"><input type="radio" name="restore-mode" checked={mode === "replace"} onChange={() => void chooseMode("replace")} /><span>{nl ? "Vervangen: alle huidige appgegevens worden vervangen door dit bestand, ook concepten en contacten." : "Replace: all current app data is replaced by this file, including drafts and contacts."}</span></label>
         </fieldset>
         <button type="button" onClick={() => void saveCurrentBackup()} disabled={busy} className="underline min-h-11">{nl ? "Eerst huidige back-up downloaden" : "Download current backup first"}</button>
         {mode === "replace" && <label className="flex gap-2 text-sm"><input type="checkbox" checked={acknowledged} onChange={event => setAcknowledged(event.target.checked)} /><span>{nl ? "Ik begrijp dat huidige gegevens die niet in dit bestand staan worden verwijderd." : "I understand that current data absent from this file will be removed."}</span></label>}
-        <div className="flex gap-3"><button type="button" disabled={busy || (mode === "replace" && !acknowledged)} onClick={() => void commit()} className="rounded-xl bg-primary text-primary-foreground px-4 min-h-11 disabled:opacity-50">{nl ? "Herstel bevestigen" : "Confirm restore"}</button><button type="button" disabled={busy} onClick={() => { setPayload(null); setPreview(null); }} className="underline">{nl ? "Annuleren" : "Cancel"}</button></div>
+        <div className="flex gap-3"><button type="button" disabled={busy || !preview.canImport || (mode === "replace" && !acknowledged)} onClick={() => void commit()} className="rounded-xl bg-primary text-primary-foreground px-4 min-h-11 disabled:opacity-50">{nl ? "Herstel bevestigen" : "Confirm restore"}</button><button type="button" disabled={busy} onClick={() => { setPayload(null); setPreview(null); setValidReplacement(false); }} className="underline">{nl ? "Annuleren" : "Cancel"}</button></div>
       </>}
     </>}
     {committed && <div role="status"><p>{nl ? "Herstel opgeslagen. Herlaad de app om alle instellingen en concepten te openen." : "Restore saved. Reload the app to open all restored settings and drafts."}</p><button type="button" onClick={() => window.location.reload()} className="underline min-h-11">{nl ? "App herladen" : "Reload app"}</button></div>}
