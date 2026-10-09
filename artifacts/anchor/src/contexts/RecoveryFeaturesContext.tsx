@@ -37,6 +37,8 @@ import {
 import { commitRecoveryPlan } from "@/db/planPersistence";
 import { commitPersonalGrowthRecord, removePersonalGrowthRecord } from "@/db/personalGrowth";
 import { commitWeeklyReviewRecord, removeWeeklyReviewRecord } from "@/db/weeklyReview";
+import { commitUsePeriodRecord, removeUsePeriodRecord } from "@/db/usePeriods";
+import type { UsePeriodRecord } from "@/lib/usePeriods";
 import type { PersonalGrowthRecord } from "@/lib/personalGrowth";
 
 const LEGACY_PINNED_TOOLS_KEY = "anchor-pinned-tools";
@@ -56,6 +58,7 @@ type RecoveryFeaturesContextValue = {
   recoveryActions: RecoveryActionRecord[];
   toolFollowUps: ToolFollowUpRecord[];
   weeklyReviews: WeeklyReviewRecord[];
+  usePeriods: UsePeriodRecord[];
   saveHomePreferences: (preferences: HomePreferences) => Promise<void>;
   patchHomePreferences: (patch: Partial<HomePreferences>) => Promise<void>;
   togglePinnedTool: (toolId: RecoveryToolId) => Promise<void>;
@@ -67,6 +70,8 @@ type RecoveryFeaturesContextValue = {
   removePersonalRecord: (record: PersonalGrowthRecord) => Promise<void>;
   saveWeeklyReview: (record: WeeklyReviewRecord, expectedUpdatedAt: number | null) => Promise<WeeklyReviewRecord>;
   removeWeeklyReview: (record: WeeklyReviewRecord) => Promise<void>;
+  saveUsePeriod: (record: UsePeriodRecord, expectedUpdatedAt: number | null) => Promise<UsePeriodRecord>;
+  removeUsePeriod: (record: UsePeriodRecord) => Promise<void>;
   addRecoveryAction: (input: {
     actionType: RecoveryActionType;
     label: string;
@@ -255,6 +260,17 @@ export function RecoveryFeaturesProvider({ children }: { children: React.ReactNo
     setRecords(current => current.filter(item => item.id !== record.id));
   }, []);
 
+  const saveUsePeriod = useCallback(async (record: UsePeriodRecord, expectedUpdatedAt: number | null) => {
+    const saved = await commitUsePeriodRecord(record, expectedUpdatedAt);
+    setRecords(current => sortRecords([saved, ...current.filter(item => item.id !== saved.id)]));
+    return saved;
+  }, []);
+
+  const removeUsePeriod = useCallback(async (record: UsePeriodRecord) => {
+    await removeUsePeriodRecord(record);
+    setRecords(current => current.filter(item => item.id !== record.id));
+  }, []);
+
   const addRecoveryAction = useCallback(async (input: {
     actionType: RecoveryActionType;
     label: string;
@@ -350,6 +366,7 @@ export function RecoveryFeaturesProvider({ children }: { children: React.ReactNo
     recoveryActions: records.filter((record): record is RecoveryActionRecord => record.recordType === "recovery-action"),
     toolFollowUps: records.filter((record): record is ToolFollowUpRecord => record.recordType === "tool-follow-up"),
     weeklyReviews: records.filter((record): record is WeeklyReviewRecord => record.recordType === "weekly-review"),
+    usePeriods: records.filter((record): record is UsePeriodRecord => record.recordType === "use-period"),
     saveHomePreferences,
     patchHomePreferences,
     togglePinnedTool,
@@ -361,6 +378,8 @@ export function RecoveryFeaturesProvider({ children }: { children: React.ReactNo
     removePersonalRecord,
     saveWeeklyReview,
     removeWeeklyReview,
+    saveUsePeriod,
+    removeUsePeriod,
     addRecoveryAction,
     scheduleToolFollowUp,
     startQuickReflection,
@@ -383,6 +402,8 @@ export function RecoveryFeaturesProvider({ children }: { children: React.ReactNo
     removePersonalRecord,
     saveWeeklyReview,
     removeWeeklyReview,
+    saveUsePeriod,
+    removeUsePeriod,
     saveHomePreferences,
     saveRecoveryPlan,
     scheduleToolFollowUp,

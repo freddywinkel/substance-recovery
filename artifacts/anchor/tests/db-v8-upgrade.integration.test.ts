@@ -100,7 +100,7 @@ describe("real IndexedDB registration upgrades to v8", () => {
     const db = await getDB();
     closeUpgradedDatabase = () => db.close();
 
-    expect(db.version).toBe(12);
+    expect(db.version).toBe(13);
     expect(db.objectStoreNames.contains("featureRecords")).toBe(true);
 
     const trek = await db.get("cravingLogs", headTrekV2.id);
@@ -182,7 +182,7 @@ describe("real IndexedDB registration upgrades to v8", () => {
     const db = await getDB();
     closeUpgradedDatabase = () => db.close();
 
-    expect(db.version).toBe(12);
+    expect(db.version).toBe(13);
     expect(db.objectStoreNames.contains("featureRecords")).toBe(true);
 
     const trek = await db.get("cravingLogs", v6TrekRecord.id);
@@ -225,7 +225,7 @@ describe("real IndexedDB registration upgrades to v8", () => {
     const db = await getDB();
     closeUpgradedDatabase = () => db.close();
 
-    expect(db.version).toBe(12);
+    expect(db.version).toBe(13);
     const transaction = db.transaction("featureRecords", "readonly");
     expect([...transaction.store.indexNames].sort()).toEqual(["byRecordType", "byTimestamp"]);
     await transaction.done;
