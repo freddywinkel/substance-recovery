@@ -296,6 +296,8 @@ test("daily and moment views fit phone and tablet; a controlled offline reload k
     page.getByText("Draft saved locally. Not submitted yet.", { exact: true }),
   ).toBeVisible();
   await page.evaluate(() => navigator.serviceWorker.ready);
+  // A newly installed prompt-mode worker takes control on the next navigation.
+  await page.reload();
   await page.waitForFunction(() => !!navigator.serviceWorker.controller);
   await context.setOffline(true);
   await page.reload();
