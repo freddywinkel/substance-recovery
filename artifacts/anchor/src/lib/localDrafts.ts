@@ -1,5 +1,7 @@
 import { getSetting, setSetting } from "@/db";
 import { getDB } from "@/db/schema";
+import { isDailyBalanceDraft, isBalanceMomentDraft } from "./dailyBalanceDraft";
+import { BALANCE_EPOCH_KEY, INITIAL_BALANCE_EPOCH } from "./balanceEpoch";
 
 export interface LocalDraftEnvelope<T = unknown> {
   version: 1;
@@ -38,6 +40,12 @@ const failures = new Map<string, Error>();
 export const pendingDraftValues = new Map<string, unknown>();
 export const getDraftFailure = (key: string): Error | undefined =>
   failures.get(key);
+
+/** Called only after the user explicitly reloads a successfully read remote draft. */
+export function acknowledgeDraftReload(key: string): void {
+  failures.delete(key);
+  pendingDraftValues.delete(key);
+}
 
 export function resetLocalDraftMemory(): void {
   if (queues.size) throw new Error("Draft writes are still pending.");
@@ -108,9 +116,19 @@ export async function writeLocalDraft<T>(
 ): Promise<number> {
   // Read inside the same IndexedDB transaction as the write to avoid lost updates across tabs.
   const db = await getDB();
-  const tx = db.transaction("settings", "readwrite");
+  const tx = db.transaction(["settings", "syncMeta"], "readwrite");
   void tx.done.catch(() => undefined);
-  const stored = await tx.store.get(`draft:${key}`);
+  const store = tx.objectStore("settings");
+  if (/^(daily-balance|balance-moment):/.test(key)) {
+    if (!isDailyBalanceDraft(value) && !isBalanceMomentDraft(value)) { tx.abort(); throw new Error("Invalid daily check-in draft."); }
+    const epoch = (await tx.objectStore("syncMeta").get(BALANCE_EPOCH_KEY))?.value ?? INITIAL_BALANCE_EPOCH;
+    const deleted = await tx.objectStore("syncMeta").get(`daily-balance-deleted:${value.record.id}${value.record.instanceId ? `:${value.record.instanceId}` : ""}`);
+    if ((value.record.storageEpoch ?? INITIAL_BALANCE_EPOCH) !== epoch
+      || (deleted && (typeof deleted.value === "string" ? deleted.value === value.record.instanceId : value.record.timestamp <= deleted.value))) {
+      tx.abort(); throw new DraftConflictError();
+    }
+  }
+  const stored = await store.get(`draft:${key}`);
   const raw = stored?.value;
   let previous: LocalDraftEnvelope | null = null;
   if (raw !== undefined && raw !== "") {
@@ -145,7 +163,7 @@ export async function writeLocalDraft<T>(
     tx.abort();
     throw new Error("This draft is too large to save.");
   }
-  await tx.store.put({ key: `draft:${key}`, value: JSON.stringify(envelope) });
+  await store.put({ key: `draft:${key}`, value: JSON.stringify(envelope) });
   await tx.done;
   return envelope.revision;
 }

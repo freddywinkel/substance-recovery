@@ -1,6 +1,8 @@
 import { isValidPreventionPlan, normalizePreventionPlan, type PreventionPlan } from "./preventionPlan";
 import { GROWTH_CATEGORIES, COMPASSION_NOTE_ID, type GrowthCategory } from "./personalGrowth";
 import { isUsePeriodRecord, type UsePeriodRecord } from "./usePeriods";
+import { isDailyBalanceRecord, isBalanceMomentRecord, type DailyBalanceRecord, type BalanceMomentRecord } from "./dailyBalance";
+export type { DailyBalanceRecord, BalanceMomentRecord } from "./dailyBalance";
 export type { UsePeriodRecord } from "./usePeriods";
 
 export const REGISTRATION_TYPES = [
@@ -53,7 +55,7 @@ export function recoveryToolLabel(toolId: RecoveryToolId, language: "en" | "nl")
   return RECOVERY_TOOL_LABELS[language][toolId];
 }
 
-export const HOME_WIDGET_IDS = [
+const PRE_BALANCE_HOME_WIDGET_IDS = [
   "sobriety",
   "quick-registration",
   "follow-ups",
@@ -65,6 +67,8 @@ export const HOME_WIDGET_IDS = [
   "pinned-contact",
   "pinned-tools",
 ] as const;
+
+export const HOME_WIDGET_IDS = [...PRE_BALANCE_HOME_WIDGET_IDS, "daily-balance"] as const;
 
 export type HomeWidgetId = (typeof HOME_WIDGET_IDS)[number];
 
@@ -103,7 +107,7 @@ export function localizedCallMessage(value: string, language: "en" | "nl"): stri
 export const DEFAULT_HOME_PREFERENCES: HomePreferences = {
   version: 1,
   widgetOrder: [...HOME_WIDGET_IDS],
-  hiddenWidgets: [],
+  hiddenWidgets: ["daily-balance"],
   hiddenRegistrationTypes: [],
   pinnedContactId: null,
   pinnedToolIds: [],
@@ -207,7 +211,9 @@ export type FeatureRecord =
   | WeeklyReviewRecord
   | GrowthMomentRecord
   | CompassionNoteRecord
-  | UsePeriodRecord;
+  | UsePeriodRecord
+  | DailyBalanceRecord
+  | BalanceMomentRecord;
 
 export interface GrowthMomentRecord {
   id: string;
@@ -269,7 +275,7 @@ const uniqueKnown = <T extends string>(value: unknown, known: readonly T[], max 
 };
 
 export function parseHomePreferences(value: unknown): HomePreferences {
-  if (!isRecord(value)) return { ...DEFAULT_HOME_PREFERENCES, widgetOrder: [...HOME_WIDGET_IDS] };
+  if (!isRecord(value)) return { ...DEFAULT_HOME_PREFERENCES, widgetOrder: [...HOME_WIDGET_IDS], hiddenWidgets: [...DEFAULT_HOME_PREFERENCES.hiddenWidgets] };
   const preferredOrder = uniqueKnown(value.widgetOrder, HOME_WIDGET_IDS);
   const widgetOrder = [
     ...preferredOrder,
@@ -278,7 +284,11 @@ export function parseHomePreferences(value: unknown): HomePreferences {
   return {
     version: 1,
     widgetOrder,
-    hiddenWidgets: uniqueKnown(value.hiddenWidgets, HOME_WIDGET_IDS).filter((id) => id !== "follow-ups"),
+    // Existing users keep the same visible Home until they explicitly enable this card.
+    hiddenWidgets: [...new Set([
+      ...uniqueKnown(value.hiddenWidgets, HOME_WIDGET_IDS).filter((id) => id !== "follow-ups"),
+      ...(!preferredOrder.includes("daily-balance") ? ["daily-balance" as const] : []),
+    ])],
     hiddenRegistrationTypes: uniqueKnown(value.hiddenRegistrationTypes, REGISTRATION_TYPES, REGISTRATION_TYPES.length - 1),
     pinnedContactId: typeof value.pinnedContactId === "string" && value.pinnedContactId.length <= 200
       ? value.pinnedContactId
@@ -305,12 +315,15 @@ export function parseRecoveryPlan(value: unknown): RecoveryPlan {
 
 export function isValidHomePreferences(value: unknown): value is HomePreferences {
   if (!isRecord(value) || value.version !== 1) return false;
-  if (!Array.isArray(value.widgetOrder) || value.widgetOrder.length !== HOME_WIDGET_IDS.length) return false;
+  if (!Array.isArray(value.widgetOrder)) return false;
+  const legacy = !value.widgetOrder.includes("daily-balance");
+  const catalog = legacy ? PRE_BALANCE_HOME_WIDGET_IDS : HOME_WIDGET_IDS;
+  if (value.widgetOrder.length !== catalog.length || new Set(value.widgetOrder).size !== catalog.length || !catalog.every(id => (value.widgetOrder as unknown[]).includes(id))) return false;
   if (!Array.isArray(value.hiddenWidgets) || !Array.isArray(value.hiddenRegistrationTypes) || !Array.isArray(value.pinnedToolIds)) return false;
   const normalized = parseHomePreferences(value);
   return (
-    JSON.stringify(normalized.widgetOrder) === JSON.stringify(value.widgetOrder)
-    && JSON.stringify(normalized.hiddenWidgets) === JSON.stringify(value.hiddenWidgets)
+    JSON.stringify(legacy ? normalized.widgetOrder.filter(id => id !== "daily-balance") : normalized.widgetOrder) === JSON.stringify(value.widgetOrder)
+    && JSON.stringify(legacy ? normalized.hiddenWidgets.filter(id => id !== "daily-balance") : normalized.hiddenWidgets) === JSON.stringify(value.hiddenWidgets)
     && JSON.stringify(normalized.hiddenRegistrationTypes) === JSON.stringify(value.hiddenRegistrationTypes)
     && JSON.stringify(normalized.pinnedToolIds) === JSON.stringify(value.pinnedToolIds)
     && normalized.pinnedContactId === value.pinnedContactId
@@ -351,6 +364,8 @@ export function parseFeatureRecord(value: unknown): FeatureRecord | null {
   if (!isFiniteTimestamp(value.timestamp) || !isFiniteTimestamp(value.updatedAt)) return null;
 
   if (value.recordType === "use-period") return isUsePeriodRecord(value) ? value : null;
+  if (value.recordType === "daily-balance") return isDailyBalanceRecord(value) ? value : null;
+  if (value.recordType === "balance-moment") return isBalanceMomentRecord(value) ? value : null;
 
   if (value.recordType === "growth-moment") {
     if (!Object.keys(value).every(key => ["id", "recordType", "timestamp", "updatedAt", "note", "category", "favourite"].includes(key))) return null;

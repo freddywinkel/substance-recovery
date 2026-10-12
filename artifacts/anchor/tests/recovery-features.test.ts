@@ -6,6 +6,7 @@ import {
   localizedCallMessage,
   parseFeatureRecord,
   parseHomePreferences,
+  isValidHomePreferences,
   parseRecoveryPlan,
 } from "../src/lib/recoveryFeatures";
 
@@ -22,7 +23,7 @@ describe("recovery feature contracts", () => {
 
     expect(parsed.widgetOrder.slice(0, 2)).toEqual(["pinned-tools", "quick-registration"]);
     expect(new Set(parsed.widgetOrder)).toEqual(new Set(HOME_WIDGET_IDS));
-    expect(parsed.hiddenWidgets).toEqual(["cigarettes"]);
+    expect(parsed.hiddenWidgets).toEqual(["cigarettes", "daily-balance"]);
     expect(parsed.hiddenRegistrationTypes).toHaveLength(4);
     expect(parsed.pinnedToolIds).toEqual(["/tools/breathing", "/tools/grounding"]);
   });
@@ -76,5 +77,20 @@ describe("recovery feature contracts", () => {
 
   it("restores the complete default Home catalog from an empty value", () => {
     expect(parseHomePreferences(null)).toEqual(DEFAULT_HOME_PREFERENCES);
+  });
+
+  it("preserves the old Home layout while accepting old backups and drafts", () => {
+    const legacy = {
+      ...DEFAULT_HOME_PREFERENCES,
+      widgetOrder: HOME_WIDGET_IDS.filter(id => id !== "daily-balance"),
+      hiddenWidgets: ["cigarettes"],
+    };
+    expect(isValidHomePreferences(legacy)).toBe(true);
+    expect(parseHomePreferences(legacy).widgetOrder.slice(0, -1)).toEqual(legacy.widgetOrder);
+    expect(parseHomePreferences(legacy).hiddenWidgets).toEqual(["cigarettes", "daily-balance"]);
+    const enabled = { ...parseHomePreferences(legacy), hiddenWidgets: ["cigarettes"] };
+    expect(isValidHomePreferences(enabled)).toBe(true);
+    expect(parseHomePreferences(enabled).hiddenWidgets).toEqual(["cigarettes"]);
+    expect(isValidHomePreferences({ ...legacy, widgetOrder: legacy.widgetOrder.slice(1) })).toBe(false);
   });
 });

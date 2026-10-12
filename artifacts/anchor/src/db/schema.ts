@@ -14,6 +14,7 @@ import { normalizeRelapseTimingRecord } from "./relapseTiming";
 import { migrateCompletedTrekRecord } from "@/lib/trekMigration";
 import type { FeatureRecord } from "@/lib/recoveryFeatures";
 import type { AcuteRisk, AcuteRiskSelection } from "./relapseSafety";
+import { BALANCE_EPOCH_KEY, INITIAL_BALANCE_EPOCH, setBalanceEpoch } from "@/lib/balanceEpoch";
 
 export type {
   AcuteConcern,
@@ -406,7 +407,7 @@ interface AnchorDB extends DBSchema {
   };
 }
 
-export const DATABASE_VERSION = 13;
+export const DATABASE_VERSION = 14;
 let dbInstance: IDBPDatabase<AnchorDB> | null = null;
 let opening: Promise<IDBPDatabase<AnchorDB>> | null = null;
 let blockedError: DatabaseBlockedError | null = null;
@@ -574,6 +575,8 @@ export async function getDB(): Promise<IDBPDatabase<AnchorDB>> {
         records.createIndex("byTimestamp", "timestamp");
         records.createIndex("byRecordType", "recordType");
       }
+      // v14 protects daily balances, paired activity moments and their typed drafts.
+      // Additive compatibility barrier only: no existing record is rewritten.
       // v13 protects retrospective use periods and their typed drafts from
       // older clients whose closed parser and backup catalog cannot retain them.
       // No store or record is rewritten; existing local data stays intact.
@@ -588,7 +591,16 @@ export async function getDB(): Promise<IDBPDatabase<AnchorDB>> {
       // database and save an older representation over the new plan fields.
     },
   }));
-  const ready = request.then((database) => {
+  const ready = request.then(async (database) => {
+    try {
+      const epoch = await database.get("syncMeta", BALANCE_EPOCH_KEY);
+      setBalanceEpoch(typeof epoch?.value === "string" ? epoch.value : INITIAL_BALANCE_EPOCH);
+      return database;
+    } catch (error) {
+      database.close();
+      throw error;
+    }
+  }).then((database) => {
     dbInstance = database;
     blockedError = null;
     opening = null;

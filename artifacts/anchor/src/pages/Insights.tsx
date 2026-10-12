@@ -324,6 +324,12 @@ export function Insights() {
   return (
     <div className="flex flex-col min-h-dvh bg-background">
       <PageHeader title={t("nav.insights")} subtitle={t("progress.subtitle")} />
+      <div className="mx-auto w-full max-w-2xl px-4 pt-4">
+        <Link href="/daily?view=history" className="block rounded-2xl border border-border bg-card p-4 focus-visible:ring-2 focus-visible:ring-primary">
+          <span className="block text-sm font-semibold">{language === "nl" ? "Stemming, slaap en activiteiten" : "Mood, sleep and activities"}</span>
+          <span className="mt-1 block text-xs text-muted-foreground">{language === "nl" ? "Bekijk je dagelijkse check-ins en je eigen metingen voor en na een activiteit." : "See daily check-ins and your own measurements before and after an activity."}</span>
+        </Link>
+      </div>
 
       <div className="flex-1 overflow-y-auto scroll-smooth-ios px-4 pt-2 pb-safe">
         <RangeFilter value={range} onChange={setRange} opts={rangeOpts} />

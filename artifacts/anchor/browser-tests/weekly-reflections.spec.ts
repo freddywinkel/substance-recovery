@@ -452,7 +452,7 @@ test("an older weekly plan remains editable and reflection plus draft survive a 
     .click();
   const bytes = await readFile((await (await downloaded).path())!);
   const backup = JSON.parse(bytes.toString());
-  expect(backup.version).toBe(5);
+  expect(backup.version).toBe(6);
   await page.getByLabel("JSON-back-up kiezen").setInputFiles({
     name: "synthetic-weekly.json",
     mimeType: "application/json",

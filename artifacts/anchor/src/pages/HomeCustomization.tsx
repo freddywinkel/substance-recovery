@@ -13,6 +13,7 @@ import { useRecoveryFeatures } from "@/contexts/RecoveryFeaturesContext";
 import { useStore } from "@/hooks/useStore";
 import {
   REGISTRATION_TYPES,
+  parseHomePreferences,
   type HomeWidgetId,
   type RecoveryToolId,
   type RegistrationType,
@@ -52,6 +53,7 @@ const COPY = {
     widgets: {
       sobriety: { label: "Goals and journey", description: "Optional journey start and recorded progress per goal" },
       "quick-registration": { label: "Quick registration", description: "A short route for difficult moments" },
+      "daily-balance": { label: "Daily check-in", description: "Sleep, mood, emotional intensity and your activities before and after" },
       "follow-ups": { label: "Follow-ups", description: "Always appears when a tool check-in or later reflection is due" },
       cigarettes: { label: "Cigarette counter", description: "Today’s cigarette total and add button" },
       "registration-activity": { label: "Registration activity", description: "Your recent registration activity" },
@@ -106,6 +108,7 @@ const COPY = {
     widgets: {
       sobriety: { label: "Doelen en traject", description: "Optionele trajectstart en vastgelegde voortgang per doel" },
       "quick-registration": { label: "Snelle registratie", description: "Een korte route voor moeilijke momenten" },
+      "daily-balance": { label: "Dag afsluiten", description: "Slaap, stemming, emotionele intensiteit en je activiteiten voor en na" },
       "follow-ups": { label: "Opvolging", description: "Verschijnt altijd zodra een tool-check-in of latere reflectie klaarstaat" },
       cigarettes: { label: "Sigarettenteller", description: "Het aantal van vandaag en de toevoegknop" },
       "registration-activity": { label: "Registratieactiviteit", description: "Je recente registratieactiviteit" },
@@ -167,10 +170,13 @@ export function HomeCustomization() {
     ready: !loading && !loadError,
     validate: isHomeCustomizationDraft,
   });
-  const { widgetOrder, hiddenWidgets, hiddenRegistrationTypes, pinnedContactId, pinnedToolIds } = draft.value;
+  const { widgetOrder, hiddenWidgets, hiddenRegistrationTypes, pinnedContactId, pinnedToolIds } = parseHomePreferences(draft.value);
   const setField = <K extends keyof HomePreferences>(key: K) => (update: SetStateAction<HomePreferences[K]>) => {
     if (savingRef.current) return;
-    draft.setValue(current => ({ ...current, [key]: typeof update === "function" ? (update as (value: HomePreferences[K]) => HomePreferences[K])(current[key]) : update }));
+    draft.setValue(current => {
+      const normalized = parseHomePreferences(current);
+      return { ...normalized, [key]: typeof update === "function" ? (update as (value: HomePreferences[K]) => HomePreferences[K])(normalized[key]) : update };
+    });
   };
   const setWidgetOrder = setField("widgetOrder"), setHiddenWidgets = setField("hiddenWidgets"),
     setHiddenRegistrationTypes = setField("hiddenRegistrationTypes"), setPinnedContactId = setField("pinnedContactId"), setPinnedToolIds = setField("pinnedToolIds");

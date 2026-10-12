@@ -158,7 +158,7 @@ describe("weekly reflection persistence and privacy", () => {
     await removeWeeklyReviewRecord(saved);
     await expect(commitWeeklyReviewRecord(original, null)).rejects.toBeInstanceOf(WeeklyReviewConflictError);
     await expect(commitWeeklyReviewRecord(saved, saved.updatedAt)).rejects.toBeInstanceOf(WeeklyReviewConflictError);
-    expect(await (await getDB()).getAll("syncMeta")).toEqual([{ key: `weekly-review-deleted:${saved.id}`, value: saved.timestamp }]);
+    expect((await (await getDB()).getAll("syncMeta")).filter(item => !['daily-balance-reset-at', 'daily-balance-epoch'].includes(item.key))).toEqual([{ key: `weekly-review-deleted:${saved.id}`, value: saved.timestamp }]);
     await expect(commitWeeklyReviewRecord(review({ id: "deliberately-new" }), null)).resolves.toMatchObject({ id: "deliberately-new" });
   });
 
@@ -175,7 +175,7 @@ describe("weekly reflection persistence and privacy", () => {
     await expect(removeWeeklyReviewRecord(saved)).rejects.toThrow();
     expect(await getFeatureRecords()).toEqual([saved]);
     expect(await getSetting(key)).toBe(privateDraft);
-    expect(await (await getDB()).getAll("syncMeta")).toEqual([]);
+    expect((await (await getDB()).getAll("syncMeta")).filter(item => !['daily-balance-reset-at', 'daily-balance-epoch'].includes(item.key))).toEqual([]);
   });
 
   it("restores intentionally exported records despite local deletion markers and fully erases markers", async () => {
@@ -185,7 +185,7 @@ describe("weekly reflection persistence and privacy", () => {
     expect((await importAllData(beforeDeletion)).committed).toBe(true);
     await expect(commitWeeklyReviewRecord({ ...saved, choseForMyself: "SYNTHETIC restored edit" }, saved.updatedAt)).resolves.toMatchObject({ id: saved.id });
     await clearAllData();
-    expect(await (await getDB()).getAll("syncMeta")).toEqual([]);
+    expect((await (await getDB()).getAll("syncMeta")).filter(item => !['daily-balance-reset-at', 'daily-balance-epoch'].includes(item.key))).toEqual([]);
   });
 });
 
@@ -204,7 +204,7 @@ describe("weekly reflection backup compatibility", () => {
     const stored = envelope({ ...draft(saved), makeRoomForNextWeek: "SYNTHETIC unfinished" });
     await setSetting(key, stored);
     const exported = await exportAllData();
-    expect(exported.version).toBe(5);
+    expect(exported.version).toBe(6);
     expect((await previewImportData(exported)).canImport).toBe(true);
     await clearAllData();
     expect((await importAllData(exported, { mode: "replace" })).committed).toBe(true);
@@ -219,7 +219,7 @@ describe("weekly reflection backup compatibility", () => {
       backup({ featureRecords: [{ ...review(), pleasantActivity: "x".repeat(2001) }] }),
       backup({ settings: [{ key: `draft:weekly-review:${time}`, value: envelope({ ...draft(), makeRoomForNextWeek: false }) }] }),
       backup({ settings: [{ key: `draft:weekly-review:${time}`, value: envelope({ ...draft(), sourceUpdatedAt: "unsupported" }) }] }),
-      backup({ version: 6 }),
+      backup({ version: 7 }),
     ]) {
       expect((await previewImportData(payload)).canImport).toBe(false);
       expect((await importAllData(payload, { mode: "replace" })).committed).toBe(false);

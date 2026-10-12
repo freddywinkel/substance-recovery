@@ -84,7 +84,7 @@ describe("retrospective use atomic persistence", () => {
     await expect(commitUsePeriodRecord(period(), null)).rejects.toBeInstanceOf(UsePeriodConflictError);
     await expect(commitUsePeriodRecord(newer, newer.updatedAt)).rejects.toBeInstanceOf(UsePeriodConflictError);
     expect(await getFeatureRecords()).toEqual([]);
-    expect(await (await getDB()).getAll("syncMeta")).toEqual([{ key: `use-period-deleted:${saved.id}`, value: saved.timestamp }]);
+    expect((await (await getDB()).getAll("syncMeta")).filter(item => !['daily-balance-reset-at', 'daily-balance-epoch'].includes(item.key))).toEqual([{ key: `use-period-deleted:${saved.id}`, value: saved.timestamp }]);
     expect(JSON.stringify(await exportAllData())).not.toContain(newer.note);
   });
   it("erases associated edit and first-save drafts atomically while retaining unrelated drafts", async () => {
@@ -115,7 +115,7 @@ describe("retrospective use atomic persistence", () => {
     await expect(removeUsePeriodRecord(saved)).rejects.toThrow();
     expect(await getFeatureRecords()).toEqual([saved]);
     expect(await getSetting(key)).toBe(value);
-    expect(await (await getDB()).getAll("syncMeta")).toEqual([]);
+    expect((await (await getDB()).getAll("syncMeta")).filter(item => !['daily-balance-reset-at', 'daily-balance-epoch'].includes(item.key))).toEqual([]);
   });
   it("keeps existing data if a period write fails", async () => {
     const saved = await commitUsePeriodRecord(period(), null);

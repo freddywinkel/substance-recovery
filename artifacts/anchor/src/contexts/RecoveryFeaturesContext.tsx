@@ -40,6 +40,8 @@ import { commitWeeklyReviewRecord, removeWeeklyReviewRecord } from "@/db/weeklyR
 import { commitUsePeriodRecord, removeUsePeriodRecord } from "@/db/usePeriods";
 import type { UsePeriodRecord } from "@/lib/usePeriods";
 import type { PersonalGrowthRecord } from "@/lib/personalGrowth";
+import { commitBalanceRecord, getDailyBalanceDraftDates, refreshBalanceEpoch, removeBalanceRecord, startBalanceMomentRecord, type StartBalanceMomentInput } from "@/db/dailyBalance";
+import type { DailyBalanceRecord, BalanceMomentRecord, BalanceRecord } from "@/lib/dailyBalance";
 
 const LEGACY_PINNED_TOOLS_KEY = "anchor-pinned-tools";
 
@@ -59,6 +61,14 @@ type RecoveryFeaturesContextValue = {
   toolFollowUps: ToolFollowUpRecord[];
   weeklyReviews: WeeklyReviewRecord[];
   usePeriods: UsePeriodRecord[];
+  dailyBalances: DailyBalanceRecord[];
+  dailyBalanceDraftDates: string[];
+  balanceMoments: BalanceMomentRecord[];
+  saveDailyBalance: (record: DailyBalanceRecord, expectedUpdatedAt: number | null) => Promise<DailyBalanceRecord>;
+  saveBalanceMoment: (record: BalanceMomentRecord, expectedUpdatedAt: number | null) => Promise<BalanceMomentRecord>;
+  removeDailyBalance: (record: DailyBalanceRecord) => Promise<void>;
+  removeBalanceMoment: (record: BalanceMomentRecord) => Promise<void>;
+  startBalanceMoment: (input: StartBalanceMomentInput) => Promise<BalanceMomentRecord>;
   saveHomePreferences: (preferences: HomePreferences) => Promise<void>;
   patchHomePreferences: (patch: Partial<HomePreferences>) => Promise<void>;
   togglePinnedTool: (toolId: RecoveryToolId) => Promise<void>;
@@ -109,6 +119,7 @@ export function RecoveryFeaturesProvider({ children }: { children: React.ReactNo
   }));
   const [recoveryPlan, setRecoveryPlanState] = useState<RecoveryPlan>({ ...DEFAULT_RECOVERY_PLAN });
   const [records, setRecords] = useState<FeatureRecord[]>([]);
+  const [dailyBalanceDraftDates, setDailyBalanceDraftDates] = useState<string[]>([]);
   const homePreferencesRef = useRef(homePreferences);
   const preferenceWriteQueue = useRef<Promise<void>>(Promise.resolve());
 
@@ -117,11 +128,13 @@ export function RecoveryFeaturesProvider({ children }: { children: React.ReactNo
     setLoadError(null);
     try {
       await preferenceWriteQueue.current;
+      await refreshBalanceEpoch();
       await reconcileQuickReflectionLinks();
-      const [storedPreferences, storedPlan, storedRecords] = await Promise.all([
+      const [storedPreferences, storedPlan, storedRecords, draftDates] = await Promise.all([
         getSetting("homePreferences", ""),
         getSetting("recoveryPlan", ""),
         getFeatureRecords(),
+        getDailyBalanceDraftDates(),
       ]);
       const storedRecoveryPlan = parseStoredRecoveryPlan(storedPlan);
       const preferences = parseHomePreferences(parseJson(storedPreferences));
@@ -150,6 +163,7 @@ export function RecoveryFeaturesProvider({ children }: { children: React.ReactNo
       setHomePreferencesState(preferences);
       setRecoveryPlanState(storedRecoveryPlan);
       setRecords(sortRecords(storedRecords));
+      setDailyBalanceDraftDates(draftDates);
     } catch (error) {
       setLoadError(error instanceof Error ? error : new Error(String(error)));
     } finally {
@@ -271,6 +285,21 @@ export function RecoveryFeaturesProvider({ children }: { children: React.ReactNo
     setRecords(current => current.filter(item => item.id !== record.id));
   }, []);
 
+  const saveBalance = useCallback(async <T extends BalanceRecord>(record: T, expectedUpdatedAt: number | null): Promise<T> => {
+    const saved = await commitBalanceRecord(record, expectedUpdatedAt);
+    setRecords(current => sortRecords([saved, ...current.filter(item => item.id !== saved.id)]));
+    return saved;
+  }, []);
+  const removeBalance = useCallback(async (record: BalanceRecord) => {
+    await removeBalanceRecord(record);
+    setRecords(current => current.filter(item => item.id !== record.id));
+  }, []);
+  const startBalanceMoment = useCallback(async (input: StartBalanceMomentInput) => {
+    const saved = await startBalanceMomentRecord(input);
+    setRecords(current => sortRecords([saved, ...current.filter(item => item.id !== saved.id)]));
+    return saved;
+  }, []);
+
   const addRecoveryAction = useCallback(async (input: {
     actionType: RecoveryActionType;
     label: string;
@@ -367,6 +396,14 @@ export function RecoveryFeaturesProvider({ children }: { children: React.ReactNo
     toolFollowUps: records.filter((record): record is ToolFollowUpRecord => record.recordType === "tool-follow-up"),
     weeklyReviews: records.filter((record): record is WeeklyReviewRecord => record.recordType === "weekly-review"),
     usePeriods: records.filter((record): record is UsePeriodRecord => record.recordType === "use-period"),
+    dailyBalances: records.filter((record): record is DailyBalanceRecord => record.recordType === "daily-balance"),
+    dailyBalanceDraftDates,
+    balanceMoments: records.filter((record): record is BalanceMomentRecord => record.recordType === "balance-moment"),
+    saveDailyBalance: saveBalance,
+    saveBalanceMoment: saveBalance,
+    removeDailyBalance: removeBalance,
+    removeBalanceMoment: removeBalance,
+    startBalanceMoment,
     saveHomePreferences,
     patchHomePreferences,
     togglePinnedTool,
@@ -409,6 +446,10 @@ export function RecoveryFeaturesProvider({ children }: { children: React.ReactNo
     scheduleToolFollowUp,
     startQuickReflection,
     updateRecord,
+    saveBalance,
+    removeBalance,
+    startBalanceMoment,
+    dailyBalanceDraftDates,
   ]);
 
   return (

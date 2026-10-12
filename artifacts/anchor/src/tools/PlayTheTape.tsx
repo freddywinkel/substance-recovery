@@ -4,6 +4,7 @@ import { useLocation } from "wouter";
 import { useT } from "@/hooks/useTranslation";
 import { CheckCircle2, ArrowRight } from "lucide-react";
 import { ToolFollowUpButton } from "@/components/ToolFollowUpButton";
+import { ToolCompletionButton } from "@/components/ToolBalanceReturn";
 
 export function PlayTheTape() {
   const { t } = useT();
@@ -65,12 +66,12 @@ export function PlayTheTape() {
             toolId="/tools/tape"
             toolLabel={t("tape.title")}
           />
-          <button
-            onClick={() => navigate("/")}
+          <ToolCompletionButton
+            onDefaultReturn={() => navigate("/")}
             className="mt-4 bg-primary text-primary-foreground rounded-2xl px-8 py-3 font-semibold touch-target hover:opacity-90 active:scale-95 transition-all"
           >
             {t("common.return_home")}
-          </button>
+          </ToolCompletionButton>
         </div>
       </div>
     );

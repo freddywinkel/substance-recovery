@@ -46,6 +46,8 @@ const Settings = lazy(() =>
 const More = lazy(() =>
   import("@/pages/More").then((module) => ({ default: module.More })),
 );
+const DailyBalance = lazy(() => import("@/pages/DailyBalance").then(module => ({ default: module.DailyBalance })));
+const BalanceMoment = lazy(() => import("@/pages/BalanceMoment").then(module => ({ default: module.BalanceMoment })));
 const QuickRegistration = lazy(() =>
   import("@/pages/QuickRegistration").then((module) => ({
     default: module.QuickRegistration,
@@ -179,6 +181,9 @@ function AppRoutes() {
       <Route path="/help" component={CrisisNow} />
       <Route path="/action-card" component={ActionCard} />
       <Route path="/quick" component={QuickRegistration} />
+      <Route path="/daily" component={DailyBalance} />
+      <Route path="/daily/moments/new" component={BalanceMoment} />
+      <Route path="/daily/moments/:id" component={BalanceMoment} />
       <Route path="/recovery-plan" component={RecoveryPlan} />
       <Route path="/home-customization" component={HomeCustomization} />
       <Route path="/actions" component={RecoveryActions} />

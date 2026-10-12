@@ -47,6 +47,7 @@ export function BottomNav() {
       label: t("nav.more"),
       match: (path) =>
         path.startsWith("/more") ||
+        path.startsWith("/daily") ||
         path.startsWith("/recovery-plan") ||
         path.startsWith("/home-customization") ||
         path.startsWith("/actions") ||

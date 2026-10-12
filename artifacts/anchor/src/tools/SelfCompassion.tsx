@@ -5,6 +5,7 @@ import { GROWTH_COPY } from "@/lib/growthCopy";
 import { useT } from "@/hooks/useTranslation";
 import { Heart, CheckCircle2 } from "lucide-react";
 import { ToolFollowUpButton } from "@/components/ToolFollowUpButton";
+import { ToolCompletionButton } from "@/components/ToolBalanceReturn";
 
 export function SelfCompassion() {
   const { t, language } = useT();
@@ -31,12 +32,12 @@ export function SelfCompassion() {
             toolId="/tools/self-compassion"
             toolLabel={t("compassion.title")}
           />
-          <button
-            onClick={() => navigate("/")}
+          <ToolCompletionButton
+            onDefaultReturn={() => navigate("/")}
             className="mt-4 bg-primary text-primary-foreground rounded-2xl px-8 py-3 font-semibold touch-target hover:opacity-90 active:scale-95 transition-all"
           >
             {t("common.return_home")}
-          </button>
+          </ToolCompletionButton>
         </div>
       </div>
     );

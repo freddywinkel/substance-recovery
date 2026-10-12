@@ -228,21 +228,21 @@ describe("personal growth persistence", () => {
     await expect(removePersonalGrowthRecord(saved)).rejects.toThrow();
     expect(await getFeatureRecords()).toEqual([saved]);
     expect(await getSetting(draftKey)).toBe(draftValue);
-    expect(await (await getDB()).getAll("syncMeta")).toEqual([]);
+    expect((await (await getDB()).getAll("syncMeta")).filter(item => !['daily-balance-reset-at', 'daily-balance-epoch'].includes(item.key))).toEqual([]);
   });
   it("keeps deletion markers content-free and local while allowing deliberate backup restoration and complete erasure", async () => {
     const saved = await commitPersonalGrowthRecord(moment(), null);
     const beforeDeletion = await exportAllData();
     await removePersonalGrowthRecord(saved);
     const db = await getDB();
-    expect(await db.getAll("syncMeta")).toEqual([{ key: `personal-growth-deleted:${saved.id}`, value: saved.timestamp }]);
+    expect((await db.getAll("syncMeta")).filter(item => !['daily-balance-reset-at', 'daily-balance-epoch'].includes(item.key))).toEqual([{ key: `personal-growth-deleted:${saved.id}`, value: saved.timestamp }]);
     const afterDeletion = await exportAllData();
     expect(afterDeletion).not.toHaveProperty("syncMeta");
     expect(JSON.stringify(afterDeletion)).not.toContain(saved.note);
     expect((await importAllData(beforeDeletion)).committed).toBe(true);
     await expect(commitPersonalGrowthRecord({ ...saved, note: "SYNTHETIC intentionally restored edit" }, saved.updatedAt)).resolves.toMatchObject({ id: saved.id });
     await clearAllData();
-    expect(await db.getAll("syncMeta")).toEqual([]);
+    expect((await db.getAll("syncMeta")).filter(item => !['daily-balance-reset-at', 'daily-balance-epoch'].includes(item.key))).toEqual([]);
     await expect(commitPersonalGrowthRecord(moment(), null)).resolves.toMatchObject({ id: saved.id });
   });
   it("preserves a different new-moment draft when deleting an existing moment", async () => {
@@ -286,7 +286,7 @@ describe("personal growth persistence", () => {
     for (const setting of settings)
       await setSetting(setting.key, setting.value);
     const exported = await exportAllData();
-    expect(exported.version).toBe(5);
+    expect(exported.version).toBe(6);
     expect((await previewImportData(exported)).canImport).toBe(true);
     await clearAllData();
     expect((await importAllData(exported, { mode: "replace" })).committed).toBe(

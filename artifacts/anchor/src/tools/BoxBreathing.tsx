@@ -4,6 +4,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { useT } from "@/hooks/useTranslation";
 import { Play, Pause, RotateCcw } from "lucide-react";
 import { ToolFollowUpButton } from "@/components/ToolFollowUpButton";
+import { ToolCompletionButton } from "@/components/ToolBalanceReturn";
 
 type Phase = "inhale" | "hold1" | "exhale" | "hold2";
 
@@ -112,12 +113,12 @@ export function BoxBreathing() {
         {cycles >= 4 && (
           <div className="rounded-2xl bg-primary/8 border border-primary/20 px-5 py-4 max-w-xs w-full text-center animate-fade-up">
             <p className="text-sm text-foreground/80 leading-relaxed mb-3">{t("breath.milestone")}</p>
-            <button
-              onClick={() => navigate("/")}
+            <ToolCompletionButton
+              onDefaultReturn={() => navigate("/")}
               className="text-sm font-semibold text-primary hover:opacity-75 transition-opacity touch-target"
             >
               {t("breath.done_btn")}
-            </button>
+            </ToolCompletionButton>
           </div>
         )}
 

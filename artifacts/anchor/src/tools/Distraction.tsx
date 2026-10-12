@@ -4,6 +4,7 @@ import { useLocation } from "wouter";
 import { useT } from "@/hooks/useTranslation";
 import { Shuffle, CheckCircle2 } from "lucide-react";
 import { ToolFollowUpButton } from "@/components/ToolFollowUpButton";
+import { ToolCompletionButton } from "@/components/ToolBalanceReturn";
 
 function shuffle<T>(arr: T[]): T[] {
   return [...arr].sort(() => Math.random() - 0.5);
@@ -45,12 +46,12 @@ export function Distraction() {
             toolId="/tools/distraction"
             toolLabel={t("dist.title")}
           />
-          <button
-            onClick={() => navigate("/")}
+          <ToolCompletionButton
+            onDefaultReturn={() => navigate("/")}
             className="mt-4 bg-primary text-primary-foreground rounded-2xl px-8 py-3 font-semibold touch-target hover:opacity-90 active:scale-95 transition-all"
           >
             {t("common.return_home")}
-          </button>
+          </ToolCompletionButton>
         </div>
       </div>
     );
