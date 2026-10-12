@@ -1,6 +1,9 @@
 import { isQuickRegistrationDraft } from "@/lib/quickRegistrationDraft";
 import { isRecoveryPlanDraft } from "@/lib/planDraft";
 import { isWeeklyReviewDraft } from "@/lib/weeklyReviewDraft";
+import { isDailyBalanceDraft, isBalanceMomentDraft } from "@/lib/dailyBalanceDraft";
+import { isDailyBalanceRecord, isBalanceMomentRecord } from "@/lib/dailyBalance";
+import { BALANCE_EPOCH_KEY, INITIAL_BALANCE_EPOCH, setBalanceEpoch } from "@/lib/balanceEpoch";
 import { isSupportiveActionDraft } from "@/lib/supportiveActionDraft";
 import { isHomeCustomizationDraft } from "@/lib/homeCustomizationDraft";
 import { isJourneyDateDraft } from "@/lib/settingsActions";
@@ -409,9 +412,14 @@ const BACKUP_STORES = ["journal", "checkIns", "settings", "cravingLogs", "relaps
 export async function clearAllData(): Promise<void> {
   const db = await getDB();
   const tx = db.transaction(ALL_STORES, "readwrite");
+  const epoch = crypto.randomUUID();
   try {
     await Promise.all(ALL_STORES.map(async (store) => tx.objectStore(store).clear()));
+    // Nonpersonal barrier also invalidates a balance form opened while the DB was empty.
+    await tx.objectStore("syncMeta").put({ key: "daily-balance-reset-at", value: Date.now() });
+    await tx.objectStore("syncMeta").put({ key: BALANCE_EPOCH_KEY, value: epoch });
     await tx.done;
+    setBalanceEpoch(epoch);
   } catch (error) {
     try { tx.abort(); } catch { /* already aborted */ }
     await tx.done.catch(() => {});
@@ -545,11 +553,13 @@ function normalizeImportedSetting(
     return { key, value: JSON.stringify(parseRecoveryPlan(parsed)) };
   }
 
-  if (/^draft:(recovery-plan|journal-entry|quick-registration|care-contact|personal-contact|supportive-action|home-customization|journey-date|registration-correction|cigarette-edit|compassion-note|growth-moment:[a-zA-Z0-9%_.~!()*'-]+|use-period:[a-zA-Z0-9%_.~!()*'-]+|weekly-review:[a-zA-Z0-9-]+)$/.test(key)) {
+  if (/^draft:(recovery-plan|journal-entry|quick-registration|care-contact|personal-contact|supportive-action|home-customization|journey-date|registration-correction|cigarette-edit|compassion-note|growth-moment:[a-zA-Z0-9%_.~!()*'-]+|use-period:[a-zA-Z0-9%_.~!()*'-]+|weekly-review:[a-zA-Z0-9-]+|daily-balance:\d{4}-\d{2}-\d{2}|balance-moment:[a-zA-Z0-9%_.~!()*'-]+)$/.test(key)) {
     if (settingValue === "") return { key, value: "" };
     if (typeof settingValue !== "string" || settingValue.length > 512_000) return null;
     const envelope = parseJsonSetting(settingValue);
     if (!isValidLocalDraftEnvelope(envelope)) return null;
+    if (key.startsWith("draft:daily-balance:") && (!isDailyBalanceDraft(envelope.value) || key !== `draft:daily-balance:${envelope.value.record.date}`)) return null;
+    if (key.startsWith("draft:balance-moment:") && (!isBalanceMomentDraft(envelope.value) || (key !== "draft:balance-moment:new" && key !== `draft:balance-moment:${encodeURIComponent(envelope.value.record.id)}`))) return null;
     if (key === "draft:compassion-note" && !isCompassionDraft(envelope.value)) return null;
     if (key.startsWith("draft:growth-moment:")) {
       if (!isGrowthMomentDraft(envelope.value)) return null;
@@ -715,9 +725,53 @@ export async function importAllData(payload: Record<string, unknown>, options: {
     if (options.mode !== "replace" && overlappingMergedUsePeriod(await tx.objectStore("featureRecords").getAll(), rows)) {
       throw new Error("A restored use period overlaps an existing period for the same target. Correct the periods or choose replacement.");
     }
-    if (options.mode === "replace") await Promise.all(ALL_STORES.map(async store => tx.objectStore(store).clear()));
+    const restoredBalanceRevisions = new Map<string, number>();
+    const previousBalanceDrafts = new Map<string, number>();
+    const restoreTime = Date.now();
+    const storageEpoch = options.mode === "replace" ? crypto.randomUUID()
+      : String((await tx.objectStore("syncMeta").get(BALANCE_EPOCH_KEY))?.value ?? INITIAL_BALANCE_EPOCH);
+    for (const row of rows) {
+      if (row.store === "featureRecords" && (isDailyBalanceRecord(row.value) || isBalanceMomentRecord(row.value))) {
+        const current = await tx.objectStore("featureRecords").get(row.key);
+        restoredBalanceRevisions.set(row.key, Math.max(restoreTime, row.value.updatedAt + 1, (current?.updatedAt ?? 0) + 1));
+      }
+      if (row.store === "settings" && /^draft:(daily-balance|balance-moment):/.test(row.key)) {
+        const current = await tx.objectStore("settings").get(row.key);
+        const envelope = current?.value ? parseJsonSetting(String(current.value)) : null;
+        if (isValidLocalDraftEnvelope(envelope)) previousBalanceDrafts.set(row.key, envelope.revision);
+      }
+    }
+    if (options.mode === "replace") {
+      await Promise.all(ALL_STORES.map(async store => tx.objectStore(store).clear()));
+      await tx.objectStore("syncMeta").put({ key: "daily-balance-reset-at", value: restoreTime });
+      await tx.objectStore("syncMeta").put({ key: BALANCE_EPOCH_KEY, value: storageEpoch });
+    }
     for (const row of rows) {
       let value = row.value;
+      if (row.store === "featureRecords" && (isDailyBalanceRecord(value) || isBalanceMomentRecord(value))) {
+        await tx.objectStore("syncMeta").delete(`daily-balance-deleted:${value.id}${value.instanceId ? `:${value.instanceId}` : ""}`);
+        value = { ...value, updatedAt: restoredBalanceRevisions.get(row.key)!, storageEpoch };
+      }
+      if (row.store === "settings" && /^draft:(daily-balance|balance-moment):/.test(row.key)) {
+        const raw = (value as { value: string }).value;
+        if (raw) {
+          const envelope = parseJsonSetting(raw);
+          if (isValidLocalDraftEnvelope(envelope) && (isDailyBalanceDraft(envelope.value) || isBalanceMomentDraft(envelope.value))) {
+            const draft = envelope.value;
+            await tx.objectStore("syncMeta").delete(`daily-balance-deleted:${draft.record.id}${draft.record.instanceId ? `:${draft.record.instanceId}` : ""}`);
+            const revision = restoredBalanceRevisions.get(draft.record.id);
+            const source = rows.find(candidate => candidate.store === "featureRecords" && candidate.key === draft.record.id)?.value;
+            const sameSource = (isDailyBalanceRecord(source) || isBalanceMomentRecord(source))
+              && draft.sourceUpdatedAt === source.updatedAt && draft.record.timestamp === source.timestamp && draft.record.instanceId === source.instanceId;
+            // A backup can legitimately contain a newer saved record alongside
+            // an older open draft. Restoration must retain that conflict.
+            const sourceUpdatedAt = revision !== undefined && sameSource ? revision
+              : revision === draft.sourceUpdatedAt ? null : draft.sourceUpdatedAt;
+            value = { key: row.key, value: JSON.stringify({ ...envelope, revision: Math.max(envelope.revision, previousBalanceDrafts.get(row.key) ?? 0) + 1,
+              value: { ...draft, record: { ...draft.record, updatedAt: revision ?? restoreTime, storageEpoch }, sourceUpdatedAt } }) };
+          }
+        }
+      }
       if (options.mode !== "replace" && row.store === "settings" && row.key === "emergencyContacts") {
         const saved = await tx.objectStore("settings").get("emergencyContacts");
         const old = saved?.value ? parseJsonSetting(String(saved.value)) : [];
@@ -730,6 +784,7 @@ export async function importAllData(payload: Record<string, unknown>, options: {
       await tx.objectStore(row.store).put(value as never);
     }
     await tx.done;
+    setBalanceEpoch(storageEpoch);
     return { imported: rows.length, skipped: 0, errors: [], committed: true };
   } catch (error) {
     try { tx.abort(); } catch { /* already aborted */ }

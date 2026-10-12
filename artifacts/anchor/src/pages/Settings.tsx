@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { useLocation } from "wouter";
 import { ImportDataPanel } from "@/components/ImportDataPanel";
+import { MoodTrackerImportPanel } from "@/components/MoodTrackerImportPanel";
 import { PersonalContactsSettings } from "@/components/PersonalContactsSettings";
 import { CareContactSettings } from "@/components/CareContactSettings";
 import { flushLocalDrafts, resetLocalDraftMemory } from "@/lib/localDrafts";
@@ -377,6 +378,7 @@ export function Settings() {
             </div>
 
             <ImportDataPanel onImport={importData} />
+            <MoodTrackerImportPanel disabled={loading || resetBusy || resetCommitted} />
           </div>
         </section>
 

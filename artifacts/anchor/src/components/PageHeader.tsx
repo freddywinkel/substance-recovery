@@ -2,6 +2,7 @@ import { useCallback } from "react";
 import { ArrowLeft } from "lucide-react";
 import { useT } from "@/hooks/useTranslation";
 import { useLocation } from "wouter";
+import { ToolBalanceReturn } from "@/components/ToolBalanceReturn";
 
 interface PageHeaderProps {
   title: string;
@@ -24,6 +25,7 @@ export function PageHeader({ title, back = false, subtitle, onBack }: PageHeader
   }, [navigate, onBack]);
 
   return (
+    <>
     <header
       className="sticky top-0 z-40 bg-background/92 backdrop-blur-md border-b border-border/50 px-4 py-3 flex items-center gap-2"
       style={{ paddingTop: "calc(0.75rem + env(safe-area-inset-top, 0px))" }}
@@ -44,5 +46,7 @@ export function PageHeader({ title, back = false, subtitle, onBack }: PageHeader
         )}
       </div>
     </header>
+    <ToolBalanceReturn />
+    </>
   );
 }

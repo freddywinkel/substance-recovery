@@ -24,6 +24,7 @@ import { CigaretteDayDrawer } from "@/components/CigaretteDayDrawer";
 import { GoalProgressHome } from "@/components/GoalProgressHome";
 import { DeferredFollowUpCard } from "@/components/DeferredFollowUpCard";
 import { GrowthHomeCard } from "@/components/GrowthHomeCard";
+import { DailyBalanceHomeCard } from "@/components/DailyBalanceHomeCard";
 import { useRecoveryFeatures } from "@/contexts/RecoveryFeaturesContext";
 import {
   HOME_WIDGET_IDS,
@@ -221,6 +222,9 @@ export function Home() {
 
         <HomeWidgetSlot key="sobriety" id="sobriety">
           {isWidgetVisible("sobriety") && <GoalProgressHome />}
+        </HomeWidgetSlot>
+        <HomeWidgetSlot key="daily-balance" id="daily-balance">
+          {isWidgetVisible("daily-balance") && <DailyBalanceHomeCard />}
         </HomeWidgetSlot>
 
         <HomeWidgetSlot key="quick-registration" id="quick-registration">

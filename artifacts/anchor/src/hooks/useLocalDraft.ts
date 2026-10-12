@@ -7,6 +7,7 @@ import {
 } from "react";
 import {
   DraftConflictError,
+  acknowledgeDraftReload,
   getDraftFailure,
   pendingDraftValues,
   queueDraftWrite,
@@ -168,6 +169,22 @@ export function useLocalDraft<T>(
       setStatus("error");
     }
   }, [key, persist]);
+  const reloadLatest = useCallback(async (nextInitial?: T) => {
+    // Reload is deliberately read-only: it must never erase another window's
+    // latest draft merely because this window has an outdated revision.
+    const stored = await readLocalDraft<T>(key);
+    const next = stored?.value ?? nextInitial ?? initialRef.current;
+    if (validateRef.current && !validateRef.current(next)) throw new Error("This saved draft cannot be opened. Export it before removing it.");
+    acknowledgeDraftReload(key);
+    generation.current += 1;
+    revision.current = stored?.revision ?? 0;
+    valueRef.current = next;
+    setState(next);
+    setHasDraft(!!stored);
+    setStatus(stored ? "saved" : "idle");
+    setError(null);
+    return next;
+  }, [key]);
   return {
     value,
     setValue,
@@ -178,6 +195,7 @@ export function useLocalDraft<T>(
     clearDraft,
     retry,
     keepMine,
+    reloadLatest,
     conflict: error instanceof DraftConflictError,
   };
 }

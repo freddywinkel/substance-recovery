@@ -3,6 +3,7 @@ import { CheckCircle2, Clock3 } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useRecoveryFeatures } from "@/contexts/RecoveryFeaturesContext";
 import type { RecoveryToolId, ToolFollowUpRecord } from "@/lib/recoveryFeatures";
+import { useToolBalanceContext } from "@/components/ToolBalanceReturn";
 
 const COPY = {
   en: {
@@ -44,6 +45,7 @@ export function ToolFollowUpButton({ toolId, toolLabel, className = "" }: ToolFo
   const [state, setState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [expanded, setExpanded] = useState(false);
   const [feelingBefore, setFeelingBefore] = useState<number | "unknown" | null>(null);
+  const balanceContext = useToolBalanceContext();
 
   const recordUse = async () => {
     if (savingRef.current || state === "saved") return;
@@ -69,6 +71,10 @@ export function ToolFollowUpButton({ toolId, toolLabel, className = "" }: ToolFo
       setState("error");
     }
   };
+
+  // The visible return above the tool leads to the linked before/after form.
+  // Opening or finishing a tool does not answer that form's attempt question.
+  if (balanceContext.present) return null;
 
   return (
     <div className={`w-full max-w-sm ${className}`}>

@@ -19,6 +19,8 @@ import { DraftStatus } from "@/components/DraftStatus";
 import { RECOVERY_TARGET_VALUES, recoveryTargetLabel, isBehavioralTarget } from "@/lib/recoveryTargets";
 import { flushLocalDrafts } from "@/lib/localDrafts";
 import { createBlankQuickRegistrationDraft, isQuickRegistrationDraft, QUICK_ACTION_IDS, QUICK_SAFETY_IDS } from "@/lib/quickRegistrationDraft";
+import { BalanceMomentLink } from "@/components/BalanceMomentLink";
+import { balanceCravingSeed, balanceMomentPath } from "@/lib/balanceConnections";
 
 const COPY = {
   en: {
@@ -133,6 +135,7 @@ export function QuickRegistration() {
     addRecord,
     homePreferences,
     startQuickReflection,
+    startBalanceMoment,
   } = useRecoveryFeatures();
   const draft = useLocalDraft("quick-registration", createBlankQuickRegistrationDraft(), { validate: isQuickRegistrationDraft });
   const { registrationType, intensity, immediateSafety, chosenAction, chosenActionOther, note, target = "", useOutcome = "", usePrescribed = false } = draft.value;
@@ -146,6 +149,8 @@ export function QuickRegistration() {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
+  const openingBalanceRef = useRef(false);
+  const [openingBalance, setOpeningBalance] = useState(false);
 
   const visibleTypes = useMemo(
     () => REGISTRATION_TYPES.filter((type) => !homePreferences.hiddenRegistrationTypes.includes(type)),
@@ -220,6 +225,25 @@ export function QuickRegistration() {
     }
   };
 
+  const openBalanceMoment = async () => {
+    if (!savedRecord || openingBalanceRef.current) return;
+    openingBalanceRef.current = true;
+    setOpeningBalance(true);
+    setError(null);
+    try {
+      const moment = await startBalanceMoment({
+        source: { kind: "quick-registration", recordId: savedRecord.id },
+        before: { mood: null, emotionalIntensity: null, craving: balanceCravingSeed(savedRecord.registrationType, savedRecord.intensity) },
+      });
+      navigate(balanceMomentPath(moment.id));
+    } catch {
+      setError(copy.reflectionError);
+    } finally {
+      openingBalanceRef.current = false;
+      setOpeningBalance(false);
+    }
+  };
+
   if (!draft.hydrated) return <div className="flex min-h-dvh flex-col bg-background"><PageHeader title={copy.title} back /><div className="p-5 text-sm" role="status">{language === "nl" ? "Concept laden…" : "Loading draft…"}</div></div>;
 
   if (savedRecord) {
@@ -237,6 +261,7 @@ export function QuickRegistration() {
           )}
           {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
           <div className="flex w-full max-w-sm flex-col gap-3">
+            <BalanceMomentLink onOpen={() => void openBalanceMoment()} saving={openingBalance} saved />
             {savedRecord.immediateSafety === "safe-for-now" && <BriefCompassionButton onOpen={() => navigate("/tools/self-compassion/brief")} />}
             <button
               type="button"

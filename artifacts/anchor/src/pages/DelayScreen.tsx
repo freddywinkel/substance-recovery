@@ -7,6 +7,8 @@ import { useActiveRegistration } from "@/contexts/ActiveRegistrationContext";
 import { useStore } from "@/hooks/useStore";
 import { useT } from "@/hooks/useTranslation";
 import { ToolFollowUpButton } from "@/components/ToolFollowUpButton";
+import { ToolBalanceReturn, useToolBalanceContext } from "@/components/ToolBalanceReturn";
+import { balanceMomentPath } from "@/lib/balanceConnections";
 import {
   DEFAULT_DELAY_DURATION_SECONDS,
   hasCompletedBoredomDelay,
@@ -32,11 +34,12 @@ export function DelayScreen() {
   const [, navigate] = useLocation();
   const { t } = useT();
   const registration = useActiveRegistration();
+  const balanceContext = useToolBalanceContext();
   const { boredomLogs, updateBoredom } = useStore();
   const localStartedAt = useRef(Date.now());
   const session = registration.session;
   const activeDraft = isDraft(session?.draft) ? session.draft : {};
-  const isBoredomReturn = session?.type === "boredom"
+  const isBoredomReturn = !balanceContext.present && session?.type === "boredom"
     && session.pendingReturn?.returnRoute === "/boredom";
   const persistedCompleted = isBoredomReturn
     && hasCompletedBoredomDelay(activeDraft, DEFAULT_DELAY_DURATION_SECONDS);
@@ -79,6 +82,10 @@ export function DelayScreen() {
   }, [persistedCompleted, startedAt]);
 
   const navigateToReturn = useCallback(() => {
+    if (balanceContext.present) {
+      navigate(balanceContext.id ? balanceMomentPath(balanceContext.id) : "/daily");
+      return;
+    }
     const returnRoute = registration.session?.pendingReturn?.returnRoute;
     if (returnRoute) {
       navigate(returnRoute);
@@ -87,7 +94,7 @@ export function DelayScreen() {
     } else {
       navigate("/");
     }
-  }, [navigate, registration.session?.pendingReturn?.returnRoute]);
+  }, [balanceContext.id, balanceContext.present, navigate, registration.session?.pendingReturn?.returnRoute]);
 
   const captureCompletion = useCallback(async () => {
     if (!isBoredomReturn) {
@@ -167,6 +174,7 @@ export function DelayScreen() {
       style={{ paddingTop: "env(safe-area-inset-top)" }}
     >
       <h1 className="sr-only">{t("delay.title")}</h1>
+      <ToolBalanceReturn />
       <div className="flex justify-end px-5 pt-5 pb-2">
         <button
           type="button"

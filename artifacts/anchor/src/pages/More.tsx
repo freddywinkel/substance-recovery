@@ -3,6 +3,7 @@ import {
   BarChart2,
   BookOpen,
   CalendarRange,
+  Moon,
   ChevronRight,
   FileText,
   Settings,
@@ -16,6 +17,14 @@ import { useT } from "@/hooks/useTranslation";
 export function More() {
   const { t, language } = useT();
   const items = [
+    {
+      to: "/daily",
+      icon: Moon,
+      title: language === "nl" ? "Dagelijkse check-in" : "Daily check-in",
+      description: language === "nl"
+        ? "Je stemming, slaap en balans. Bekijk ook je activiteiten en hoe je je ervoor en erna voelde."
+        : "Your mood, sleep and balance. See your activities and how you felt before and after.",
+    },
     {
       to: "/recovery-plan",
       icon: ShieldCheck,

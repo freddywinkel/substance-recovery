@@ -3,7 +3,7 @@ import { RECOVERY_TARGET_VALUES, recoveryTargetLabel, isBehavioralTarget } from 
 import { encodeUseDetails, selectedUseDetails, type UseDetail } from "@/lib/useDetails";
 import { UseDetailsEditor } from "@/components/UseDetailsEditor";
 import { TargetSafetyAdvice } from "@/components/TargetSafetyAdvice";
-import { useState, useCallback, useEffect, useMemo } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { useLocation } from "wouter";
 import { useStore } from "@/hooks/useStore";
 import { useT } from "@/hooks/useTranslation";
@@ -29,6 +29,8 @@ import { useToast } from "@/hooks/use-toast";
 import { removeHiddenOtherText, toStableOptionId, toStableOptionIds } from "@/lib/registrationIds";
 import { getSubstanceSafetyWarnings, getUrgentSafetyCopy } from "@/lib/registrationSafety";
 import { useRecoveryFeatures } from "@/contexts/RecoveryFeaturesContext";
+import { BalanceMomentLink } from "@/components/BalanceMomentLink";
+import { balanceMomentPath } from "@/lib/balanceConnections";
 
 // ── Step type ────────────────────────────────────────────────
 type Step = "onset" | "trigger" | "inner" | "substance" | "action" | "outcome" | "done";
@@ -261,7 +263,7 @@ function RequiredMarker({ language }: { language: "en" | "nl" }) {
 
 // ── Main component ────────────────────────────────────────────
 export function CravingTracker() {
-  const { completeQuickReflection } = useRecoveryFeatures();
+  const { completeQuickReflection, startBalanceMoment } = useRecoveryFeatures();
   const { step, setStep, draft, setDraft, reg } = useResumableDraft<Step, CravingDraft>({
     type: "craving",
     route: "/craving",
@@ -270,6 +272,8 @@ export function CravingTracker() {
     steps: STEP_ORDER,
   });
   const [saving, setSaving] = useState(false);
+  const [openingBalance, setOpeningBalance] = useState(false);
+  const openingBalanceRef = useRef(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [savedLog, setSavedLog] = useState<CravingLog | null>(null);
   const { logCraving } = useStore();
@@ -488,6 +492,34 @@ export function CravingTracker() {
     await openToolPath(path, step);
   };
 
+  const openBalanceMoment = async () => {
+    if (openingBalanceRef.current || saving || !reg.session) return;
+    openingBalanceRef.current = true;
+    setOpeningBalance(true);
+    try {
+      // Await the current answers and return point before leaving this tracker.
+      const preserved = await reg.patchSession({
+        step,
+        draft,
+        pendingReturn: { returnRoute: "/craving", returnStep: step },
+      });
+      if (!preserved) throw new Error("Craving draft could not be preserved.");
+      const quickId = reg.session.quickRegistrationId;
+      const moment = await startBalanceMoment({
+        source: quickId
+          ? { kind: "quick-registration", recordId: quickId }
+          : { kind: "craving", recordId: reg.session.recordId },
+        before: { mood: null, emotionalIntensity: null, craving: draft.intensity },
+      });
+      navigate(balanceMomentPath(moment.id));
+    } catch {
+      toast({ title: t("common.save_error"), variant: "destructive" });
+    } finally {
+      openingBalanceRef.current = false;
+      setOpeningBalance(false);
+    }
+  };
+
   // ── Done screen ───────────────────────────────────────────
   if (step === "done") {
     const showMedicalSafety = draft.useOutcome === "used"
@@ -616,6 +648,7 @@ export function CravingTracker() {
 
           {/* Navigation */}
           <div className="flex flex-col gap-3 w-full max-w-xs">
+            <BalanceMomentLink onOpen={() => void openBalanceMoment()} saving={openingBalance} saved />
             <BriefCompassionButton onOpen={() => void openToolPath("/tools/self-compassion/brief", "done")} />
             {draft.useOutcome === "used" && (
               <button
@@ -750,6 +783,7 @@ export function CravingTracker() {
               lowLabel={t("logs.cr_intensity_low")}
               highLabel={t("logs.cr_intensity_high")}
             />
+            <BalanceMomentLink onOpen={() => void openBalanceMoment()} saving={openingBalance || saving} />
             <div className="h-px bg-border my-1" />
             <p className="text-sm font-medium text-foreground">
               {t("craving.q.confidence")} {" "}
@@ -918,6 +952,7 @@ export function CravingTracker() {
         {/* ── Action ─────────────────────────────────────────── */}
         {step === "action" && (
           <>
+            <BalanceMomentLink onOpen={() => void openBalanceMoment()} saving={openingBalance || saving} />
             <p className="text-base font-medium text-foreground">
               {t("craving.q.action")}
               <RequiredMarker language={language} />
