@@ -1,12 +1,13 @@
+import { clearDataAndReload } from "./helpers/storageSession";
 import "fake-indexeddb/auto";
 import { beforeEach, describe, expect, it } from "vitest";
 import { getDB } from "../src/db/schema";
-import { clearAllData, getSetting, setSetting } from "../src/db/crud";
+import { getSetting, setSetting } from "../src/db/crud";
 import { DEFAULT_RECOVERY_PLAN, parseStoredRecoveryPlan } from "../src/lib/recoveryFeatures";
 import { commitRecoveryPlan } from "../src/db/planPersistence";
 import { writeLocalDraft } from "../src/lib/localDrafts";
 
-beforeEach(async () => { await clearAllData(); });
+beforeEach(async () => { await clearDataAndReload(); });
 
 describe("strict stored plan reads", () => {
   it("distinguishes genuinely absent settings from malformed existing values", () => {

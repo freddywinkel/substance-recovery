@@ -232,7 +232,7 @@ export function DelayScreen() {
         </div>
 
         {!done && (
-          <p className="text-xs text-muted-foreground/60 text-center max-w-[220px] leading-relaxed">
+          <p className="text-xs text-muted-foreground text-center max-w-[220px] leading-relaxed">
             {t("delay.hint")}
           </p>
         )}

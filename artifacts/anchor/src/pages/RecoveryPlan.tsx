@@ -455,7 +455,7 @@ export function RecoveryPlan() {
           <div className="flex flex-wrap gap-2">
             <Link
               href="/action-card"
-              className="min-h-11 rounded-xl bg-primary/15 px-4 py-3 text-sm font-medium text-primary"
+              className="min-h-11 rounded-xl bg-primary/15 px-4 py-3 text-sm font-medium text-foreground"
             >
               {language === "nl" ? "Mijn actiekaart" : "My action card"}
             </Link>

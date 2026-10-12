@@ -27,7 +27,11 @@ export function computeCigaretteStats(
   logs: CigaretteLog[],
   now = Date.now()
 ): CigaretteStats {
-  const sorted = [...logs].sort((a, b) => a.timestamp - b.timestamp);
+  // Preserve imported history, but do not describe a future/invalid timestamp
+  // as an event that already happened (for example after a device clock change).
+  const sorted = logs
+    .filter(log => !log.deleted && Number.isFinite(log.timestamp) && log.timestamp >= 0 && log.timestamp <= now)
+    .sort((a, b) => a.timestamp - b.timestamp);
   const todayStart = startOfDay(now);
   const weekStart = now - 7 * DAY_MS;
   const monthStart = now - 30 * DAY_MS;

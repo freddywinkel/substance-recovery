@@ -1,9 +1,10 @@
+import { clearDataAndReload, importDataAndReload } from "./helpers/storageSession";
 import "fake-indexeddb/auto";
 import { beforeEach, describe, expect, it } from "vitest";
 import { getDB, type CigaretteLog, type CravingLog, type RelapseLog } from "../src/db/schema";
 import {
-  clearAllData, exportAllData, getCravingLogs, getRelapseLogs, getFeatureRecords,
-  getSetting, importAllData, previewImportData, setSetting, updateRegistrationEpisode,
+  exportAllData, getCravingLogs, getRelapseLogs, getFeatureRecords,
+  getSetting, previewImportData, setSetting, updateRegistrationEpisode,
   updateCigaretteLog,
 } from "../src/db/crud";
 import { applyRegistrationCorrection, correctionAnswers, localDateTime } from "../src/components/RegistrationCorrection";
@@ -28,7 +29,7 @@ const quickDraft = (): RegistrationCorrectionDraft => {
 };
 const settingsDraft = (value: unknown) => ({ key: "draft:registration-correction", value: JSON.stringify({ version: 1, revision: 1, updatedAt: stamp, clientId: "synthetic", value }) });
 const backup = (settings: unknown[]) => ({ version: 3, dataVersion: 3, journal: [], cravingLogs: [], relapseLogs: [], anxietyLogs: [], boredomLogs: [], featureRecords: [], settings });
-beforeEach(async () => { await clearAllData(); });
+beforeEach(async () => { await clearDataAndReload(); });
 
 describe("recoverable history correction drafts", () => {
   it("accepts unfinished quick time/intensity without silently normalizing null, zero or explicit no", () => {
@@ -71,8 +72,8 @@ describe("recoverable history correction drafts", () => {
     const setting = settingsDraft(draft);
     await setSetting(setting.key, setting.value);
     const exported = await exportAllData();
-    await clearAllData();
-    expect((await importAllData(exported)).committed).toBe(true);
+    await clearDataAndReload();
+    expect((await importDataAndReload(exported)).committed).toBe(true);
     expect(await getSetting(setting.key)).toBe(setting.value);
     expect(JSON.parse(String(await getSetting(setting.key))).value).toEqual(draft);
   });
@@ -80,7 +81,7 @@ describe("recoverable history correction drafts", () => {
     const malformed = settingsDraft({ ...quickDraft(), eventTime: { hidden: true } });
     await setSetting("theme", "dark");
     expect((await previewImportData(backup([malformed]))).canImport).toBe(false);
-    expect((await importAllData(backup([{ key: "theme", value: "light" }, malformed]))).committed).toBe(false);
+    expect((await importDataAndReload(backup([{ key: "theme", value: "light" }, malformed]))).committed).toBe(false);
     expect(await getSetting("theme")).toBe("dark");
     await setSetting(malformed.key, malformed.value);
     const exported = await exportAllData();

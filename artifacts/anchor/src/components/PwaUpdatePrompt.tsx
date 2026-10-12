@@ -1,20 +1,62 @@
 import { RefreshCw } from "lucide-react";
 import { useRegisterSW } from "virtual:pwa-register/react";
 import { useT } from "@/hooks/useTranslation";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { flushLocalDrafts } from "@/lib/localDrafts";
 import { useActiveRegistration } from "@/contexts/ActiveRegistrationContext";
 
 export function PwaUpdatePrompt() {
   const { t, language } = useT();
-  const { storageError, retryPersistence } = useActiveRegistration();
+  const { flushPersistence } = useActiveRegistration();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(false);
   const busyRef = useRef(false);
+  const reloadBusyRef = useRef(false);
+  const activatedRef = useRef(false);
+  const reloadRef = useRef<() => Promise<void>>(async () => undefined);
   const {
     needRefresh: [needRefresh, setNeedRefresh],
     updateServiceWorker,
-  } = useRegisterSW();
+  } = useRegisterSW({
+    // Another window can activate the waiting worker. Its Update button cannot
+    // check this window's unsaved inputs, so every window guards its own reload.
+    onNeedReload: () => {
+      activatedRef.current = true;
+      void reloadRef.current();
+    },
+  });
+
+  reloadRef.current = async () => {
+    if (reloadBusyRef.current) return;
+    reloadBusyRef.current = true;
+    setNeedRefresh(true); setBusy(true); setError(false);
+    try {
+      await flushLocalDrafts();
+      await flushPersistence();
+      window.location.reload();
+    } catch { setError(true); }
+    finally { reloadBusyRef.current = false; setBusy(false); }
+  };
+
+  useEffect(() => {
+    if (!("serviceWorker" in navigator)) return;
+    const serviceWorker = navigator.serviceWorker;
+    let previousController = serviceWorker.controller;
+    const guardControllerChange = () => {
+      const controller = serviceWorker.controller;
+      const replacingController = previousController !== null && controller !== previousController;
+      previousController = controller;
+      // Workbox's reload callback may not be installed in a window that never
+      // observed the waiting worker. Every already-controlled window still has
+      // to check its input before switching to the newly activated app build.
+      if (replacingController) {
+        activatedRef.current = true;
+        void reloadRef.current();
+      }
+    };
+    serviceWorker.addEventListener("controllerchange", guardControllerChange);
+    return () => serviceWorker.removeEventListener("controllerchange", guardControllerChange);
+  }, []);
 
   if (!needRefresh) return null;
 
@@ -23,24 +65,27 @@ export function PwaUpdatePrompt() {
   };
 
   const update = async () => {
-    if (busyRef.current) return;
+    if (busyRef.current || reloadBusyRef.current) return;
     busyRef.current = true; setBusy(true); setError(false);
     try {
-      if (storageError) throw storageError;
       await flushLocalDrafts();
-      if (!await retryPersistence()) throw new Error("Registration draft could not be saved.");
-      await updateServiceWorker(true);
+      await flushPersistence();
+      if (activatedRef.current) await reloadRef.current();
+      else await updateServiceWorker(true);
     } catch { setError(true); }
     finally { busyRef.current = false; setBusy(false); }
   };
 
   return (
     <aside
-      className="fixed left-3 right-3 z-[60] mx-auto max-w-lg rounded-2xl border border-border bg-card p-3 shadow-xl shadow-black/25"
+      className="fixed left-3 right-3 z-[60] mx-auto max-w-lg overflow-y-auto overscroll-contain rounded-2xl border border-border bg-card p-3 shadow-xl shadow-black/25 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary"
       style={{
         bottom:
           "calc(var(--bottom-nav-h) + var(--return-banner-h, 0px) + var(--storage-banner-h, 0px) + var(--data-warning-h, 0px) + 0.75rem)",
+        maxHeight:
+          "max(3rem, calc(100dvh - var(--bottom-nav-h) - var(--return-banner-h, 0px) - var(--storage-banner-h, 0px) - var(--data-warning-h, 0px) - 6.75rem))",
       }}
+      tabIndex={0}
       role="status"
       aria-live="polite"
       aria-atomic="true"
@@ -69,7 +114,7 @@ export function PwaUpdatePrompt() {
         <button
           type="button"
           onClick={dismiss}
-          className="min-h-11 rounded-xl border border-border px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+          className="min-h-11 max-w-full rounded-xl border border-border px-4 py-2 text-sm font-medium text-foreground [overflow-wrap:anywhere] transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
         >
           {t("pwa.update.later")}
         </button>
@@ -77,7 +122,7 @@ export function PwaUpdatePrompt() {
           type="button"
           onClick={() => void update()}
           disabled={busy}
-          className="min-h-11 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-all hover:opacity-90 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+          className="min-h-11 max-w-full rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground [overflow-wrap:anywhere] transition-all hover:opacity-90 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
         >
           {t("pwa.update.action")}
         </button>

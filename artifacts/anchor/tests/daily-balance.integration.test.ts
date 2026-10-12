@@ -9,6 +9,7 @@ import { parseFeatureRecord } from "../src/lib/recoveryFeatures";
 import { acknowledgeDraftReload, DraftConflictError, flushLocalDrafts, getDraftFailure, pendingDraftValues, queueDraftWrite, readLocalDraft, resetLocalDraftMemory, writeLocalDraft } from "../src/lib/localDrafts";
 import { SCALES, DEFAULT_SETTINGS, emptyForm, type Backup } from "../src/lib/moodTrackerBackup";
 import { BALANCE_EPOCH_KEY } from "../src/lib/balanceEpoch";
+import { clearDataAndReload, simulateFullAppReload } from "./helpers/storageSession";
 
 const day = "2026-01-02";
 const today = 1_790_000_000_000;
@@ -18,7 +19,7 @@ const backup = (): Backup => ({ app: "moodtracker", version: 1, exportedAt: new 
     mood: -2, drive: 0, fatigue: 0, enjoyment: 3, craving: 3, use: "none", significantChange: false, changeNote: "", supportedBy: "SYNTHETIC painting", note: "SYNTHETIC imported" }],
   drafts: [{ date: day, revision: 5, updatedAt: "2026-01-02T22:00:00.000Z", form: { ...emptyForm(day), mainHours: "25", mainMinutes: "", mood: 0, craving: 0, note: "SYNTHETIC unfinished" } }] });
 
-beforeEach(async () => { vi.restoreAllMocks(); vi.spyOn(Date, "now").mockReturnValue(today); await clearAllData(); resetLocalDraftMemory(); });
+beforeEach(async () => { vi.restoreAllMocks(); vi.spyOn(Date, "now").mockReturnValue(today); await clearDataAndReload(); resetLocalDraftMemory(); });
 
 describe("daily balance contracts", () => {
   it("preserves null and zero; EIS accepts 0–100 independently from mood and craving", () => {
@@ -103,8 +104,8 @@ describe("atomic balance persistence", () => {
     const unsaved = daily();
     vi.spyOn(Date, "now").mockReturnValue(today + 10);
     await clearAllData();
-    await expect(commitBalanceRecord(unsaved, null)).rejects.toBeInstanceOf(BalanceConflictError);
-    await expect(writeLocalDraft(`daily-balance:${day}`, dailyDraftFromRecord(unsaved, null), 0, "sleeping-tab")).rejects.toBeInstanceOf(DraftConflictError);
+    await expect(commitBalanceRecord(unsaved, null)).rejects.toThrow();
+    await expect(writeLocalDraft(`daily-balance:${day}`, dailyDraftFromRecord(unsaved, null), 0, "sleeping-tab")).rejects.toThrow();
     expect(await (await getDB()).get("syncMeta", BALANCE_RESET_KEY)).toMatchObject({ value: today + 10 });
     expect((await exportAllData()).settings).toEqual([]);
   });
@@ -114,8 +115,11 @@ describe("atomic balance persistence", () => {
     await clearAllData();
     const epoch = (await (await getDB()).get("syncMeta", BALANCE_EPOCH_KEY))?.value;
     expect(epoch).not.toBe(old.storageEpoch);
+    await expect(commitBalanceRecord(old, null)).rejects.toThrow();
+    await expect(writeLocalDraft(`daily-balance:${day}`, dailyDraftFromRecord(old, null), 0, "old-window")).rejects.toThrow();
+    await simulateFullAppReload();
+    // Record-specific tokens still reject old input even after the app reloads.
     await expect(commitBalanceRecord(old, null)).rejects.toBeInstanceOf(BalanceConflictError);
-    await expect(writeLocalDraft(`daily-balance:${day}`, dailyDraftFromRecord(old, null), 0, "old-window")).rejects.toBeInstanceOf(DraftConflictError);
     const fresh = daily({ mood: 1 });
     expect(fresh.storageEpoch).toBe(epoch);
     await expect(commitBalanceRecord(fresh, null)).resolves.toMatchObject({ mood: 1 });
@@ -176,7 +180,7 @@ describe("atomic balance persistence", () => {
     expect(records).toHaveLength(2);
     expect(records.find(record => record.id === saved.id)).toMatchObject({ mood: 0, emotionalIntensity: 100 });
     expect((await readLocalDraft(`daily-balance:${day}`))?.value).toMatchObject({ mainHours: "25" });
-    await expect(commitBalanceRecord({ ...saved, mood: -1 }, saved.updatedAt)).rejects.toBeInstanceOf(BalanceConflictError);
+    await expect(commitBalanceRecord({ ...saved, mood: -1 }, saved.updatedAt)).rejects.toThrow();
   });
   it("restoring a stale draft preserves its conflict with the newer committed daily record", async () => {
     const old = await commitBalanceRecord(daily({ note: "SYNTHETIC older" }), null);
@@ -184,6 +188,7 @@ describe("atomic balance persistence", () => {
     await writeLocalDraft(`daily-balance:${day}`, { ...dailyDraftFromRecord(old), record: { ...old, note: "SYNTHETIC stale draft" } }, 0, "old-window");
     const exported = await exportAllData();
     expect((await importAllData(exported, { mode: "replace" })).committed).toBe(true);
+    await simulateFullAppReload(); // The restored draft is opened by a new app load.
     const envelope = await readLocalDraft(`daily-balance:${day}`);
     expect(isDailyBalanceDraft(envelope?.value)).toBe(true);
     if (!isDailyBalanceDraft(envelope?.value)) throw new Error("missing draft");

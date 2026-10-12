@@ -15,6 +15,7 @@ import { migrateCompletedTrekRecord } from "@/lib/trekMigration";
 import type { FeatureRecord } from "@/lib/recoveryFeatures";
 import type { AcuteRisk, AcuteRiskSelection } from "./relapseSafety";
 import { BALANCE_EPOCH_KEY, INITIAL_BALANCE_EPOCH, setBalanceEpoch } from "@/lib/balanceEpoch";
+import { captureStorageGeneration, getLoadedStorageGeneration, guardDatabaseWrites, INITIAL_STORAGE_GENERATION, STORAGE_GENERATION_KEY } from "./storageGeneration";
 
 export type {
   AcuteConcern,
@@ -407,7 +408,7 @@ interface AnchorDB extends DBSchema {
   };
 }
 
-export const DATABASE_VERSION = 14;
+export const DATABASE_VERSION = 15;
 let dbInstance: IDBPDatabase<AnchorDB> | null = null;
 let opening: Promise<IDBPDatabase<AnchorDB>> | null = null;
 let blockedError: DatabaseBlockedError | null = null;
@@ -575,6 +576,8 @@ export async function getDB(): Promise<IDBPDatabase<AnchorDB>> {
         records.createIndex("byTimestamp", "timestamp");
         records.createIndex("byRecordType", "recordType");
       }
+      // v15 requires generation-guarded writers after reset/restore. Compatibility
+      // barrier only: no store or record changes. Older windows must reload.
       // v14 protects daily balances, paired activity moments and their typed drafts.
       // Additive compatibility barrier only: no existing record is rewritten.
       // v13 protects retrospective use periods and their typed drafts from
@@ -594,8 +597,10 @@ export async function getDB(): Promise<IDBPDatabase<AnchorDB>> {
   const ready = request.then(async (database) => {
     try {
       const epoch = await database.get("syncMeta", BALANCE_EPOCH_KEY);
+      const generation = await database.get("syncMeta", STORAGE_GENERATION_KEY);
+      captureStorageGeneration(typeof generation?.value === "string" ? generation.value : INITIAL_STORAGE_GENERATION);
       setBalanceEpoch(typeof epoch?.value === "string" ? epoch.value : INITIAL_BALANCE_EPOCH);
-      return database;
+      return guardDatabaseWrites(database, () => getLoadedStorageGeneration());
     } catch (error) {
       database.close();
       throw error;

@@ -87,7 +87,9 @@ export function queueDraftWrite(
 }
 
 export async function flushLocalDrafts(): Promise<void> {
-  await Promise.all([...queues.values()]);
+  // An edit can join this or another draft while an earlier write is pending.
+  // Drain those writes too before an update or explicit navigation may proceed.
+  while (queues.size) await Promise.allSettled([...queues.values()]);
   if (failures.size)
     throw new Error(
       "A draft has not been saved. Return to the form and retry before updating.",

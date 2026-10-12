@@ -6,9 +6,10 @@ import {
   useRef,
   useState,
 } from "react";
-import { getSetting, setSetting } from "@/db";
-import { setRegistrationSessionState } from "@/db/registrationSessionSettings";
+import { getRegistrationSessionState, RegistrationSessionConflictError, setRegistrationSessionState, type RegistrationSessionSnapshot } from "@/db/registrationSessionSettings";
 import { QUICK_REFLECTION_HANDOFF_KEY } from "@/lib/recoveryFeatures";
+import { PersistenceQueue } from "@/lib/persistenceQueue";
+import { flushLocalDrafts } from "@/lib/localDrafts";
 import {
   ACTIVE_REGISTRATION_VERSION,
   parseActiveRegistration,
@@ -27,9 +28,6 @@ export type {
 // One tracker is active at a time and persists through navigation/reloads.
 // Explicitly preserved drafts are kept in a LIFO stack and restored after the
 // newer registration is completed or discarded.
-
-const SETTING_KEY = "activeRegistration";
-const SUSPENDED_SETTING_KEY = "suspendedRegistrations";
 
 function consumeQuickReflectionHandoff(type: RegistrationType): {
   id: string;
@@ -97,6 +95,10 @@ interface ActiveRegistrationValue {
   discardSession: (options?: { restoreSuspended?: boolean }) => Promise<boolean>;
   resetSessions: () => Promise<boolean>;
   retryPersistence: () => Promise<boolean>;
+  flushPersistence: () => Promise<void>;
+  reloadSavedRegistration: () => Promise<boolean>;
+  getFlushedSessionSnapshot: (session: ActiveRegistration) => Promise<RegistrationSessionSnapshot>;
+  reportSessionConflict: (error: RegistrationSessionConflictError) => void;
 }
 
 const ActiveRegistrationContext = createContext<ActiveRegistrationValue | null>(null);
@@ -137,16 +139,29 @@ export function ActiveRegistrationProvider({ children }: { children: React.React
   const [storageError, setStorageError] = useState<Error | null>(null);
   const sessionRef = useRef<ActiveRegistration | null>(null);
   const suspendedRef = useRef<ActiveRegistration[]>([]);
-  const writeQueue = useRef<Promise<void>>(Promise.resolve());
+  const writeQueue = useRef(new PersistenceQueue());
+  const persistedStateRef = useRef<RegistrationSessionSnapshot | null>(null);
+  const replacingInputRef = useRef(false);
+  const storageErrorRef = useRef(storageError);
+  storageErrorRef.current = storageError;
+
+  useEffect(() => {
+    const protectUnsavedRegistration = (event: BeforeUnloadEvent) => {
+      if (!replacingInputRef.current && (writeQueue.current.needsProtection || storageErrorRef.current)) {
+        event.preventDefault();
+        event.returnValue = "";
+      }
+    };
+    window.addEventListener("beforeunload", protectUnsavedRegistration);
+    return () => window.removeEventListener("beforeunload", protectUnsavedRegistration);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([
-      getSetting(SETTING_KEY, ""),
-      getSetting(SUSPENDED_SETTING_KEY, ""),
-    ])
-      .then(async ([rawActive, rawSuspended]) => {
+    getRegistrationSessionState()
+      .then(async (stored) => {
         if (cancelled) return;
+        const { activeRegistration: rawActive, suspendedRegistrations: rawSuspended } = stored;
         const activeResult = parseActiveRegistration(rawActive);
         if (!activeResult.ok) {
           setStorageError(new Error(activeResult.error));
@@ -155,13 +170,7 @@ export function ActiveRegistrationProvider({ children }: { children: React.React
           return;
         }
 
-        let suspended: ActiveRegistration[];
-        try {
-          suspended = parseSuspendedRegistrationStack(rawSuspended);
-        } catch (error) {
-          setStorageError(error instanceof Error ? error : new Error(String(error)));
-          suspended = [];
-        }
+        let suspended = parseSuspendedRegistrationStack(rawSuspended);
 
         let active = activeResult.value;
         // An atomic switch prevents this state during normal use, but older
@@ -174,6 +183,7 @@ export function ActiveRegistrationProvider({ children }: { children: React.React
 
         sessionRef.current = active;
         suspendedRef.current = suspended;
+        persistedStateRef.current = stored;
         setSession(active);
 
         const normalizedActive = active ? JSON.stringify(active) : "";
@@ -183,7 +193,8 @@ export function ActiveRegistrationProvider({ children }: { children: React.React
           normalizedActive !== (rawActive ?? "") ||
           normalizedSuspended !== (rawSuspended ?? "");
         if (needsNormalization) {
-          await setRegistrationSessionState(normalizedActive, normalizedSuspended);
+          await setRegistrationSessionState(normalizedActive, normalizedSuspended, stored);
+          persistedStateRef.current = { activeRegistration: normalizedActive, suspendedRegistrations: normalizedSuspended };
         }
       })
       .catch((error: unknown) => {
@@ -204,12 +215,12 @@ export function ActiveRegistrationProvider({ children }: { children: React.React
     // IndexedDB writes can resolve out of order when several fields change in
     // quick succession. Serialize every snapshot so an older write can never
     // overwrite a newer draft (or resurrect a session after it was cleared).
-    const write = writeQueue.current.then(() =>
-      setSetting(SETTING_KEY, next ? JSON.stringify(next) : ""),
-    );
-    writeQueue.current = write.catch(() => {
-      // Keep the queue usable after a failed write. The individual caller still
-      // receives `false`, and the persistent banner exposes the failure.
+    const activeRegistration = next ? JSON.stringify(next) : "";
+    const write = writeQueue.current.enqueue(async () => {
+      const expected = persistedStateRef.current;
+      if (!expected || typeof expected.suspendedRegistrations !== "string") throw new Error("The saved registration must be loaded before writing.");
+      await setRegistrationSessionState(activeRegistration, expected.suspendedRegistrations, expected);
+      persistedStateRef.current = { ...expected, activeRegistration };
     });
 
     return write.then(
@@ -228,14 +239,12 @@ export function ActiveRegistrationProvider({ children }: { children: React.React
     next: ActiveRegistration | null,
     suspended: ActiveRegistration[],
   ): Promise<boolean> => {
-    const write = writeQueue.current.then(() =>
-      setRegistrationSessionState(
-        next ? JSON.stringify(next) : "",
-        serializeSuspendedRegistrationStack(suspended),
-      ),
-    );
-    writeQueue.current = write.catch(() => {
-      // Keep the queue usable; the caller receives false and the banner stays.
+    const nextState = { activeRegistration: next ? JSON.stringify(next) : "", suspendedRegistrations: serializeSuspendedRegistrationStack(suspended) };
+    const write = writeQueue.current.enqueue(async () => {
+      const expected = persistedStateRef.current;
+      if (!expected) throw new Error("The saved registration must be loaded before writing.");
+      await setRegistrationSessionState(nextState.activeRegistration, nextState.suspendedRegistrations, expected);
+      persistedStateRef.current = nextState;
     });
 
     return write.then(
@@ -410,6 +419,39 @@ export function ActiveRegistrationProvider({ children }: { children: React.React
     () => enqueueWrite(sessionRef.current),
     [enqueueWrite],
   );
+  const flushPersistence = useCallback(async () => {
+    await writeQueue.current.flush();
+    if (storageErrorRef.current) throw storageErrorRef.current;
+  }, []);
+  const reportSessionConflict = useCallback((error: RegistrationSessionConflictError) => setStorageError(error), []);
+  const getFlushedSessionSnapshot = useCallback(async (expectedSession: ActiveRegistration) => {
+    await flushPersistence();
+    const saved = persistedStateRef.current;
+    if (!saved || saved.activeRegistration !== JSON.stringify(expectedSession)) {
+      const error = new RegistrationSessionConflictError();
+      setStorageError(error);
+      throw error;
+    }
+    return { ...saved };
+  }, [flushPersistence]);
+  const reloadSavedRegistration = useCallback(async () => {
+    try {
+      await writeQueue.current.flush().catch(() => undefined);
+      const saved = await getRegistrationSessionState();
+      const active = parseActiveRegistration(saved.activeRegistration);
+      if (!active.ok) throw new Error(active.error);
+      parseSuspendedRegistrationStack(saved.suspendedRegistrations);
+      // This explicit action replaces only the registration input. Other forms
+      // still have to save safely before the whole window may reload.
+      await flushLocalDrafts();
+      replacingInputRef.current = true;
+      window.location.reload();
+      return true;
+    } catch {
+      replacingInputRef.current = false;
+      return false;
+    }
+  }, []);
 
   if (!loaded) return null;
 
@@ -427,6 +469,10 @@ export function ActiveRegistrationProvider({ children }: { children: React.React
         discardSession,
         resetSessions,
         retryPersistence,
+        flushPersistence,
+        reloadSavedRegistration,
+        getFlushedSessionSnapshot,
+        reportSessionConflict,
       }}
     >
       {children}

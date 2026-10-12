@@ -1,4 +1,21 @@
-# Anchor PWA — Implementation Plan
+# Anchor PWA — Historical Implementation Plan
+
+> This is the original scaffold plan, retained for project history. It is not the
+> current architecture, feature checklist or release authorization. In particular,
+> the proposed Clerk account and `/api/sync` below are not part of the deployed PWA.
+
+The current product is a local-only React/Vite PWA with IndexedDB, manual JSON
+backup/restore, Dutch and English interfaces, recovery registrations and tools,
+support planning, personal growth, and connected daily/activity check-ins. It has
+no account, cloud synchronization or deployed application backend. The existing
+five-position navigation and visual identity remain the product baseline.
+
+Use the root [README](../../README.md),
+[release-readiness report](../../RELEASE_READINESS.md),
+[daily balance plan](../../docs/DAILY_BALANCE_PLAN.md) and
+[design principles](docs/DESIGN_PRINCIPLES.md) for current requirements and evidence.
+
+## Original proposal (superseded)
 
 ## Product
 A mobile-first, offline-capable Progressive Web App for drug addiction recovery support.
