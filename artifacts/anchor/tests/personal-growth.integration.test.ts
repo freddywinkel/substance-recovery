@@ -1,12 +1,11 @@
+import { clearDataAndReload, importDataAndReload } from "./helpers/storageSession";
 import "fake-indexeddb/auto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  clearAllData,
   exportAllData,
   getFeatureRecords,
   getJournalEntries,
   getSetting,
-  importAllData,
   previewImportData,
   saveFeatureRecord,
   setSetting,
@@ -74,7 +73,7 @@ const envelope = (value: unknown) =>
   });
 beforeEach(async () => {
   vi.restoreAllMocks();
-  await clearAllData();
+  await clearDataAndReload();
 });
 
 describe("personal growth contracts", () => {
@@ -228,21 +227,21 @@ describe("personal growth persistence", () => {
     await expect(removePersonalGrowthRecord(saved)).rejects.toThrow();
     expect(await getFeatureRecords()).toEqual([saved]);
     expect(await getSetting(draftKey)).toBe(draftValue);
-    expect((await (await getDB()).getAll("syncMeta")).filter(item => !['daily-balance-reset-at', 'daily-balance-epoch'].includes(item.key))).toEqual([]);
+    expect((await (await getDB()).getAll("syncMeta")).filter(item => !['daily-balance-reset-at', 'daily-balance-epoch', 'storage-generation'].includes(item.key))).toEqual([]);
   });
   it("keeps deletion markers content-free and local while allowing deliberate backup restoration and complete erasure", async () => {
     const saved = await commitPersonalGrowthRecord(moment(), null);
     const beforeDeletion = await exportAllData();
     await removePersonalGrowthRecord(saved);
     const db = await getDB();
-    expect((await db.getAll("syncMeta")).filter(item => !['daily-balance-reset-at', 'daily-balance-epoch'].includes(item.key))).toEqual([{ key: `personal-growth-deleted:${saved.id}`, value: saved.timestamp }]);
+    expect((await db.getAll("syncMeta")).filter(item => !['daily-balance-reset-at', 'daily-balance-epoch', 'storage-generation'].includes(item.key))).toEqual([{ key: `personal-growth-deleted:${saved.id}`, value: saved.timestamp }]);
     const afterDeletion = await exportAllData();
     expect(afterDeletion).not.toHaveProperty("syncMeta");
     expect(JSON.stringify(afterDeletion)).not.toContain(saved.note);
-    expect((await importAllData(beforeDeletion)).committed).toBe(true);
+    expect((await importDataAndReload(beforeDeletion)).committed).toBe(true);
     await expect(commitPersonalGrowthRecord({ ...saved, note: "SYNTHETIC intentionally restored edit" }, saved.updatedAt)).resolves.toMatchObject({ id: saved.id });
-    await clearAllData();
-    expect((await db.getAll("syncMeta")).filter(item => !['daily-balance-reset-at', 'daily-balance-epoch'].includes(item.key))).toEqual([]);
+    await clearDataAndReload();
+    expect((await db.getAll("syncMeta")).filter(item => !['daily-balance-reset-at', 'daily-balance-epoch', 'storage-generation'].includes(item.key))).toEqual([]);
     await expect(commitPersonalGrowthRecord(moment(), null)).resolves.toMatchObject({ id: saved.id });
   });
   it("preserves a different new-moment draft when deleting an existing moment", async () => {
@@ -288,8 +287,8 @@ describe("personal growth persistence", () => {
     const exported = await exportAllData();
     expect(exported.version).toBe(6);
     expect((await previewImportData(exported)).canImport).toBe(true);
-    await clearAllData();
-    expect((await importAllData(exported, { mode: "replace" })).committed).toBe(
+    await clearDataAndReload();
+    expect((await importDataAndReload(exported, { mode: "replace" })).committed).toBe(
       true,
     );
     expect(await getFeatureRecords()).toEqual(
@@ -298,7 +297,7 @@ describe("personal growth persistence", () => {
     expect(await getJournalEntries()).toEqual([existing]);
     for (const setting of settings)
       expect(await getSetting(setting.key)).toEqual(setting.value);
-    expect((await importAllData(exported)).committed).toBe(true);
+    expect((await importDataAndReload(exported)).committed).toBe(true);
     expect(await getFeatureRecords()).toHaveLength(2);
   });
   it.each([1, 2, 3, 4])(
@@ -316,8 +315,8 @@ describe("personal growth persistence", () => {
     await setSetting(key, value);
     const exported = await exportAllData();
     expect((await previewImportData(exported)).canImport).toBe(true);
-    await clearAllData();
-    expect((await importAllData(exported, { mode: "replace" })).committed).toBe(true);
+    await clearDataAndReload();
+    expect((await importDataAndReload(exported, { mode: "replace" })).committed).toBe(true);
     expect(await getSetting(key)).toBe(value);
     expect(await getFeatureRecords()).toEqual([saved]);
   });
@@ -341,7 +340,7 @@ describe("personal growth persistence", () => {
     ]) {
       expect((await previewImportData(payload)).canImport).toBe(false);
       expect(
-        (await importAllData(payload, { mode: "replace" })).committed,
+        (await importDataAndReload(payload, { mode: "replace" })).committed,
       ).toBe(false);
       expect(await getFeatureRecords()).toHaveLength(1);
     }
@@ -357,7 +356,7 @@ describe("personal growth persistence", () => {
       backup({ settings: [{ key: "draft:growth-moment:new", value: envelope(reservedDraft) }] }),
     ]) {
       expect((await previewImportData(payload)).canImport).toBe(false);
-      expect((await importAllData(payload, { mode: "replace" })).committed).toBe(false);
+      expect((await importDataAndReload(payload, { mode: "replace" })).committed).toBe(false);
       expect(await getFeatureRecords()).toEqual([existing]);
     }
   });

@@ -75,15 +75,15 @@ describe("database write compatibility and recovery", () => {
   beforeEach(() => { vi.resetModules(); vi.stubGlobal("indexedDB", new IDBFactory()); });
   afterEach(() => { connections.splice(0).forEach(db => db.close()); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
-  it.each([9, 10, 11, 12, 13])("upgrades v%s to v14 without rewriting any record or store, including raw drafts and tombstones", async version => {
+  it.each([9, 10, 11, 12, 13, 14])("upgrades v%s to v15 without rewriting any record or store, including raw drafts and tombstones", async version => {
     const legacy = await seed(version);
     const before = await snapshot(legacy);
     legacy.close();
     const { getDB, DATABASE_VERSION } = await import("../src/db/schema");
     const db = await getDB(); connections.push(db);
     expect(db.version).toBe(DATABASE_VERSION);
-    expect(db.version).toBe(14);
-    const native = await openNative(14);
+    expect(db.version).toBe(15);
+    const native = await openNative(15);
     expect(await snapshot(native)).toEqual(before);
     const { getDatabaseLifecycleStatus } = await import("../src/db/lifecycle");
     expect(getDatabaseLifecycleStatus()).toBeNull();
@@ -107,16 +107,17 @@ describe("database write compatibility and recovery", () => {
     await expect(openNative(9)).rejects.toMatchObject({ name: "VersionError" });
     await expect(openNative(12)).rejects.toMatchObject({ name: "VersionError" });
     await expect(openNative(13)).rejects.toMatchObject({ name: "VersionError" });
+    await expect(openNative(14)).rejects.toMatchObject({ name: "VersionError" });
     expect(await db.get("settings", "recoveryPlan")).toEqual(syntheticRows.settings[0]);
   });
 
-  it("closes a v14 connection on a future upgrade and refuses all further access until the app reloads", async () => {
+  it("closes a v15 connection on a future upgrade and refuses all further access until the app reloads", async () => {
     const legacy = await seed(); legacy.close();
     const { getDB } = await import("../src/db/schema");
     const { getDatabaseLifecycleStatus } = await import("../src/db/lifecycle");
     const current = await getDB(); connections.push(current);
-    const newer = await openNative(15);
-    expect(newer.version).toBe(15);
+    const newer = await openNative(16);
+    expect(newer.version).toBe(16);
     expect(getDatabaseLifecycleStatus()?.kind).toBe("outdated");
     await expect(getDB()).rejects.toMatchObject({ name: "DatabaseOutdatedError" });
     expect(() => current.transaction("settings", "readwrite")).toThrow();
@@ -124,12 +125,12 @@ describe("database write compatibility and recovery", () => {
   });
 
   it("treats an already newer database as outdated instead of attempting a destructive reset", async () => {
-    const newer = await seed(15); const before = await snapshot(newer); newer.close();
+    const newer = await seed(16); const before = await snapshot(newer); newer.close();
     const { getDB } = await import("../src/db/schema");
     const { getDatabaseLifecycleStatus } = await import("../src/db/lifecycle");
     await expect(getDB()).rejects.toMatchObject({ name: "DatabaseOutdatedError" });
     expect(getDatabaseLifecycleStatus()?.kind).toBe("outdated");
-    expect(await snapshot(await openNative(15))).toEqual(before);
+    expect(await snapshot(await openNative(16))).toEqual(before);
   });
 
   it("allows retry after a transient open failure and requires a clean provider reload", async () => {
@@ -140,7 +141,7 @@ describe("database write compatibility and recovery", () => {
     expect(getDatabaseLifecycleStatus()?.kind).toBe("unavailable");
     openSpy.mockRestore();
     const db = await getDB(); connections.push(db);
-    expect(db.version).toBe(14);
+    expect(db.version).toBe(15);
     expect(getDatabaseLifecycleStatus()?.kind).toBe("reload-required");
   });
   it("closes the opened connection after an epoch read failure and allows a clean retry without losing data", async () => {
@@ -158,9 +159,9 @@ describe("database write compatibility and recovery", () => {
     expect(closeSpy).toHaveBeenCalledTimes(1);
     readSpy.mockRestore();
     const db = await getDB(); connections.push(db);
-    expect(db.version).toBe(14);
+    expect(db.version).toBe(15);
     expect(getDatabaseLifecycleStatus()?.kind).toBe("reload-required");
-    expect(await snapshot(await openNative(14))).toEqual(before);
+    expect(await snapshot(await openNative(15))).toEqual(before);
   });
 
   it("retains the complete old database after an aborted upgrade and succeeds on a later retry", async () => {
@@ -177,7 +178,7 @@ describe("database write compatibility and recovery", () => {
     expect(await snapshot(unchanged)).toEqual(before);
     unchanged.close(); openSpy.mockRestore();
     const db = await getDB(); connections.push(db);
-    expect(db.version).toBe(14);
-    expect(await snapshot(await openNative(14))).toEqual(before);
+    expect(db.version).toBe(15);
+    expect(await snapshot(await openNative(15))).toEqual(before);
   });
 });

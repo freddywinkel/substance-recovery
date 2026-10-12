@@ -19,7 +19,7 @@ export function DatabaseGate({ children }: { children: ReactNode }) {
 
   async function retry() {
     if (retrying) return;
-    if (status?.kind === "outdated") { window.location.reload(); return; }
+    if (status?.kind === "outdated" || status?.kind === "reset") { window.location.reload(); return; }
     setRetrying(true);
     setRetryError(false);
     try { await getDB(); window.location.reload(); }
@@ -33,6 +33,8 @@ export function DatabaseGate({ children }: { children: ReactNode }) {
       ? (nl ? "Sluit andere Anchor-vensters" : "Close other Anchor windows")
       : status?.kind === "outdated"
         ? (nl ? "Open de bijgewerkte app" : "Open the updated app")
+        : status?.kind === "reset"
+          ? (nl ? "Je lokale gegevens zijn gewist of hersteld" : "Your local data was erased or restored")
         : status?.kind === "reload-required"
           ? (nl ? "Je gegevens zijn klaar om opnieuw te openen" : "Your data is ready to reopen")
           : (nl ? "Je gegevens zijn nu niet beschikbaar" : "Your data is currently unavailable");
@@ -40,6 +42,8 @@ export function DatabaseGate({ children }: { children: ReactNode }) {
     ? (nl ? "Een andere tab of geïnstalleerd Anchor-venster houdt de vorige database open. Sluit die vensters en probeer opnieuw. De update wist geen gegevens." : "Another tab or installed Anchor window is keeping the previous database open. Close those windows and retry. This update does not erase data.")
     : status?.kind === "outdated"
       ? (nl ? "Een nieuwere app gebruikt deze database. Dit venster kan daarom niets meer opslaan. Werk de app bij en herlaad dit venster. Wis geen sitegegevens." : "A newer app uses this database. This window can no longer save. Update the app and reload this window. Do not clear site data.")
+      : status?.kind === "reset"
+        ? (nl ? "Dit venster gebruikt nog de vorige gegevens. Opslaan is gestopt zodat oude invoer je gewiste of herstelde gegevens niet terugzet. Herlaad dit venster om verder te gaan." : "This window still uses the previous data. Saving has stopped so old input cannot bring back erased data or overwrite a restore. Reload this window to continue.")
       : status?.kind === "reload-required"
         ? (nl ? "Herlaad Anchor om alle schermen met je bewaarde gegevens te openen." : "Reload Anchor to open every screen with your saved data.")
         : status?.kind === "unavailable"

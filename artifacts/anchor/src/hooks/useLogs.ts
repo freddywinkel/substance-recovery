@@ -27,6 +27,7 @@ import {
   deleteBoredomLog,
 } from "@/db";
 import { cravingRegistrationKind } from "@/lib/canonicalRegistration";
+import { RegistrationSessionConflictError, type RegistrationSessionSnapshot } from "@/db/registrationSessionSettings";
 import {
   useActiveRegistration,
   type RegistrationType,
@@ -135,7 +136,7 @@ function withSessionMetadata<T extends RegistrationLog>(
 }
 
 export function useLogs() {
-  const { session } = useActiveRegistration();
+  const { session, getFlushedSessionSnapshot, reportSessionConflict } = useActiveRegistration();
   const [cigaretteLogs, setCigaretteLogs] = useState<CigaretteLog[]>([]);
   const [cravingLogs, setCravingLogs] = useState<CravingLog[]>([]);
   const [relapseLogs, setRelapseLogs] = useState<RelapseLog[]>([]);
@@ -195,15 +196,28 @@ export function useLogs() {
     };
   }, [load]);
 
+  const saveRegistration = useCallback(async <T extends RegistrationLog>(
+    entry: Omit<T, "id">,
+    expectedType: RegistrationType,
+    save: (record: Omit<T, "id"> & { id?: string }, expected: RegistrationSessionSnapshot) => Promise<T>,
+  ): Promise<T> => {
+    try {
+      if (!session || session.type !== expectedType) throw new RegistrationSessionConflictError();
+      const expected = await getFlushedSessionSnapshot(session);
+      return await save(withSessionMetadata(entry, expectedType, session), expected);
+    } catch (error) {
+      if (error instanceof RegistrationSessionConflictError) reportSessionConflict(error);
+      throw error;
+    }
+  }, [session, getFlushedSessionSnapshot, reportSessionConflict]);
+
   const logCraving = useCallback(
     async (entry: Omit<CravingLog, "id">) => {
       const expectedType = cravingRegistrationKind(entry);
       if (!expectedType) {
         throw new Error("Craving registration is missing its canonical registrationType answer.");
       }
-      const result = await addCravingLog(
-        withSessionMetadata(entry, expectedType, session),
-      );
+      const result = await saveRegistration(entry, expectedType, addCravingLog);
       try {
         setCravingLogs(await getCravingLogs());
         clearReadbackIssue();
@@ -213,7 +227,7 @@ export function useLogs() {
       }
       return result;
     },
-    [clearReadbackIssue, noteReadbackFailure, session]
+    [clearReadbackIssue, noteReadbackFailure, saveRegistration]
   );
 
   const removeCraving = useCallback(async (id: string) => {
@@ -240,9 +254,7 @@ export function useLogs() {
 
   const logRelapse = useCallback(
     async (entry: Omit<RelapseLog, "id">) => {
-      const result = await addRelapseLog(
-        withSessionMetadata(entry, "relapse", session),
-      );
+      const result = await saveRegistration(entry, "relapse", addRelapseLog);
       try {
         setRelapseLogs(await getRelapseLogs());
         clearReadbackIssue();
@@ -252,7 +264,7 @@ export function useLogs() {
       }
       return result;
     },
-    [clearReadbackIssue, noteReadbackFailure, session]
+    [clearReadbackIssue, noteReadbackFailure, saveRegistration]
   );
 
   const removeRelapse = useCallback(async (id: string) => {
@@ -279,9 +291,7 @@ export function useLogs() {
 
   const logAnxiety = useCallback(
     async (entry: Omit<AnxietyLog, "id">) => {
-      const result = await addAnxietyLog(
-        withSessionMetadata(entry, "anxiety", session),
-      );
+      const result = await saveRegistration(entry, "anxiety", addAnxietyLog);
       try {
         setAnxietyLogs(await getAnxietyLogs());
         clearReadbackIssue();
@@ -291,7 +301,7 @@ export function useLogs() {
       }
       return result;
     },
-    [clearReadbackIssue, noteReadbackFailure, session]
+    [clearReadbackIssue, noteReadbackFailure, saveRegistration]
   );
 
   const removeAnxiety = useCallback(async (id: string) => {
@@ -318,9 +328,7 @@ export function useLogs() {
 
   const logBoredom = useCallback(
     async (entry: Omit<BoredomLog, "id">) => {
-      const result = await addBoredomLog(
-        withSessionMetadata(entry, "boredom", session),
-      );
+      const result = await saveRegistration(entry, "boredom", addBoredomLog);
       try {
         setBoredomLogs(await getBoredomLogs());
         clearReadbackIssue();
@@ -330,7 +338,7 @@ export function useLogs() {
       }
       return result;
     },
-    [clearReadbackIssue, noteReadbackFailure, session]
+    [clearReadbackIssue, noteReadbackFailure, saveRegistration]
   );
 
   const removeBoredom = useCallback(async (id: string) => {

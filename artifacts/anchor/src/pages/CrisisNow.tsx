@@ -94,7 +94,7 @@ export function CrisisNow() {
               <h2 id="emergency-routes-title" className="text-sm font-semibold text-foreground">
                 {t("help.emergency")}
               </h2>
-              <p className="text-sm text-muted-foreground mt-1 leading-relaxed">
+              <p className="text-sm text-foreground mt-1 leading-relaxed">
                 {t("crisis.emergency_text")}
               </p>
             </div>

@@ -1,4 +1,4 @@
-export type DatabaseLifecycleKind = "opening" | "blocked" | "outdated" | "unavailable" | "reload-required";
+export type DatabaseLifecycleKind = "opening" | "blocked" | "outdated" | "unavailable" | "reload-required" | "reset";
 export interface DatabaseLifecycleStatus { kind: DatabaseLifecycleKind; error?: Error; }
 let status: DatabaseLifecycleStatus | null = { kind: "opening" };
 const listeners = new Set<() => void>();

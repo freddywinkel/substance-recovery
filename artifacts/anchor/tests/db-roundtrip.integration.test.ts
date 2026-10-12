@@ -1,10 +1,10 @@
+import { clearDataAndReload, importDataAndReload } from "./helpers/storageSession";
 import "fake-indexeddb/auto";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   addCravingLog,
   addRelapseLog,
-  clearAllData,
   exportAllData,
   getCravingLogs,
   getRelapseLogs,
@@ -12,7 +12,6 @@ import {
   getEmergencyContacts,
   getFeatureRecords,
   getSetting,
-  importAllData,
   reconcileQuickReflectionLinks,
   saveCrisisService,
   saveFeatureRecord,
@@ -174,11 +173,11 @@ function emptyBackup(overrides: Record<string, unknown> = {}) {
 
 describe("IndexedDB backup and retry integration", () => {
   beforeEach(async () => {
-    await clearAllData();
+    await clearDataAndReload();
   });
 
   afterEach(async () => {
-    await clearAllData();
+    await clearDataAndReload();
   });
 
   it("saves, reads, exports, clears, and restores a registration", async () => {
@@ -199,10 +198,10 @@ describe("IndexedDB backup and retry integration", () => {
       ],
     });
 
-    await clearAllData();
+    await clearDataAndReload();
     expect(await getCravingLogs()).toEqual([]);
 
-    const result = await importAllData(backup);
+    const result = await importDataAndReload(backup);
     expect(result.skipped).toBe(0);
     expect(result.errors).toEqual([]);
     expect(await getCravingLogs()).toMatchObject([
@@ -293,9 +292,9 @@ describe("IndexedDB backup and retry integration", () => {
     // normalize them instead of skipping the otherwise valid record.
     delete quickInBackup.linkedDetailedRecordId;
 
-    await clearAllData();
+    await clearDataAndReload();
     expect(await getFeatureRecords()).toEqual([]);
-    expect(await importAllData(backup)).toMatchObject({ skipped: 0, errors: [] });
+    expect(await importDataAndReload(backup)).toMatchObject({ skipped: 0, errors: [] });
     expect(await getFeatureRecords()).toHaveLength(4);
     expect((await getFeatureRecords()).find((record) => record.id === "quick-backup")).toMatchObject({
       id: "quick-backup",
@@ -321,8 +320,8 @@ describe("IndexedDB backup and retry integration", () => {
     await setRegistrationSessionState("", JSON.stringify(suspended));
 
     const backup = await exportAllData();
-    await clearAllData();
-    expect(await importAllData(backup)).toMatchObject({ skipped: 0, errors: [] });
+    await clearDataAndReload();
+    expect(await importDataAndReload(backup)).toMatchObject({ skipped: 0, errors: [] });
     expect(JSON.parse(String(await getSetting("suspendedRegistrations")))).toMatchObject([
       { recordId: "suspended-craving", type: "craving", step: "onset" },
     ]);
@@ -364,8 +363,8 @@ describe("IndexedDB backup and retry integration", () => {
       });
 
     const backup = await exportAllData();
-    await clearAllData();
-    expect(await importAllData(backup)).toMatchObject({ skipped: 0, errors: [] });
+    await clearDataAndReload();
+    expect(await importDataAndReload(backup)).toMatchObject({ skipped: 0, errors: [] });
     expect((await getCravingLogs()).find((record) => record.id === "detailed-linked-roundtrip")?.answers)
       .toMatchObject({ quickRegistrationId: "quick-linked-roundtrip" });
   });
@@ -388,8 +387,8 @@ describe("IndexedDB backup and retry integration", () => {
     await updateCravingLog(withCanonicalNote(saved, "  Edited in History  "));
 
     const backup = await exportAllData();
-    await clearAllData();
-    expect(await importAllData(backup)).toMatchObject({ skipped: 0, errors: [] });
+    await clearDataAndReload();
+    expect(await importDataAndReload(backup)).toMatchObject({ skipped: 0, errors: [] });
     expect(await getCravingLogs()).toMatchObject([{
       note: "Edited in History",
       answers: { note: "Edited in History" },
@@ -422,8 +421,8 @@ describe("IndexedDB backup and retry integration", () => {
       }],
     });
 
-    await clearAllData();
-    const imported = await importAllData(backup);
+    await clearDataAndReload();
+    const imported = await importDataAndReload(backup);
     expect(imported).toMatchObject({ skipped: 0, errors: [] });
     expect(await getRelapseLogs()).toMatchObject([{
       acuteRisks: ["unsafe", "withdrawal", "self-harm-risk"],
@@ -439,7 +438,7 @@ describe("IndexedDB backup and retry integration", () => {
       acuteRisk: "withdrawal",
       when: "yesterday",
     });
-    const imported = await importAllData(emptyBackup({ relapseLogs: [legacy] }));
+    const imported = await importDataAndReload(emptyBackup({ relapseLogs: [legacy] }));
 
     expect(imported).toMatchObject({ skipped: 0, errors: [] });
     expect(await getRelapseLogs()).toMatchObject([{
@@ -469,7 +468,7 @@ describe("IndexedDB backup and retry integration", () => {
       answers: { acuteRisks: ["none"], acuteRisk: "unsafe" },
     });
 
-    const imported = await importAllData(emptyBackup({
+    const imported = await importDataAndReload(emptyBackup({
       relapseLogs: [legacyNone, canonicalNone],
     }));
     expect(imported).toMatchObject({ skipped: 0, errors: [] });
@@ -507,7 +506,7 @@ describe("IndexedDB backup and retry integration", () => {
       },
     });
 
-    expect(await importAllData(emptyBackup({ relapseLogs: [deployedV2] })))
+    expect(await importDataAndReload(emptyBackup({ relapseLogs: [deployedV2] })))
       .toMatchObject({ skipped: 0, errors: [] });
     expect(await getRelapseLogs()).toMatchObject([{
       id: "deployed-v2-follow-up",
@@ -529,8 +528,8 @@ describe("IndexedDB backup and retry integration", () => {
     }]);
 
     const backup = await exportAllData();
-    await clearAllData();
-    expect(await importAllData(backup)).toMatchObject({ skipped: 0, errors: [] });
+    await clearDataAndReload();
+    expect(await importDataAndReload(backup)).toMatchObject({ skipped: 0, errors: [] });
     expect(await getRelapseLogs()).toMatchObject([{
       answers: {
         acuteRisks: ["none"],
@@ -544,7 +543,7 @@ describe("IndexedDB backup and retry integration", () => {
   });
 
   it("rejects contradictory canonical safety arrays and an amount without a target", async () => {
-    const imported = await importAllData(emptyBackup({
+    const imported = await importDataAndReload(emptyBackup({
       relapseLogs: [
         relapseRecord({
           id: "conflicting-risks",
@@ -590,8 +589,8 @@ describe("IndexedDB backup and retry integration", () => {
       answers: { emotionAfter: 7 },
     }]);
     const backup = await exportAllData();
-    await clearAllData();
-    expect(await importAllData(backup)).toMatchObject({ skipped: 0, errors: [] });
+    await clearDataAndReload();
+    expect(await importDataAndReload(backup)).toMatchObject({ skipped: 0, errors: [] });
     expect(await getRelapseLogs()).toMatchObject([{
       when: "yesterday",
       emotionAfter: 7,
@@ -629,7 +628,7 @@ describe("IndexedDB backup and retry integration", () => {
       crisisService: null,
     };
 
-    const result = await importAllData(historicalBackup);
+    const result = await importDataAndReload(historicalBackup);
 
     expect(result.skipped).toBe(0);
     expect(result.errors).toEqual([]);
@@ -646,7 +645,7 @@ describe("IndexedDB backup and retry integration", () => {
   });
 
   it("reports malformed present top-level contact and crisis fields", async () => {
-    const result = await importAllData(emptyBackup({
+    const result = await importDataAndReload(emptyBackup({
       emergencyContacts: { id: "not-an-array" },
       crisisService: "not-a-service",
     }));
@@ -666,7 +665,7 @@ describe("IndexedDB backup and retry integration", () => {
       isCustom: true,
     });
 
-    const result = await importAllData(emptyBackup({
+    const result = await importDataAndReload(emptyBackup({
       emergencyContacts: [
         {
           id: "contact-1",

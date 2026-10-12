@@ -1,10 +1,11 @@
+import { clearDataAndReload, importDataAndReload } from "./helpers/storageSession";
 import "fake-indexeddb/auto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createBlankQuickRegistrationDraft, isQuickRegistrationDraft } from "../src/lib/quickRegistrationDraft";
 import { isJourneyDateDraft, isValidSettingsDate, localSettingsDate, performSettingsReset } from "../src/lib/settingsActions";
-import { clearAllData, exportAllData, getSetting, importAllData, setSetting } from "../src/db/crud";
+import { exportAllData, getSetting, setSetting } from "../src/db/crud";
 
-beforeEach(async () => { await clearAllData(); });
+beforeEach(async () => { await clearDataAndReload(); });
 
 describe("quick draft payload validation", () => {
   it("preserves unanswered, explicit zero, GHB and optional fields absent in older drafts", () => {
@@ -28,13 +29,13 @@ describe("quick draft payload validation", () => {
     const envelope = { version: 1, revision: 1, updatedAt: 100, clientId: "synthetic", value: { ...createBlankQuickRegistrationDraft(), intensity: 0, note: "unfinished" } };
     await setSetting("draft:quick-registration", JSON.stringify(envelope));
     const backup = await exportAllData();
-    await clearAllData();
-    expect((await importAllData(backup, { mode: "replace" })).committed).toBe(true);
+    await clearDataAndReload();
+    expect((await importDataAndReload(backup, { mode: "replace" })).committed).toBe(true);
     expect(JSON.parse(String(await getSetting("draft:quick-registration")))).toEqual(envelope);
     const corrupt = structuredClone(backup);
     const settings = corrupt.settings as Array<{ key: string; value: unknown }>;
     settings.find(item => item.key === "draft:quick-registration")!.value = JSON.stringify({ ...envelope, value: { ...envelope.value, immediateSafety: [] } });
-    expect((await importAllData(corrupt, { mode: "replace" })).committed).toBe(false);
+    expect((await importDataAndReload(corrupt, { mode: "replace" })).committed).toBe(false);
     expect(JSON.parse(String(await getSetting("draft:quick-registration")))).toEqual(envelope);
   });
 });

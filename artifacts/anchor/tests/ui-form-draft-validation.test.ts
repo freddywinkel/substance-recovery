@@ -1,11 +1,12 @@
+import { clearDataAndReload, importDataAndReload } from "./helpers/storageSession";
 import "fake-indexeddb/auto";
 import { beforeEach, describe, expect, it } from "vitest";
 import { createSupportiveActionDraft, isSupportiveActionDraft } from "../src/lib/supportiveActionDraft";
 import { isHomeCustomizationDraft } from "../src/lib/homeCustomizationDraft";
 import { DEFAULT_HOME_PREFERENCES } from "../src/lib/recoveryFeatures";
-import { clearAllData, exportAllData, getSetting, importAllData, previewImportData, setSetting } from "../src/db/crud";
+import { exportAllData, getSetting, previewImportData, setSetting } from "../src/db/crud";
 
-beforeEach(async () => { await clearAllData(); });
+beforeEach(async () => { await clearDataAndReload(); });
 const settingsDraft = (key: string, value: unknown) => ({ key: `draft:${key}`, value: JSON.stringify({ version: 1, revision: 1, updatedAt: 1780000000000, clientId: "synthetic", value }) });
 const backup = (settings: unknown[]) => ({ version: 3, dataVersion: 3, journal: [], cravingLogs: [], relapseLogs: [], anxietyLogs: [], boredomLogs: [], featureRecords: [], settings });
 
@@ -30,9 +31,9 @@ describe("unfinished action and home editor drafts", () => {
   it("backs up and restores unsaved action, home choices and a future date awaiting correction", async () => {
     const settings = [settingsDraft("supportive-action", { ...createSupportiveActionDraft(), label: "Synthetic input" }), settingsDraft("home-customization", { ...DEFAULT_HOME_PREFERENCES, hiddenWidgets: ["sobriety"] }), settingsDraft("journey-date", "2099-01-01")];
     expect((await previewImportData(backup(settings))).canImport).toBe(true);
-    expect((await importAllData(backup(settings))).committed).toBe(true);
-    const exported = await exportAllData(); await clearAllData();
-    expect((await importAllData(exported)).committed).toBe(true);
+    expect((await importDataAndReload(backup(settings))).committed).toBe(true);
+    const exported = await exportAllData(); await clearDataAndReload();
+    expect((await importDataAndReload(exported)).committed).toBe(true);
     for (const setting of settings) expect(await getSetting(setting.key)).toBe(setting.value);
   });
   it("rejects malformed new draft payloads before replacing any saved settings", async () => {
@@ -41,7 +42,7 @@ describe("unfinished action and home editor drafts", () => {
     for (const setting of malformed) {
       const payload = backup([{ key: "theme", value: "light" }, setting]);
       expect((await previewImportData(payload)).canImport).toBe(false);
-      expect((await importAllData(payload)).committed).toBe(false);
+      expect((await importDataAndReload(payload)).committed).toBe(false);
       expect(await getSetting("theme")).toBe("dark");
     }
   });

@@ -5,7 +5,10 @@ import { writeFile, mkdir } from 'node:fs/promises';
 import assert from 'node:assert/strict';
 
 if (!process.env.PWA_TEST_ROOT || !process.env.PWA_UPDATE_ROOT) throw new Error('Provide two actual builds in PWA_TEST_ROOT and PWA_UPDATE_ROOT.');
-const port = 8754;
+const port = Number(process.env.PWA_TEST_PORT || 8754);
+const expectedPriorVersion = Number(process.env.PWA_EXPECTED_PRIOR_DB_VERSION || 15);
+const expectedNextVersion = Number(process.env.PWA_EXPECTED_NEXT_DB_VERSION || 15);
+if (![expectedPriorVersion, expectedNextVersion].every(version => Number.isSafeInteger(version) && version > 0)) throw new Error('Expected database versions must be positive integers.');
 const base = `http://127.0.0.1:${port}/substance-recovery/`;
 const output = resolve(process.env.PWA_UPDATE_EVIDENCE || 'test-results/daily-balance-update');
 await mkdir(output, { recursive: true });
@@ -93,7 +96,7 @@ try {
   await page.getByRole('button', { name: 'Opnieuw proberen', exact: true }).click();
   await draftSaved();
   const before = await snapshot();
-  assert.equal(before.databaseVersion, 14);
+  assert.equal(before.databaseVersion, expectedPriorVersion);
   assert.equal(before.records.length, 3);
   assert.equal(before.drafts.length, 2);
   const savedDay = before.records.find(record => record.recordType === 'daily-balance');
@@ -107,16 +110,19 @@ try {
   await page.waitForFunction(before => document.querySelector('meta[name="anchor-build"]')?.getAttribute('content') !== before, beforeBuild, { timeout: 30000 });
   await note.waitFor(); assert.equal(await note.inputValue(), latestNote);
   const afterBuild = await page.locator('meta[name="anchor-build"]').getAttribute('content');
-  assert.deepEqual(await snapshot(), before);
+  // An explicitly expected compatibility-barrier upgrade changes only the
+  // schema version. Every record and raw draft must still match byte for byte.
+  const expectedAfter = { ...before, databaseVersion: expectedNextVersion };
+  assert.deepEqual(await snapshot(), expectedAfter);
   await context.setOffline(true);
   await page.reload(); await note.waitFor(); assert.equal(await note.inputValue(), latestNote);
   await page.goto(`${base}daily?date=${day}`);
   await draftSaved();
   assert.equal(await mainSleep.getByRole('textbox', { name: 'Hoofdslaap · Uren', exact: true }).inputValue(), '25');
-  assert.deepEqual(await snapshot(), before);
+  assert.deepEqual(await snapshot(), expectedAfter);
   assert.deepEqual(errors, []);
   await page.screenshot({ path: resolve(output, 'offline-day-and-draft-preserved.png') });
-  const result = { beforeBuild, afterBuild, databaseVersion: before.databaseVersion, savedDayCount: 1, savedMomentCount: 2, rawDraftCount: 2,
+  const result = { beforeBuild, afterBuild, beforeDatabaseVersion: before.databaseVersion, afterDatabaseVersion: expectedNextVersion, savedDayCount: 1, savedMomentCount: 2, rawDraftCount: 2,
     completeRecordsByteForBytePreserved: true, invalidSleepDraftPreserved: true, unfinishedAfterRatingsAndNewestNotePreserved: true,
     failedDraftBlockedUpdate: true, retryThenUpdatePassed: true, offlineReloadPassed: true, runtimeErrors: errors, browser: await browser.version(), physicalInstalledAppTest: false };
   await writeFile(resolve(output, 'result.json'), JSON.stringify(result, null, 2));

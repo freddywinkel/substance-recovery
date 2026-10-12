@@ -1,12 +1,13 @@
+import { clearDataAndReload, importDataAndReload } from "./helpers/storageSession";
 import "fake-indexeddb/auto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { clearAllData, exportAllData, getSetting, importAllData, setSetting } from "../src/db/crud";
+import { exportAllData, getSetting, setSetting } from "../src/db/crud";
 import { commitRecoveryPlan } from "../src/db/planPersistence";
 import { DEFAULT_RECOVERY_PLAN, parseRecoveryPlan, isValidRecoveryPlan } from "../src/lib/recoveryFeatures";
 import { emptyPreventionPlan, isValidPreventionPlan } from "../src/lib/preventionPlan";
 import { DraftConflictError, flushLocalDrafts, queueDraftWrite, readLocalDraft, removeLocalDraft, resetLocalDraftMemory, writeLocalDraft } from "../src/lib/localDrafts";
 
-beforeEach(async () => { vi.restoreAllMocks(); await flushLocalDrafts().catch(() => undefined); resetLocalDraftMemory(); await clearAllData(); });
+beforeEach(async () => { vi.restoreAllMocks(); await flushLocalDrafts().catch(() => undefined); resetLocalDraftMemory(); await clearDataAndReload(); });
 
 const plan = () => ({ ...DEFAULT_RECOVERY_PLAN, warningSigns: ["My original signal"], prevention: {
   ...emptyPreventionPlan(), goals: [{ id: "goal-a", target: "Alcohol", type: "reduction" as const, description: "My personal agreement", startDate: "2026-09-01", active: true, showProgress: true }],
@@ -18,8 +19,8 @@ describe("versioned prevention plan", () => {
     const saved = await commitRecoveryPlan(plan(), { pinnedContactId: "friend" }, 100);
     expect(saved.plan.prevention?.revision).toBe(1);
     const backup = await exportAllData();
-    await clearAllData();
-    const restored = await importAllData(backup, { mode: "replace" });
+    await clearDataAndReload();
+    const restored = await importDataAndReload(backup, { mode: "replace" });
     expect(restored.committed).toBe(true);
     expect(parseRecoveryPlan(JSON.parse(String(await getSetting("recoveryPlan"))))).toEqual(saved.plan);
   });
@@ -47,7 +48,7 @@ describe("versioned prevention plan", () => {
   });
   it("does not resurrect a removed plan from a stale tab", async () => {
     const saved = await commitRecoveryPlan(plan(), undefined, 100);
-    await clearAllData();
+    await clearDataAndReload();
     await expect(commitRecoveryPlan(saved.plan)).rejects.toThrow("another tab");
     expect(await getSetting("recoveryPlan")).toBeUndefined();
   });
@@ -70,6 +71,63 @@ describe("versioned prevention plan", () => {
 });
 
 describe("durable local drafts", () => {
+  const gate = () => {
+    let release!: () => void;
+    const promise = new Promise<void>(resolve => { release = resolve; });
+    return { promise, release };
+  };
+
+  it.each(["recovery-plan", "journal-entry"])("flush waits for an edit queued during an earlier save, including key %s", async lateKey => {
+    const firstStarted = gate(); const finishFirst = gate();
+    const lateStarted = gate(); const finishLate = gate();
+    let revision = 0;
+    const first = queueDraftWrite("recovery-plan", async () => {
+      firstStarted.release(); await finishFirst.promise;
+      revision = await writeLocalDraft("recovery-plan", { text: "First" }, 0, "tab-a");
+    });
+    await firstStarted.promise;
+    const flushing = flushLocalDrafts();
+    const state = flushing.then(() => "resolved", () => "rejected");
+    const late = queueDraftWrite(lateKey, async () => {
+      lateStarted.release(); await finishLate.promise;
+      await writeLocalDraft(lateKey, { text: "Typed during update" }, lateKey === "recovery-plan" ? revision : 0, "tab-a");
+    });
+    finishFirst.release();
+    await first;
+    await lateStarted.promise;
+    const beforeLateSave = await Promise.race([state, new Promise(resolve => setTimeout(() => resolve("pending"), 0))]);
+    finishLate.release();
+    await late; await flushing;
+    expect(beforeLateSave).toBe("pending");
+    expect((await readLocalDraft(lateKey))?.value).toEqual({ text: "Typed during update" });
+  });
+
+  it("waits for a late failing write and remains blocked until that draft is retried successfully", async () => {
+    const firstStarted = gate(); const finishFirst = gate();
+    const lateStarted = gate(); const finishLate = gate();
+    const first = queueDraftWrite("recovery-plan", async () => {
+      firstStarted.release(); await finishFirst.promise;
+      await writeLocalDraft("recovery-plan", { text: "Saved" }, 0, "tab-a");
+    });
+    await firstStarted.promise;
+    const state = flushLocalDrafts().then(() => "resolved", () => "rejected");
+    const late = queueDraftWrite("journal-entry", async () => {
+      lateStarted.release(); await finishLate.promise;
+      throw new Error("synthetic late storage failure");
+    });
+    const lateFailure = late.catch(error => error);
+    finishFirst.release(); await first; await lateStarted.promise;
+    const beforeLateSave = await Promise.race([state, new Promise(resolve => setTimeout(() => resolve("pending"), 0))]);
+    finishLate.release(); await lateFailure;
+    const finalState = await state;
+    await expect(flushLocalDrafts()).rejects.toThrow("not been saved");
+    await queueDraftWrite("journal-entry", () => writeLocalDraft("journal-entry", { note: "Retried input" }, 0, "tab-a").then(() => undefined));
+    await expect(flushLocalDrafts()).resolves.toBeUndefined();
+    expect(beforeLateSave).toBe("pending");
+    expect(finalState).toBe("rejected");
+    expect((await readLocalDraft("journal-entry"))?.value).toEqual({ note: "Retried input" });
+  });
+
   it("lets an explicit discard finish when another window already removed the draft", async () => {
     const revision = await writeLocalDraft("use-period:new", { note: "interrupted edit" }, 0, "tab-a");
     await removeLocalDraft("use-period:new", revision);

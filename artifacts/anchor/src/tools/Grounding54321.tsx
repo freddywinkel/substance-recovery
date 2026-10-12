@@ -109,7 +109,7 @@ export function Grounding54321() {
           </div>
           <h2 className="text-xl font-semibold">{current.sense}</h2>
           <p className="text-muted-foreground leading-relaxed">{current.prompt}</p>
-          <p className="text-xs text-muted-foreground/70 italic">{current.examples}</p>
+            <p className="text-xs text-muted-foreground italic">{current.examples}</p>
         </div>
 
         <p className="text-center text-sm text-muted-foreground">

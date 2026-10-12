@@ -6,6 +6,7 @@ A mobile-first Progressive Web App (PWA) for addiction recovery support, built a
 
 Substance Recovery is an offline-first application that helps users track their recovery journey with tools for:
 - **Journal** — Mood and craving logging with notes
+- **Daily balance** — An optional evening check-in for sleep, mood, emotional intensity and craving, linked to before/activity/after moments; includes a previewed MoodTracker JSON import
 - **My growth** — Optional everyday moments and self-chosen reminders, with no symptom questions, streaks or scores; accessible from Home, Journal and supportive actions
 - **Brief self-compassion** — Optional acknowledgement, kind words or a practical action, and one editable personal phrase; no automatic tool-use or follow-up record
 - **Weekly reflection** — Optional memories, personal choices, room for next week and one enjoyable activity; usable without problem registrations, alongside the existing supportive plan
@@ -25,7 +26,7 @@ The [8 September implementation audit](docs/AUDIT_IMPLEMENTATION_2026-09-08.md) 
 
 ## Stack
 
-- **Frontend**: React 19, TypeScript 5.9, Vite 7, Tailwind CSS v4, Framer Motion, Radix UI primitives
+- **Frontend**: React 19, TypeScript 5.9, Vite 7, Tailwind CSS v4, Radix UI primitives
 - **Storage**: Browser IndexedDB
 - **Build**: Vite
 - **Package Manager**: pnpm (required — preinstall hook blocks npm/yarn)
@@ -123,9 +124,19 @@ Native binaries are normal optional dependencies selected for the current OS/CPU
 
 ### Import and backup versions
 
-New backups use format 5. Historical formats 1–4 remain supported and checked before import. Invalid/unsupported data blocks the import without partial writes; merge and replacement each use one IndexedDB transaction. The complete snapshot includes growth moments, reminder preferences, personal self-compassion words, weekly reflection fields, local drafts, historical check-ins and deletion markers. It excludes obsolete device-specific sync bookkeeping and content-free personal-growth/weekly-review retry guards. Selective reports are separate from backups; personal growth and optional weekly reflection fields are not automatically added to a shareable report.
+New backups use format 6. Historical formats 1–5 remain supported and checked before import. Invalid/unsupported data blocks the import without partial writes; merge and replacement each use one IndexedDB transaction. The complete snapshot includes daily balances, before/activity/after moments, retrospective use periods, growth moments, reminder preferences, personal self-compassion words, weekly reflection fields, local drafts, historical check-ins and deletion markers. It excludes obsolete device-specific sync bookkeeping and content-free retry guards. Selective reports are separate from backups; personal growth and optional weekly reflection fields are not automatically added to a shareable report. Settings has a separate MoodTracker import: review dates and conflicts before choosing whether to keep Anchor's day or use the imported day. Imported craving ratings retain their original 0–3 scale.
 
-Database version 12 preserves existing stores and records while preventing older clients from reopening a database containing expanded growth and weekly-review drafts that their backup catalog does not understand. The v11-to-v12 upgrade rewrites no records or stores. If an update waits for another Anchor tab or installed app window, close those other windows and choose **Reopen / reload**. Help remains available during a database interruption. Do not clear browser site data to resolve an update. Rolling the app code back to a version-11 or earlier client after this upgrade will not restore database access; use a compatible updated client instead.
+Database version 15 preserves existing stores and records and prevents older clients from bypassing the reset/replacement protection. Version 14 introduced the compatibility barrier for daily balances and activity moments. The v14-to-v15 upgrade rewrites no records or stores. If an update waits for another Anchor tab or installed app window, resolve any unsaved-input warning there before closing that window and choosing **Reopen / reload**. Help remains available during a database interruption. Do not clear browser site data to resolve an update. Rolling the app code back to a version-14 or earlier client after this upgrade will not restore database access; use a compatible updated client instead.
+
+### Release decision and recovery
+
+Read [RELEASE_READINESS.md](RELEASE_READINESS.md) for the pre-deployment audit, verified environments and open release gates. The user separately authorized this limited-beta release; consult the [Pages workflow](https://github.com/freddywinkel/substance-recovery/actions/workflows/deploy-pages.yml) for current publication status.
+
+Before an authorized release, run the verification commands above, retain the previous production artifact and test the previous-to-candidate worker update with saved records and unfinished input. After deployment, compare the public `anchor-build` metadata and assets with the intended build, then verify a real prior browser client updating without clearing its data.
+
+For the first transition from the previously published version, save or retry pending input in every open Anchor window, keep a backup, and close extra windows before updating the remaining saved window. The new per-window update protection applies once this candidate is loaded; it cannot change JavaScript still running in the older client.
+
+Prefer a forward fix for data/schema issues. A rollback artifact must understand the installed database version and all current record/draft types; never lower the database version, delete site data or restore an older backup automatically. Test a compatible rollback in an isolated profile first. User-chosen backup replacement removes records absent from the file, so keep a separate current backup before restoring.
 
 ### Dependency maintenance
 

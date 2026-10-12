@@ -4,6 +4,9 @@ import { isWeeklyReviewDraft } from "@/lib/weeklyReviewDraft";
 import { isDailyBalanceDraft, isBalanceMomentDraft } from "@/lib/dailyBalanceDraft";
 import { isDailyBalanceRecord, isBalanceMomentRecord } from "@/lib/dailyBalance";
 import { BALANCE_EPOCH_KEY, INITIAL_BALANCE_EPOCH, setBalanceEpoch } from "@/lib/balanceEpoch";
+import { STORAGE_GENERATION_KEY } from "./storageGeneration";
+import { RegistrationSessionConflictError, type RegistrationSessionSnapshot } from "./registrationSessionSettings";
+import { cravingRegistrationKind } from "@/lib/canonicalRegistration";
 import { isSupportiveActionDraft } from "@/lib/supportiveActionDraft";
 import { isHomeCustomizationDraft } from "@/lib/homeCustomizationDraft";
 import { isJourneyDateDraft } from "@/lib/settingsActions";
@@ -106,6 +109,59 @@ function normalizeRelapseRecord(record: RelapseLog): RelapseLog {
 
 function normalizeCravingRecord(record: CravingLog): CravingLog {
   return migrateCompletedTrekRecord(migrateCravingRegistrationType(record));
+}
+
+type CompletedRegistration = CravingLog | RelapseLog | AnxietyLog | BoredomLog;
+type RegistrationStore = "cravingLogs" | "relapseLogs" | "anxietyLogs" | "boredomLogs";
+
+function completionContent(record: CompletedRegistration): string {
+  // A retry may be requested after the first write succeeded but the screen
+  // failed to advance. Keep the original commit clock and every recorded answer.
+  const { completedAt: _completedAt, updatedAt: _updatedAt, ...content } = record;
+  return registrationSourceSignature(content);
+}
+
+/** Tracker completion and its saved-session ownership check commit together. */
+async function commitRegistration<T extends CompletedRegistration>(
+  storeName: RegistrationStore,
+  record: T,
+  type: RegistrationType | null,
+  expected?: RegistrationSessionSnapshot,
+): Promise<T> {
+  const db = await getDB();
+  // Imports and deliberate non-tracker callers retain their existing contract.
+  if (expected === undefined) { await db.put(storeName, record); return record; }
+  const parsed = parseActiveRegistration(expected.activeRegistration);
+  if (!parsed.ok || !parsed.value || parsed.value.recordId !== record.id || parsed.value.type !== type) {
+    throw new RegistrationSessionConflictError();
+  }
+  const tx = db.transaction([storeName, "settings"], "readwrite");
+  void tx.done.catch(() => undefined);
+  try {
+    const [active, suspended, previous] = await Promise.all([
+      tx.objectStore("settings").get("activeRegistration"),
+      tx.objectStore("settings").get("suspendedRegistrations"),
+      tx.objectStore(storeName).get(record.id),
+    ]);
+    if (!Object.is(active?.value ?? "", expected.activeRegistration)
+      || !Object.is(suspended?.value ?? "", expected.suspendedRegistrations)) throw new RegistrationSessionConflictError();
+    if (previous) {
+      // Two windows may have the same session snapshot when both press Save.
+      // Only an identical retry can reuse the stable ID; changed answers must
+      // never replace a completed record through the first-save endpoint.
+      if (completionContent(previous) !== completionContent(record)) throw new RegistrationSessionConflictError();
+      await tx.done;
+      return previous as T;
+    }
+    if (parsed.value.savedLogId) throw new RegistrationSessionConflictError();
+    await tx.objectStore(storeName).put(record);
+    await tx.done;
+    return record;
+  } catch (error) {
+    try { tx.abort(); } catch { /* already closed */ }
+    await tx.done.catch(() => undefined);
+    throw error;
+  }
 }
 
 function assertRelapseAmountHasTarget(record: Pick<
@@ -275,11 +331,9 @@ export async function deleteFeatureRecord(id: string): Promise<void> {
 }
 
 // ── Craving Logs ─────────────────────────────────────────────
-export async function addCravingLog(entry: NewRegistrationRecord<CravingLog>): Promise<CravingLog> {
-  const db = await getDB();
+export async function addCravingLog(entry: NewRegistrationRecord<CravingLog>, expected?: RegistrationSessionSnapshot): Promise<CravingLog> {
   const full = normalizeCravingRecord(prepareRegistrationRecord<CravingLog>(entry));
-  await db.put("cravingLogs", full);
-  return full;
+  return commitRegistration("cravingLogs", full, cravingRegistrationKind(full), expected);
 }
 export async function updateCravingLog(log: CravingLog): Promise<void> {
   const db = await getDB();
@@ -300,12 +354,10 @@ export async function deleteCravingLog(id: string): Promise<void> {
 }
 
 // ── Relapse Logs ─────────────────────────────────────────────
-export async function addRelapseLog(entry: NewRegistrationRecord<RelapseLog>): Promise<RelapseLog> {
-  const db = await getDB();
+export async function addRelapseLog(entry: NewRegistrationRecord<RelapseLog>, expected?: RegistrationSessionSnapshot): Promise<RelapseLog> {
   assertRelapseAmountHasTarget(entry);
   const full = normalizeRelapseRecord(prepareRegistrationRecord<RelapseLog>(entry));
-  await db.put("relapseLogs", full);
-  return full;
+  return commitRegistration("relapseLogs", full, "relapse", expected);
 }
 export async function getRelapseLogs(limit = Infinity): Promise<RelapseLog[]> {
   const db = await getDB();
@@ -330,11 +382,9 @@ export async function deleteRelapseLog(id: string): Promise<void> {
 }
 
 // ── Anxiety Logs ─────────────────────────────────────────────
-export async function addAnxietyLog(entry: NewRegistrationRecord<AnxietyLog>): Promise<AnxietyLog> {
-  const db = await getDB();
+export async function addAnxietyLog(entry: NewRegistrationRecord<AnxietyLog>, expected?: RegistrationSessionSnapshot): Promise<AnxietyLog> {
   const full = prepareRegistrationRecord<AnxietyLog>(entry);
-  await db.put("anxietyLogs", full);
-  return full;
+  return commitRegistration("anxietyLogs", full, "anxiety", expected);
 }
 export async function getAnxietyLogs(limit = Infinity): Promise<AnxietyLog[]> {
   const db = await getDB();
@@ -351,11 +401,9 @@ export async function deleteAnxietyLog(id: string): Promise<void> {
 }
 
 // ── Boredom Logs ──────────────────────────────────────────────
-export async function addBoredomLog(entry: NewRegistrationRecord<BoredomLog>): Promise<BoredomLog> {
-  const db = await getDB();
+export async function addBoredomLog(entry: NewRegistrationRecord<BoredomLog>, expected?: RegistrationSessionSnapshot): Promise<BoredomLog> {
   const full = prepareRegistrationRecord<BoredomLog>(entry);
-  await db.put("boredomLogs", full);
-  return full;
+  return commitRegistration("boredomLogs", full, "boredom", expected);
 }
 export async function getBoredomLogs(limit = Infinity): Promise<BoredomLog[]> {
   const db = await getDB();
@@ -418,6 +466,7 @@ export async function clearAllData(): Promise<void> {
     // Nonpersonal barrier also invalidates a balance form opened while the DB was empty.
     await tx.objectStore("syncMeta").put({ key: "daily-balance-reset-at", value: Date.now() });
     await tx.objectStore("syncMeta").put({ key: BALANCE_EPOCH_KEY, value: epoch });
+    await tx.objectStore("syncMeta").put({ key: STORAGE_GENERATION_KEY, value: crypto.randomUUID() });
     await tx.done;
     setBalanceEpoch(epoch);
   } catch (error) {
@@ -783,6 +832,9 @@ export async function importAllData(payload: Record<string, unknown>, options: {
       }
       await tx.objectStore(row.store).put(value as never);
     }
+    // Both merge and replace may supersede settings and records held by open
+    // windows. They must reload before writing against the restored snapshot.
+    await tx.objectStore("syncMeta").put({ key: STORAGE_GENERATION_KEY, value: crypto.randomUUID() });
     await tx.done;
     setBalanceEpoch(storageEpoch);
     return { imported: rows.length, skipped: 0, errors: [], committed: true };

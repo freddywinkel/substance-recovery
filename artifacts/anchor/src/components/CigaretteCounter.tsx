@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Plus } from "lucide-react";
 import { useT } from "@/hooks/useTranslation";
 import { computeCigaretteStats, formatMinutes, formatTimeSince } from "@/lib/cigaretteStats";
@@ -13,7 +13,19 @@ interface CigaretteCounterProps {
 
 export function CigaretteCounter({ logs, onLog, onOpenDrawer }: CigaretteCounterProps) {
   const { t } = useT();
-  const stats = useMemo(() => computeCigaretteStats(logs), [logs]);
+  const [timeRefresh, setTimeRefresh] = useState(0);
+  useEffect(() => {
+    const refresh = () => setTimeRefresh(value => value + 1);
+    const onVisible = () => { if (!document.hidden) refresh(); };
+    const timer = window.setInterval(refresh, 60_000);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, []);
+  // Recompute with the actual clock on each tick AND when a new log arrives.
+  const stats = useMemo(() => computeCigaretteStats(logs), [logs, timeRefresh]);
 
   const trendText = () => {
     if (!stats.trendDirection || stats.trendDirection === "same") return null;

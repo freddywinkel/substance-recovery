@@ -1,7 +1,8 @@
+import { clearDataAndReload, importDataAndReload } from "./helpers/storageSession";
 import "fake-indexeddb/auto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getDB, type JournalEntry } from "../src/db/schema";
-import { addCigaretteLog, addJournalEntry, clearAllData, exportAllData, getCigaretteLogs, getEmergencyContacts, getJournalEntries, getSetting, importAllData, previewImportData, saveEmergencyContacts, setSetting, updateCigaretteLog } from "../src/db/crud";
+import { addCigaretteLog, addJournalEntry, exportAllData, getCigaretteLogs, getEmergencyContacts, getJournalEntries, getSetting, previewImportData, saveEmergencyContacts, setSetting, updateCigaretteLog } from "../src/db/crud";
 import { createJournalDraft, isJournalDraft } from "../src/lib/journalDraft";
 import { validateImportedStoreRecord } from "../src/db/validation";
 import { createBlankQuickRegistrationDraft } from "../src/lib/quickRegistrationDraft";
@@ -11,7 +12,7 @@ const time = 1_780_000_000_000;
 const journal = (id: string, timestamp = time): JournalEntry => ({ id, timestamp, mood: null, cravingIntensity: null, note: "synthetic note", toolUsed: null });
 const contact = (id: string, name = id) => ({ id, name, relationship: "friend", phone: "synthetic" });
 const backup = (extra: Record<string, unknown> = {}) => ({ version: 3, dataVersion: 3, journal: [], cravingLogs: [], relapseLogs: [], anxietyLogs: [], boredomLogs: [], cigaretteLogs: [], featureRecords: [], settings: [], ...extra });
-beforeEach(async () => { vi.restoreAllMocks(); await clearAllData(); });
+beforeEach(async () => { vi.restoreAllMocks(); await clearDataAndReload(); });
 
 describe("complete history and journal data quality", () => {
   it("retains more than 1,000 records in full reads and exports, with opt-in limits only", async () => {
@@ -50,20 +51,20 @@ describe("backup preflight, preservation and atomic transactions", () => {
     const payload = backup({ journal: [journal("new")], emergencyContacts: [{ id: "bad", name: 42 }], settings: [{ key: "theme", value: "light" }] });
     const preview = await previewImportData(payload); expect(preview.canImport).toBe(false);
     expect(await getSetting("theme")).toBe("dark");
-    expect(await importAllData(payload)).toMatchObject({ imported: 0, committed: false });
+    expect(await importDataAndReload(payload)).toMatchObject({ imported: 0, committed: false });
     expect(await getEmergencyContacts()).toEqual([contact("keep")]); expect(await getJournalEntries()).toEqual([]); expect(await getSetting("theme")).toBe("dark");
   });
   it("merges contacts by stable ID; explicit replacement removes absent IDs atomically", async () => {
     await saveEmergencyContacts([contact("keep"), contact("update", "old")]); await addJournalEntry(journal("old"));
     const payload = backup({ emergencyContacts: [contact("update", "new"), contact("new")] });
-    expect((await importAllData(payload)).committed).toBe(true);
+    expect((await importDataAndReload(payload)).committed).toBe(true);
     expect(await getEmergencyContacts()).toEqual([contact("keep"), contact("update", "new"), contact("new")]); expect(await getJournalEntries()).toHaveLength(1);
-    expect((await importAllData(payload, { mode: "replace" })).committed).toBe(true);
+    expect((await importDataAndReload(payload, { mode: "replace" })).committed).toBe(true);
     expect(await getEmergencyContacts()).toEqual([contact("update", "new"), contact("new")]); expect(await getJournalEntries()).toEqual([]);
   });
   it("blocks duplicate IDs, conflicting legacy aliases, unsupported settings and future versions", async () => {
     for (const payload of [backup({ journal: [journal("same"), journal("same")] }), backup({ version: 99 }), backup({ settings: [{ key: "future", value: "x" }] }), backup({ settings: [{ key: "emergencyContacts", value: JSON.stringify([contact("one")]) }], emergencyContacts: [contact("two")] })]) {
-      expect((await previewImportData(payload)).canImport).toBe(false); expect((await importAllData(payload)).committed).toBe(false);
+      expect((await previewImportData(payload)).canImport).toBe(false); expect((await importDataAndReload(payload)).committed).toBe(false);
     }
     expect(await getEmergencyContacts()).toEqual([]);
   });
@@ -74,7 +75,7 @@ describe("backup preflight, preservation and atomic transactions", () => {
     const value = { version: 1, revision: 1, updatedAt: time, clientId: "synthetic", value: createJournalDraft() };
     await setSetting("draft:journal-entry", JSON.stringify(value));
     const exported = await exportAllData(); expect(exported.version).toBe(6); expect(exported.journal).toHaveLength(2); expect(exported.checkIns).toHaveLength(1);
-    await clearAllData(); const result = await importAllData(exported); expect(result.errors).toEqual([]); expect(result.committed).toBe(true);
+    await clearDataAndReload(); const result = await importDataAndReload(exported); expect(result.errors).toEqual([]); expect(result.committed).toBe(true);
     expect(await db.get("journal", "deleted")).toMatchObject({ deleted: true }); expect(await getJournalEntries()).toHaveLength(1); expect(await db.getAll("checkIns")).toHaveLength(1); expect(await getSetting("draft:journal-entry")).toBe(JSON.stringify(value));
   });
   it("preflights the quick draft payload before any import write and preserves unanswered values", async () => {
@@ -82,12 +83,12 @@ describe("backup preflight, preservation and atomic transactions", () => {
     const envelope = { version: 1, revision: 1, updatedAt: time, clientId: "synthetic", value: draft };
     const setting = { key: "draft:quick-registration", value: JSON.stringify(envelope) };
     expect((await previewImportData(backup({ settings: [setting] }))).canImport).toBe(true);
-    expect((await importAllData(backup({ settings: [setting] }))).committed).toBe(true);
+    expect((await importDataAndReload(backup({ settings: [setting] }))).committed).toBe(true);
     expect(await getSetting(setting.key)).toBe(setting.value);
     const invalid = { ...setting, value: JSON.stringify({ ...envelope, value: { ...draft, immediateSafety: "invented-safety" } }) };
     const payload = backup({ journal: [journal("must-not-import")], settings: [invalid] });
     expect((await previewImportData(payload)).canImport).toBe(false);
-    expect((await importAllData(payload)).committed).toBe(false);
+    expect((await importDataAndReload(payload)).committed).toBe(false);
     expect(await getJournalEntries()).toEqual([]);
     expect(await getSetting(setting.key)).toBe(setting.value);
   });
@@ -99,16 +100,16 @@ describe("backup preflight, preservation and atomic transactions", () => {
       { key: "draft:weekly-review:2026-09-07", value: JSON.stringify({ version: 1, revision: 1, updatedAt: time, clientId: "synthetic", value: weekly }) },
     ];
     expect(isRecoveryPlanDraft(plan)).toBe(true);
-    expect((await importAllData(backup({ settings }))).committed).toBe(true);
+    expect((await importDataAndReload(backup({ settings }))).committed).toBe(true);
     const exported = await exportAllData();
-    await clearAllData();
-    expect((await importAllData(exported)).committed).toBe(true);
+    await clearDataAndReload();
+    expect((await importDataAndReload(exported)).committed).toBe(true);
     for (const setting of settings) expect(await getSetting(setting.key)).toEqual(setting.value);
     for (const [key, value] of [[settings[0].key, { ...plan, baseUpdatedAt: -1 }], [settings[1].key, { ...weekly, nextWeekPlan: ["wrong type"] }]] as const) {
       const invalid = { key, value: JSON.stringify({ version: 1, revision: 1, updatedAt: time, clientId: "synthetic", value }) };
       const payload = backup({ settings: [invalid], journal: [journal("must-not-import")] });
       expect((await previewImportData(payload)).canImport).toBe(false);
-      expect((await importAllData(payload)).committed).toBe(false);
+      expect((await importDataAndReload(payload)).committed).toBe(false);
       expect(await getJournalEntries()).toEqual([]);
     }
     for (const setting of settings) expect(await getSetting(setting.key)).toEqual(setting.value);
@@ -120,7 +121,7 @@ describe("backup preflight, preservation and atomic transactions", () => {
       if (this.name === "cigaretteLogs") throw new DOMException("synthetic quota failure", "QuotaExceededError");
       return original.apply(this, args);
     });
-    const result = await importAllData(backup({ journal: [journal("incoming")], cigaretteLogs: [{ id: "cig", timestamp: time }] }), { mode: "replace" });
+    const result = await importDataAndReload(backup({ journal: [journal("incoming")], cigaretteLogs: [{ id: "cig", timestamp: time }] }), { mode: "replace" });
     expect(result).toMatchObject({ committed: false, imported: 0 });
     expect(await getJournalEntries()).toEqual([journal("original")]); expect(await getEmergencyContacts()).toEqual([contact("original")]);
   });
@@ -131,7 +132,7 @@ describe("backup preflight, preservation and atomic transactions", () => {
       if (this.name === "settings") throw new Error("synthetic clear failure");
       return original.call(this);
     });
-    await expect(clearAllData()).rejects.toThrow("synthetic clear failure");
+    await expect(clearDataAndReload()).rejects.toThrow("synthetic clear failure");
     expect(await getJournalEntries()).toEqual([journal("keep")]); expect(await getEmergencyContacts()).toEqual([contact("keep")]);
   });
 });

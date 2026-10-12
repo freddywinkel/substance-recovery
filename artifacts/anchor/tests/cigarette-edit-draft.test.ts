@@ -1,12 +1,13 @@
+import { clearDataAndReload, importDataAndReload } from "./helpers/storageSession";
 import "fake-indexeddb/auto";
 import { beforeEach, describe, expect, it } from "vitest";
 import { cigaretteDraftMatchesSource, isCigaretteEditDraft, type CigaretteEditValues } from "../src/lib/cigaretteEditDraft";
-import { clearAllData, exportAllData, getSetting, importAllData, setSetting } from "../src/db/crud";
+import { exportAllData, getSetting, setSetting } from "../src/db/crud";
 
 const valid: CigaretteEditValues = { id: "synthetic-cigarette", editTime: "", editNote: "unfinished", sourceTimestamp: 1_700_000_000_000, sourceNote: "original", sourceUpdatedAt: null };
 
 describe("cigarette edit draft boundaries", () => {
-  beforeEach(async () => { await clearAllData(); });
+  beforeEach(async () => { await clearDataAndReload(); });
   it("preserves unfinished times without accepting unsupported draft shapes", () => {
     expect(isCigaretteEditDraft(null)).toBe(true);
     expect(isCigaretteEditDraft(valid)).toBe(true);
@@ -28,12 +29,12 @@ describe("cigarette edit draft boundaries", () => {
     const envelope = { version: 1, revision: 1, updatedAt: 100, clientId: "synthetic", value: valid };
     await setSetting("draft:cigarette-edit", JSON.stringify(envelope));
     const backup = await exportAllData();
-    await clearAllData();
-    expect((await importAllData(backup, { mode: "replace" })).committed).toBe(true);
+    await clearDataAndReload();
+    expect((await importDataAndReload(backup, { mode: "replace" })).committed).toBe(true);
     expect(JSON.parse(String(await getSetting("draft:cigarette-edit")))).toEqual(envelope);
     const corrupt = structuredClone(backup);
     (corrupt.settings as Array<{ key: string; value: unknown }>).find(item => item.key === "draft:cigarette-edit")!.value = JSON.stringify({ ...envelope, value: { ...valid, sourceTimestamp: 9e20 } });
-    expect((await importAllData(corrupt, { mode: "replace" })).committed).toBe(false);
+    expect((await importDataAndReload(corrupt, { mode: "replace" })).committed).toBe(false);
     expect(JSON.parse(String(await getSetting("draft:cigarette-edit")))).toEqual(envelope);
   });
 });

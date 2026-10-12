@@ -42,7 +42,12 @@ export function PrivacyPolicy() {
     <div className="flex flex-col min-h-dvh bg-background">
       <PageHeader title={t("privacy.title")} back={true} />
 
-      <div className="flex-1 overflow-y-auto scroll-smooth-ios px-4 py-4 pb-safe flex flex-col gap-4">
+      <div
+        role="region"
+        aria-label={t("privacy.title")}
+        tabIndex={0}
+        className="flex-1 overflow-y-auto scroll-smooth-ios px-4 py-4 pb-safe flex flex-col gap-4 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary"
+      >
         <p className="text-sm text-muted-foreground leading-relaxed">
           {t("privacy.intro")}
         </p>

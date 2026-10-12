@@ -30,6 +30,7 @@ export function Journal() {
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [dateFilter, setDateFilter] = useState<"all" | "today" | "week" | "month">("all");
+  const [visibleCount, setVisibleCount] = useState(50);
   const [, navigate] = useLocation();
 
   const filteredEntries = useMemo(() => {
@@ -93,14 +94,14 @@ export function Journal() {
             type="text"
             value={searchQuery}
             aria-label={t("journal.search_placeholder")}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => { setSearchQuery(e.target.value); setVisibleCount(50); }}
             placeholder={t("journal.search_placeholder")}
             className="w-full rounded-xl border border-border/50 bg-card pl-9 pr-9 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
           />
           {searchQuery && (
             <button
               type="button"
-              onClick={() => setSearchQuery("")}
+              onClick={() => { setSearchQuery(""); setVisibleCount(50); }}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
               aria-label={t("common.cancel")}
             >
@@ -114,7 +115,7 @@ export function Journal() {
           {dateFilterOpts.map(({ v, label }) => (
             <button
               key={v}
-              onClick={() => setDateFilter(v)}
+              onClick={() => { setDateFilter(v); setVisibleCount(50); }}
               aria-pressed={dateFilter === v}
               className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 ${
                 dateFilter === v
@@ -130,7 +131,7 @@ export function Journal() {
 
       <div className="flex-1 overflow-y-auto scroll-smooth-ios px-4 py-3 flex flex-col gap-3 pb-safe">
         {/* Local storage reassurance */}
-        <p className="text-xs text-muted-foreground/70 text-center px-2">
+        <p className="text-xs text-muted-foreground text-center px-2">
           {t("journal.local_storage")}
         </p>
 
@@ -146,7 +147,13 @@ export function Journal() {
             </p>
           </div>
         ) : (
-          filteredEntries.map((entry) => (
+          <>
+          <p role="status" className="text-xs text-muted-foreground">
+            {language === "nl"
+              ? `${Math.min(visibleCount, filteredEntries.length)} van ${filteredEntries.length} notities`
+              : `${Math.min(visibleCount, filteredEntries.length)} of ${filteredEntries.length} entries`}
+          </p>
+          {filteredEntries.slice(0, visibleCount).map((entry) => (
             <div
               key={entry.id}
               className="rounded-[1.5rem] border border-border/50 bg-card/50 p-4 animate-fade-up"
@@ -194,7 +201,13 @@ export function Journal() {
                 <p className="text-sm text-muted-foreground mt-2 leading-relaxed">{entry.note}</p>
               )}
             </div>
-          ))
+          ))}
+          {visibleCount < filteredEntries.length && <button
+            type="button"
+            onClick={() => setVisibleCount(count => count + 50)}
+            className="min-h-12 rounded-xl border border-border px-4 py-3 text-sm font-medium text-foreground hover:bg-muted/40"
+          >{language === "nl" ? "Meer notities tonen" : "Show more entries"}</button>}
+          </>
         )}
 
         <div className="h-4" />

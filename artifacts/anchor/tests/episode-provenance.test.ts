@@ -1,3 +1,4 @@
+import { clearDataAndReload } from "./helpers/storageSession";
 import "fake-indexeddb/auto";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
@@ -17,7 +18,6 @@ import {
   headTrekV2,
 } from "./fixtures/deployed-v2-records";
 import {
-  clearAllData,
   addRelapseLog,
   saveFeatureRecord,
   updateRegistrationEpisode,
@@ -313,8 +313,8 @@ describe("goal-aware reported observations", () => {
 });
 
 describe("corrected episode persistence and lifecycle", () => {
-  beforeEach(async () => clearAllData());
-  afterEach(async () => clearAllData());
+  beforeEach(async () => clearDataAndReload());
+  afterEach(async () => clearDataAndReload());
   it("does not turn an old default safety false into an explicit answer while preparing a correction", () => {
     const answers = correctionAnswers({ id: "legacy", timestamp: sunday, dataVersion: 1, urgencyHigh: false, note: "keep note", intensity: null, context: "", trigger: "", reaction: "", bodySensations: [] }, "anxiety");
     expect(answers.urgencyHigh).toBeNull();

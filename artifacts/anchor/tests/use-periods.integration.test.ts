@@ -1,6 +1,7 @@
+import { clearDataAndReload, importDataAndReload } from "./helpers/storageSession";
 import "fake-indexeddb/auto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { clearAllData, exportAllData, getFeatureRecords, getSetting, importAllData, previewImportData, setSetting } from "../src/db/crud";
+import { exportAllData, getFeatureRecords, getSetting, previewImportData, setSetting } from "../src/db/crud";
 import { getDB } from "../src/db/schema";
 import { commitUsePeriodRecord, removeUsePeriodRecord, UsePeriodConflictError, UsePeriodOverlapError } from "../src/db/usePeriods";
 import { parseFeatureRecord } from "../src/lib/recoveryFeatures";
@@ -16,7 +17,7 @@ const backup = (extra: Record<string, unknown> = {}) => ({
 });
 const envelope = (value: unknown) => JSON.stringify({ version: 1, revision: 1, updatedAt: time, clientId: "synthetic", value });
 
-beforeEach(async () => { vi.restoreAllMocks(); await clearAllData(); });
+beforeEach(async () => { vi.restoreAllMocks(); await clearDataAndReload(); });
 
 describe("retrospective use contracts", () => {
   it("retains incomplete drafts without inventing use frequency or dates", () => {
@@ -84,7 +85,7 @@ describe("retrospective use atomic persistence", () => {
     await expect(commitUsePeriodRecord(period(), null)).rejects.toBeInstanceOf(UsePeriodConflictError);
     await expect(commitUsePeriodRecord(newer, newer.updatedAt)).rejects.toBeInstanceOf(UsePeriodConflictError);
     expect(await getFeatureRecords()).toEqual([]);
-    expect((await (await getDB()).getAll("syncMeta")).filter(item => !['daily-balance-reset-at', 'daily-balance-epoch'].includes(item.key))).toEqual([{ key: `use-period-deleted:${saved.id}`, value: saved.timestamp }]);
+    expect((await (await getDB()).getAll("syncMeta")).filter(item => !['daily-balance-reset-at', 'daily-balance-epoch', 'storage-generation'].includes(item.key))).toEqual([{ key: `use-period-deleted:${saved.id}`, value: saved.timestamp }]);
     expect(JSON.stringify(await exportAllData())).not.toContain(newer.note);
   });
   it("erases associated edit and first-save drafts atomically while retaining unrelated drafts", async () => {
@@ -115,7 +116,7 @@ describe("retrospective use atomic persistence", () => {
     await expect(removeUsePeriodRecord(saved)).rejects.toThrow();
     expect(await getFeatureRecords()).toEqual([saved]);
     expect(await getSetting(key)).toBe(value);
-    expect((await (await getDB()).getAll("syncMeta")).filter(item => !['daily-balance-reset-at', 'daily-balance-epoch'].includes(item.key))).toEqual([]);
+    expect((await (await getDB()).getAll("syncMeta")).filter(item => !['daily-balance-reset-at', 'daily-balance-epoch', 'storage-generation'].includes(item.key))).toEqual([]);
   });
   it("keeps existing data if a period write fails", async () => {
     const saved = await commitUsePeriodRecord(period(), null);
@@ -140,13 +141,13 @@ describe("retrospective use backups", () => {
     const exported = await exportAllData();
     expect((await previewImportData(exported)).canImport).toBe(true);
     await removeUsePeriodRecord(saved);
-    expect((await importAllData(exported)).committed).toBe(true);
+    expect((await importDataAndReload(exported)).committed).toBe(true);
     expect(await getFeatureRecords()).toEqual([saved]);
     expect(await getSetting(editKey)).toBe(editValue);
     expect(await getSetting("draft:use-period:new")).toBe(newValue);
     await expect(commitUsePeriodRecord({ ...saved, note: "deliberately restored" }, saved.updatedAt)).resolves.toMatchObject({ id });
-    await clearAllData();
-    expect((await importAllData(exported, { mode: "replace" })).committed).toBe(true);
+    await clearDataAndReload();
+    expect((await importDataAndReload(exported, { mode: "replace" })).committed).toBe(true);
     expect(await getFeatureRecords()).toEqual([saved]);
   });
   it("rejects malformed records, forged draft IDs and incoming overlap before replacement", async () => {
@@ -158,7 +159,7 @@ describe("retrospective use backups", () => {
       backup({ featureRecords: [period("one"), period("two")] }),
     ]) {
       expect((await previewImportData(payload)).canImport).toBe(false);
-      expect((await importAllData(payload, { mode: "replace" })).committed).toBe(false);
+      expect((await importDataAndReload(payload, { mode: "replace" })).committed).toBe(false);
       expect(await getFeatureRecords()).toEqual([saved]);
     }
   });
@@ -168,16 +169,16 @@ describe("retrospective use backups", () => {
     const payload = backup({ featureRecords: [incoming] });
     expect((await previewImportData(payload, { mode: "merge" })).canImport).toBe(false);
     expect((await previewImportData(payload, { mode: "replace" })).canImport).toBe(true);
-    expect((await importAllData(payload)).committed).toBe(false);
+    expect((await importDataAndReload(payload)).committed).toBe(false);
     expect(await getFeatureRecords()).toEqual([saved]);
-    expect((await importAllData(payload, { mode: "replace" })).committed).toBe(true);
+    expect((await importDataAndReload(payload, { mode: "replace" })).committed).toBe(true);
     expect(await getFeatureRecords()).toEqual([incoming]);
   });
   it("evaluates replaced IDs as their incoming version instead of double counting a corrected backup", async () => {
     const saved = await commitUsePeriodRecord(period(), null);
     const payload = backup({ featureRecords: [{ ...saved, startDate: "2026-05-02", endDate: "2026-05-10" }] });
     expect((await previewImportData(payload)).canImport).toBe(true);
-    expect((await importAllData(payload)).committed).toBe(true);
+    expect((await importDataAndReload(payload)).committed).toBe(true);
     expect(await getFeatureRecords()).toEqual(payload.featureRecords);
   });
 });
